@@ -150,6 +150,7 @@
 			moveQuality={appState.lastMoveQuality}
 			onHoverMove={(move) => hoveredMove = move}
 			onClearHover={() => hoveredMove = null}
+			onPlayMove={(move) => onMove(move.slice(0, 2), move.slice(2, 4))}
 		/>
 
 		<!-- AI Coach -->

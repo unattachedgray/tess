@@ -23,12 +23,12 @@
 	});
 </script>
 
-<div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden">
+<div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden flex-shrink-0">
 	<div class="px-4 py-2 border-b border-[var(--border)]">
 		<h3 class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Moves</h3>
 	</div>
 
-	<div bind:this={scrollContainer} class="max-h-64 overflow-y-auto p-2">
+	<div bind:this={scrollContainer} class="max-h-40 overflow-y-auto p-2">
 		{#if movePairs.length === 0}
 			<p class="text-sm text-[var(--text-muted)] text-center py-4">No moves yet</p>
 		{:else}

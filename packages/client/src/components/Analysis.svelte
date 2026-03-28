@@ -10,11 +10,17 @@
 	} = $props();
 
 	let scrollContainer: HTMLElement;
+	let prevMessageCount = 0;
 
+	// Only auto-scroll when a NEW analysis message arrives, not on other updates
 	$effect(() => {
-		if (messages.length && scrollContainer) {
-			scrollContainer.scrollTop = scrollContainer.scrollHeight;
+		const count = messages.length;
+		if (count > prevMessageCount && scrollContainer) {
+			requestAnimationFrame(() => {
+				scrollContainer.scrollTop = scrollContainer.scrollHeight;
+			});
 		}
+		prevMessageCount = count;
 	});
 
 	function renderMarkdown(text: string): string {
@@ -29,11 +35,14 @@
 	}
 </script>
 
-<div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden flex flex-col max-h-80">
-	<div class="px-4 py-2 border-b border-[var(--border)]">
+<div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden flex flex-col min-h-0 flex-1">
+	<div class="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] flex-shrink-0">
 		<h3 class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
 			AI Coach
 		</h3>
+		{#if loading}
+			<span class="inline-block w-3 h-3 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></span>
+		{/if}
 	</div>
 
 	<div bind:this={scrollContainer} class="flex-1 overflow-y-auto p-3 space-y-3">
@@ -55,17 +64,6 @@
 				</div>
 			</div>
 		{/each}
-
-		{#if loading}
-			<div class="flex items-center gap-2 py-2">
-				<div class="flex gap-1">
-					<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 0ms"></div>
-					<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 150ms"></div>
-					<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 300ms"></div>
-				</div>
-				<span class="text-xs text-[var(--text-muted)]">Analyzing...</span>
-			</div>
-		{/if}
 	</div>
 </div>
 

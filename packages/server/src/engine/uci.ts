@@ -98,7 +98,14 @@ export class UciAdapter {
 			.split("\n")
 			.filter((l) => l.startsWith("info") && l.includes(" pv "));
 
-		const info = infoLines.map((l) => this.parseInfo(l));
+		// Keep only the last info line per multipv index (engine overwrites earlier iterations)
+		const byPv = new Map<number, string>();
+		for (const l of infoLines) {
+			const parsed = this.parseInfo(l);
+			byPv.set(parsed.multipv, l);
+		}
+
+		const info = [...byPv.values()].map((l) => this.parseInfo(l));
 
 		return { bestmove, info };
 	}

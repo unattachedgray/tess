@@ -8,12 +8,14 @@
 		moveQuality = null,
 		onHoverMove,
 		onClearHover,
+		onPlayMove,
 	}: {
 		suggestions: Suggestion[];
 		stale: boolean;
 		moveQuality: MoveQuality;
 		onHoverMove?: (move: string) => void;
 		onClearHover?: () => void;
+		onPlayMove?: (move: string) => void;
 	} = $props();
 
 	const QUALITY_COLORS: Record<string, string> = {
@@ -44,10 +46,13 @@
 	}
 </script>
 
-<div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden {stale ? 'opacity-50' : ''}">
+<div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden {stale ? 'opacity-50' : ''} flex-shrink-0">
 	<div class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">
 		<h3 class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-			Engine Suggestions
+			Engine
+			{#if stale && suggestions.length > 0}
+				<span class="inline-block w-3 h-3 ml-1 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin align-middle"></span>
+			{/if}
 		</h3>
 		{#if moveQuality}
 			<span class="text-xs font-semibold {QUALITY_COLORS[moveQuality]}">
@@ -56,7 +61,7 @@
 		{/if}
 	</div>
 
-	<div class="p-2 space-y-1">
+	<div class="p-2 space-y-0.5">
 		{#if suggestions.length === 0}
 			<div class="flex items-center justify-center py-3">
 				<div class="flex gap-1">
@@ -68,11 +73,13 @@
 		{:else}
 			{#each suggestions as sug, i}
 				<button
-					class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-[var(--bg-hover)] text-left"
+					class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-[var(--bg-hover)] text-left cursor-pointer"
 					onmouseenter={() => onHoverMove?.(sug.move)}
 					onmouseleave={() => onClearHover?.()}
+					onclick={() => onPlayMove?.(sug.move)}
+					title="Click to play {sug.san ?? sug.move}"
 				>
-					<span class="w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold {i === 0
+					<span class="w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0 {i === 0
 						? 'bg-[var(--accent)] text-[var(--bg-primary)]'
 						: 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}">
 						{i + 1}
@@ -80,7 +87,7 @@
 					<span class="font-mono font-semibold text-[var(--text-primary)]">
 						{sug.san ?? sug.move}
 					</span>
-					<span class="ml-auto font-mono text-xs {sug.score > 0 ? 'text-[var(--success)]' : sug.score < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}">
+					<span class="ml-auto font-mono text-xs flex-shrink-0 {sug.score > 0 ? 'text-[var(--success)]' : sug.score < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}">
 						{formatScore(sug)}
 					</span>
 				</button>
