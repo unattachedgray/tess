@@ -72,7 +72,11 @@ export class ChessGame {
 	moveUci(uci: string): Move | null {
 		const from = uci.slice(0, 2);
 		const to = uci.slice(2, 4);
-		const promotion = uci.length > 4 ? uci[4] : undefined;
+		let promotion = uci.length > 4 ? uci[4] : undefined;
+		// Auto-promote to queen if no promotion specified but move requires it
+		if (!promotion && this.isPromotion(from, to)) {
+			promotion = "q";
+		}
 		return this.move(from, to, promotion);
 	}
 
