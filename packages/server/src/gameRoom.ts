@@ -413,7 +413,7 @@ export class GameRoom {
 				const moves = this.goGame.getKataGoMoves();
 				const color = this.goGame.turn === "black" ? "b" : "w";
 				// Use moderate visit count for suggestions (high counts too slow on CPU)
-				const sugVisits = 100;
+				const sugVisits = 500;
 				log.info("Go suggestions query", { moves: moves.length, color, topN, visits: sugVisits });
 				const results = await this.kataGo.analyze(moves, color, sugVisits, topN, this.goGame.size);
 				log.info("Go suggestions result", { count: results.length });

@@ -53,7 +53,7 @@ export const DIFFICULTY_TIERS: DifficultyTier[] = [
 	},
 ];
 
-export const FULL_STRENGTH_MOVETIME = 5000;
+export const FULL_STRENGTH_MOVETIME = 1000;
 
 export function getTier(id: string): DifficultyTier | undefined {
 	return DIFFICULTY_TIERS.find((t) => t.id === id);

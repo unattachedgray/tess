@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,16 +79,37 @@ export function resolveJanggiNnuePath(): string | null {
 	return null;
 }
 
+function hasGpu(): boolean {
+	try {
+		execSync("nvidia-smi", { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export function resolveKataGoPath(): string | null {
 	const base = resolve(__dirname, "../../../../assets/engines/katago");
 	const boardgamesBase = resolve(__dirname, "../../../../../boardgames/assets/engines/katago");
 
 	const dirs = [base, boardgamesBase];
+	const gpu = hasGpu();
+
+	// Prefer CUDA binary if GPU available
+	if (gpu) {
+		for (const dir of dirs) {
+			const cuda = resolve(dir, "katago-cuda");
+			if (existsSync(cuda)) {
+				log.info("found KataGo CUDA", { path: cuda });
+				return cuda;
+			}
+		}
+	}
 
 	for (const dir of dirs) {
 		const binary = resolve(dir, "katago");
 		if (existsSync(binary)) {
-			log.info("found KataGo", { path: binary });
+			log.info("found KataGo CPU", { path: binary });
 			return binary;
 		}
 	}

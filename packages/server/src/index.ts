@@ -60,9 +60,11 @@ async function main() {
 
 	if (kataGoPath && kataGoConfig) {
 		try {
+			const isGpu = kataGoPath.includes("cuda");
 			kataGo = new KataGoAdapter(kataGoPath, kataGoConfig.config, kataGoConfig.model, {
-				numSearchThreads: "4",
+				numSearchThreads: isGpu ? "12" : "4",
 				numAnalysisThreads: "2",
+				...(isGpu ? { nnMaxBatchSize: "64", nnCacheSizePowerOfTwo: "21" } : {}),
 			});
 			log.info("initializing KataGo...");
 			await kataGo.init();
