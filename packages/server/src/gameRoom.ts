@@ -1,6 +1,14 @@
-import { ChessGame, type DifficultyId, type GameType, type Suggestion } from "@tess/shared";
+import {
+	ChessGame,
+	type DifficultyId,
+	type GameType,
+	GoGame,
+	JanggiGame,
+	type Suggestion,
+} from "@tess/shared";
 import { type AnalysisContext, analyzePosition } from "./ai.js";
 import { FULL_STRENGTH_MOVETIME, getTier } from "./engine/difficulty.js";
+import type { KataGoAdapter } from "./engine/katago.js";
 import type { UciPool } from "./engine/uciPool.js";
 import { createLogger } from "./logger.js";
 
@@ -23,8 +31,11 @@ export class GameRoom {
 	readonly gameType: GameType;
 	readonly difficulty: DifficultyId;
 	readonly playerColor: "white" | "black";
-	private game: ChessGame;
+	private chessGame: ChessGame | null = null;
+	private goGame: GoGame | null = null;
+	private janggiGame: JanggiGame | null = null;
 	private uciPool: UciPool;
+	private kataGo: KataGoAdapter | null;
 	private moveCallbacks: ((data: unknown) => void)[] = [];
 	private moveInProgress = false;
 	private lastSuggestions: Suggestion[] = [];
@@ -36,13 +47,27 @@ export class GameRoom {
 		difficulty: DifficultyId;
 		playerColor: "white" | "black";
 		uciPool: UciPool;
+		kataGo: KataGoAdapter | null;
+		boardSize?: number;
 	}) {
 		this.id = config.id;
 		this.gameType = config.gameType;
 		this.difficulty = config.difficulty;
 		this.playerColor = config.playerColor;
 		this.uciPool = config.uciPool;
-		this.game = new ChessGame();
+		this.kataGo = config.kataGo;
+
+		switch (config.gameType) {
+			case "chess":
+				this.chessGame = new ChessGame();
+				break;
+			case "go":
+				this.goGame = new GoGame(config.boardSize ?? 19);
+				break;
+			case "janggi":
+				this.janggiGame = new JanggiGame();
+				break;
+		}
 	}
 
 	onMove(cb: (data: unknown) => void): void {
@@ -53,63 +78,138 @@ export class GameRoom {
 		for (const cb of this.moveCallbacks) cb(data);
 	}
 
+	// --- State accessors ---
+
 	getState() {
+		if (this.gameType === "go" && this.goGame) {
+			return {
+				type: "GAME_STATE" as const,
+				gameId: this.id,
+				gameType: this.gameType,
+				fen: "",
+				boardState: this.goGame.getBoardState(),
+				boardSize: this.goGame.size,
+				playerColor: this.playerColor,
+				turn: this.goGame.turn,
+				legalMoves: {} as Record<string, string[]>,
+				moveHistory: this.goGame.getMoveHistory().map((m) => ({
+					san: m.coord,
+					uci: m.coord,
+					fen: "",
+					moveNumber: m.moveNumber,
+				})),
+				capturedPieces: {
+					white: [] as string[],
+					black: [] as string[],
+				},
+				prisoners: this.goGame.prisoners,
+				isCheck: false,
+				isGameOver: this.goGame.isGameOver,
+				result: this.goGame.getGameResult() ?? undefined,
+				difficulty: this.difficulty,
+			};
+		}
+
+		if (this.gameType === "janggi" && this.janggiGame) {
+			return {
+				type: "GAME_STATE" as const,
+				gameId: this.id,
+				gameType: this.gameType,
+				fen: this.janggiGame.fen,
+				playerColor: this.playerColor,
+				turn: this.janggiGame.turn,
+				legalMoves: this.janggiGame.getLegalMovesObject(),
+				moveHistory: this.janggiGame.getMoveHistory(),
+				capturedPieces: {
+					white: this.janggiGame.getCapturedPieces().blue,
+					black: this.janggiGame.getCapturedPieces().red,
+				},
+				isCheck: false,
+				isGameOver: this.janggiGame.isGameOver,
+				result: this.janggiGame.getGameResult() ?? undefined,
+				difficulty: this.difficulty,
+			};
+		}
+
+		// Chess (default)
+		const game = this.chessGame!;
 		return {
 			type: "GAME_STATE" as const,
 			gameId: this.id,
-			fen: this.game.fen,
+			gameType: this.gameType,
+			fen: game.fen,
 			playerColor: this.playerColor,
-			turn: this.game.turn,
-			legalMoves: this.game.getLegalMovesObject(),
-			moveHistory: this.game.getMoveHistory(),
-			capturedPieces: this.game.getCapturedPieces(),
-			isCheck: this.game.isCheck,
-			isGameOver: this.game.isGameOver,
-			result: this.game.getGameResult() ?? undefined,
+			turn: game.turn,
+			legalMoves: game.getLegalMovesObject(),
+			moveHistory: game.getMoveHistory(),
+			capturedPieces: game.getCapturedPieces(),
+			isCheck: game.isCheck,
+			isGameOver: game.isGameOver,
+			result: game.getGameResult() ?? undefined,
 			difficulty: this.difficulty,
 		};
 	}
 
 	private buildMovePayload() {
+		if (this.gameType === "go" && this.goGame) {
+			return {
+				turn: this.goGame.turn,
+				legalMoves: {} as Record<string, string[]>,
+				capturedPieces: { white: [] as string[], black: [] as string[] },
+				prisoners: this.goGame.prisoners,
+				boardState: this.goGame.getBoardState(),
+				lastStone: this.goGame.lastMove,
+				isCheck: false,
+				isGameOver: this.goGame.isGameOver,
+				result: this.goGame.getGameResult() ?? undefined,
+			};
+		}
+
+		if (this.gameType === "janggi" && this.janggiGame) {
+			return {
+				turn: this.janggiGame.turn,
+				legalMoves: this.janggiGame.getLegalMovesObject(),
+				capturedPieces: {
+					white: this.janggiGame.getCapturedPieces().blue,
+					black: this.janggiGame.getCapturedPieces().red,
+				},
+				isCheck: false,
+				isGameOver: this.janggiGame.isGameOver,
+				result: this.janggiGame.getGameResult() ?? undefined,
+			};
+		}
+
+		const game = this.chessGame!;
 		return {
-			turn: this.game.turn,
-			legalMoves: this.game.getLegalMovesObject(),
-			capturedPieces: this.game.getCapturedPieces(),
-			isCheck: this.game.isCheck,
-			isGameOver: this.game.isGameOver,
-			result: this.game.getGameResult() ?? undefined,
+			turn: game.turn,
+			legalMoves: game.getLegalMovesObject(),
+			capturedPieces: game.getCapturedPieces(),
+			isCheck: game.isCheck,
+			isGameOver: game.isGameOver,
+			result: game.getGameResult() ?? undefined,
 		};
 	}
 
-	async playMove(uci: string): Promise<{ success: boolean; error?: string }> {
-		if (this.moveInProgress) return { success: false, error: "Move in progress" };
-		if (this.game.isGameOver) return { success: false, error: "Game is over" };
+	// --- Move handling ---
 
-		if (this.game.turn !== this.playerColor) {
-			return { success: false, error: "Not your turn" };
-		}
+	async playMove(move: string): Promise<{ success: boolean; error?: string }> {
+		if (this.moveInProgress) return { success: false, error: "Move in progress" };
+		if (this.isGameOver) return { success: false, error: "Game is over" };
+		if (this.currentTurn !== this.playerColor) return { success: false, error: "Not your turn" };
 
 		this.moveInProgress = true;
 		try {
-			const result = this.game.moveUci(uci);
-			if (!result) return { success: false, error: "Illegal move" };
+			const moveResult = this.executeMove(move);
+			if (!moveResult) return { success: false, error: "Illegal move" };
 
-			const history = this.game.getMoveHistory();
-			const lastMove = history[history.length - 1];
+			this.emit({ type: "MOVE", move: moveResult, ...this.buildMovePayload() });
 
-			this.emit({
-				type: "MOVE",
-				move: lastMove,
-				...this.buildMovePayload(),
-			});
-
-			if (!this.game.isGameOver) {
+			if (!this.isGameOver) {
 				await this.makeAiMove();
 			}
 
-			// After AI responds, send suggestions + analysis (fire-and-forget)
-			if (!this.game.isGameOver) {
-				this.sendSuggestionsAndAnalysis(uci);
+			if (!this.isGameOver) {
+				this.sendSuggestionsAndAnalysis(move);
 			}
 
 			return { success: true };
@@ -118,52 +218,106 @@ export class GameRoom {
 		}
 	}
 
+	private executeMove(
+		move: string,
+	): { san: string; uci: string; fen: string; moveNumber: number } | null {
+		if (this.gameType === "go" && this.goGame) {
+			if (move.toUpperCase() === "PASS") {
+				if (!this.goGame.pass()) return null;
+			} else {
+				const coord = this.goGame.fromGtpCoord(move);
+				if (!coord || !this.goGame.play(coord.x, coord.y)) return null;
+			}
+			const history = this.goGame.getMoveHistory();
+			const last = history[history.length - 1];
+			return { san: last.coord, uci: last.coord, fen: "", moveNumber: last.moveNumber };
+		}
+
+		if (this.gameType === "janggi" && this.janggiGame) {
+			const result = this.janggiGame.moveUci(move);
+			if (!result) return null;
+			const history = this.janggiGame.getMoveHistory();
+			return history[history.length - 1];
+		}
+
+		// Chess
+		const result = this.chessGame!.moveUci(move);
+		if (!result) return null;
+		const history = this.chessGame!.getMoveHistory();
+		return history[history.length - 1];
+	}
+
+	private get currentTurn(): "white" | "black" {
+		if (this.goGame) return this.goGame.turn;
+		if (this.janggiGame) return this.janggiGame.turn;
+		return this.chessGame!.turn;
+	}
+
+	private get isGameOver(): boolean {
+		if (this.goGame) return this.goGame.isGameOver;
+		if (this.janggiGame) return this.janggiGame.isGameOver;
+		return this.chessGame!.isGameOver;
+	}
+
+	private get currentFen(): string {
+		if (this.janggiGame) return this.janggiGame.fen;
+		if (this.chessGame) return this.chessGame.fen;
+		return "";
+	}
+
+	// --- AI moves ---
+
 	private async makeAiMove(): Promise<void> {
 		const tier = getTier(this.difficulty);
 		if (!tier) return;
-
 		const delay = randomDelay(AI_DELAY[this.difficulty]);
 
 		try {
-			const [searchResult] = await Promise.all([
-				this.uciPool.search(this.game.fen, tier.chessMovetime),
-				new Promise((r) => setTimeout(r, delay)),
-			]);
+			let aiMoveStr: string;
 
-			const aiMove = this.game.moveUci(searchResult.bestmove);
-			if (!aiMove) {
-				log.error("AI produced illegal move", {
-					move: searchResult.bestmove,
-					fen: this.game.fen,
-				});
+			if (this.gameType === "go" && this.goGame && this.kataGo) {
+				const moves = this.goGame.getKataGoMoves();
+				const color = this.goGame.turn === "black" ? "b" : "w";
+				const [moveResult] = await Promise.all([
+					this.kataGo.getMove(moves, color, tier.goVisits, this.goGame.size),
+					new Promise((r) => setTimeout(r, delay)),
+				]);
+				aiMoveStr = moveResult;
+			} else if (this.gameType === "janggi" && this.janggiGame) {
+				const [searchResult] = await Promise.all([
+					this.uciPool.search(this.janggiGame.fen, tier.janggiMovetime, 1, "janggi"),
+					new Promise((r) => setTimeout(r, delay)),
+				]);
+				aiMoveStr = searchResult.bestmove;
+			} else {
+				const [searchResult] = await Promise.all([
+					this.uciPool.search(this.chessGame!.fen, tier.chessMovetime),
+					new Promise((r) => setTimeout(r, delay)),
+				]);
+				aiMoveStr = searchResult.bestmove;
+			}
+
+			const moveResult = this.executeMove(aiMoveStr);
+			if (!moveResult) {
+				log.error("AI produced illegal move", { move: aiMoveStr, gameType: this.gameType });
 				return;
 			}
 
-			const history = this.game.getMoveHistory();
-			const lastMove = history[history.length - 1];
-
-			this.emit({
-				type: "MOVE",
-				move: lastMove,
-				...this.buildMovePayload(),
-			});
+			this.emit({ type: "MOVE", move: moveResult, ...this.buildMovePayload() });
 		} catch (err) {
 			log.error("AI move failed", { error: (err as Error).message });
-			this.emit({
-				type: "ERROR",
-				message: "AI failed to respond. You can continue or start a new game.",
-			});
+			this.emit({ type: "ERROR", message: "AI failed to respond." });
 		}
 	}
 
-	/** Fire-and-forget: sends suggestions then analysis to client */
+	// --- Suggestions & Analysis ---
+
 	private sendSuggestionsAndAnalysis(playerMove: string): void {
 		this.getSuggestions(3)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;
 
-				// Send move quality based on previous suggestions
 				if (this.lastSuggestions.length > 0) {
 					this.emit({
 						type: "MOVE_QUALITY",
@@ -172,7 +326,6 @@ export class GameRoom {
 					});
 				}
 
-				// Request AI analysis if coaching enabled
 				if (this.coachingEnabled) {
 					this.requestAnalysis();
 				}
@@ -186,16 +339,10 @@ export class GameRoom {
 		userMove: string,
 	): "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" {
 		if (this.lastSuggestions.length === 0) return "ok";
-
 		const bestMove = this.lastSuggestions[0].move;
 		if (userMove.startsWith(bestMove) || bestMove.startsWith(userMove)) return "best";
-
-		const inTop = this.lastSuggestions.some(
-			(s) => s.move === userMove || userMove.startsWith(s.move),
-		);
-		if (inTop) return "good";
-
-		// Score difference from the previous best
+		if (this.lastSuggestions.some((s) => s.move === userMove || userMove.startsWith(s.move)))
+			return "good";
 		const bestScore = Math.abs(this.lastSuggestions[0].score);
 		if (bestScore < 30) return "ok";
 		if (bestScore < 80) return "inaccuracy";
@@ -204,18 +351,28 @@ export class GameRoom {
 	}
 
 	private async requestAnalysis(): Promise<void> {
-		const history = this.game.getMoveHistory();
-		const lastMoveEntry = history.length > 0 ? history[history.length - 1] : null;
+		const history =
+			this.gameType === "go"
+				? this.goGame!.getMoveHistory()
+				: this.gameType === "janggi"
+					? this.janggiGame!.getMoveHistory()
+					: this.chessGame!.getMoveHistory();
+
+		const lastEntry = history.length > 0 ? history[history.length - 1] : null;
 
 		const ctx: AnalysisContext = {
 			gameType: this.gameType,
-			fen: this.game.fen,
+			fen: this.currentFen,
 			moveCount: history.length,
 			playerColor: this.playerColor,
-			lastMove: lastMoveEntry?.san,
-			lastMoveColor: this.game.turn === "white" ? "Black" : "White",
+			lastMove: lastEntry
+				? "san" in lastEntry
+					? lastEntry.san
+					: (lastEntry as { coord?: string }).coord
+				: undefined,
+			lastMoveColor: this.currentTurn === "white" ? "Black" : "White",
 			suggestions: this.lastSuggestions,
-			pgn: this.game.pgn,
+			pgn: this.chessGame?.pgn,
 		};
 
 		const text = await analyzePosition(ctx);
@@ -226,18 +383,38 @@ export class GameRoom {
 
 	async getSuggestions(topN = 3) {
 		try {
-			const result = await this.uciPool.search(this.game.fen, FULL_STRENGTH_MOVETIME, topN);
-			const suggestions = result.info
-				.filter((i) => i.pv.length > 0)
-				.sort((a, b) => a.multipv - b.multipv)
-				.slice(0, topN)
-				.map((info) => ({
-					move: info.pv[0],
-					san: this.game.uciToSan(info.pv[0]) ?? info.pv[0],
-					score: info.mate !== null ? (info.mate > 0 ? 99999 : -99999) : info.score,
-					depth: info.depth,
+			let suggestions: Suggestion[];
+
+			if (this.gameType === "go" && this.goGame && this.kataGo) {
+				const moves = this.goGame.getKataGoMoves();
+				const color = this.goGame.turn === "black" ? "b" : "w";
+				const results = await this.kataGo.analyze(moves, color, 10000, topN, this.goGame.size);
+				suggestions = results.map((info) => ({
+					move: info.move,
+					san: info.move,
+					score: Math.round(info.winrate * 10000 - 5000), // normalize to centipawn-like
+					depth: info.visits,
 					pv: info.pv,
 				}));
+			} else {
+				const fen = this.gameType === "janggi" ? this.janggiGame!.fen : this.chessGame!.fen;
+				const variant = this.gameType === "janggi" ? "janggi" : undefined;
+				const result = await this.uciPool.search(fen, FULL_STRENGTH_MOVETIME, topN, variant);
+				suggestions = result.info
+					.filter((i) => i.pv.length > 0)
+					.sort((a, b) => a.multipv - b.multipv)
+					.slice(0, topN)
+					.map((info) => {
+						const game = this.gameType === "janggi" ? null : this.chessGame;
+						return {
+							move: info.pv[0],
+							san: game?.uciToSan(info.pv[0]) ?? info.pv[0],
+							score: info.mate !== null ? (info.mate > 0 ? 99999 : -99999) : info.score,
+							depth: info.depth,
+							pv: info.pv,
+						};
+					});
+			}
 
 			this.lastSuggestions = suggestions;
 			return { type: "SUGGESTIONS" as const, suggestions };
@@ -247,39 +424,29 @@ export class GameRoom {
 		}
 	}
 
-	get pgn(): string {
-		return this.game.pgn;
-	}
-
-	async getHint(): Promise<{
-		type: "HINT";
-		level: number;
-		piece?: string;
-		destination?: string;
-		fullMove?: string;
-	} | null> {
+	async getHint() {
 		if (this.lastSuggestions.length === 0) {
 			const sug = await this.getSuggestions(1);
 			this.lastSuggestions = sug.suggestions;
 		}
 		if (this.lastSuggestions.length === 0) return null;
-
 		const bestMove = this.lastSuggestions[0].move;
-		const piece = bestMove.slice(0, 2);
-		const dest = bestMove.slice(2, 4);
-
-		// Progressive hints: call multiple times for more detail
 		return {
-			type: "HINT",
+			type: "HINT" as const,
 			level: 3,
-			piece,
-			destination: dest,
+			piece: bestMove.slice(0, 2),
+			destination: bestMove.length >= 4 ? bestMove.slice(2, 4) : bestMove,
 			fullMove: bestMove,
 		};
 	}
 
+	get pgn(): string {
+		return this.chessGame?.pgn ?? "";
+	}
+
 	resign(color: "white" | "black") {
 		const winner = color === "white" ? "black" : "white";
+		if (this.goGame) this.goGame.resign(color);
 		return {
 			type: "GAME_OVER" as const,
 			result: { winner: winner as "white" | "black", reason: "resignation" },
@@ -287,46 +454,21 @@ export class GameRoom {
 	}
 
 	async startIfAiFirst(): Promise<void> {
-		if (this.game.turn !== this.playerColor) {
+		if (this.currentTurn !== this.playerColor) {
 			await this.makeAiMove();
 		}
-		// Always send opening suggestions after game starts
 		this.sendOpeningSuggestions();
 	}
 
-	/** Fire-and-forget: sends initial suggestions and opening analysis */
 	private sendOpeningSuggestions(): void {
 		this.getSuggestions(3)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;
-
-				if (this.coachingEnabled) {
-					this.requestOpeningAnalysis();
-				}
+				if (this.coachingEnabled) this.requestAnalysis();
 			})
 			.catch((err) => {
 				log.error("opening suggestions failed", { error: (err as Error).message });
 			});
-	}
-
-	private async requestOpeningAnalysis(): Promise<void> {
-		const history = this.game.getMoveHistory();
-		const ctx: AnalysisContext = {
-			gameType: this.gameType,
-			fen: this.game.fen,
-			moveCount: history.length,
-			playerColor: this.playerColor,
-			lastMove: history.length > 0 ? history[history.length - 1].san : undefined,
-			lastMoveColor:
-				history.length > 0 ? (this.game.turn === "white" ? "Black" : "White") : undefined,
-			suggestions: this.lastSuggestions,
-			pgn: this.game.pgn,
-		};
-
-		const text = await analyzePosition(ctx);
-		if (text) {
-			this.emit({ type: "ANALYSIS", text });
-		}
 	}
 }

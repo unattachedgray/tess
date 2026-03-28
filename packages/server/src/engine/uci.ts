@@ -76,9 +76,20 @@ export class UciAdapter {
 		});
 	}
 
-	async search(fen: string, movetime: number, multiPv = 1): Promise<UciSearchResult> {
+	async search(
+		fen: string,
+		movetime: number,
+		multiPv = 1,
+		variant?: string,
+	): Promise<UciSearchResult> {
 		if (!this.ready) throw new Error("Engine not ready");
 
+		if (variant) {
+			this.send(`setoption name UCI_Variant value ${variant}`);
+			this.send("setoption name Use NNUE value false");
+		} else {
+			this.send("setoption name UCI_Variant value chess");
+		}
 		this.send(`setoption name MultiPV value ${multiPv}`);
 		this.send("isready");
 		await this.waitFor("readyok", 5000);

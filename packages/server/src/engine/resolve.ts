@@ -40,3 +40,38 @@ export function resolveNnuePath(): string | null {
 	log.warn("NNUE file not found, engine will use default evaluation");
 	return null;
 }
+
+export function resolveKataGoPath(): string | null {
+	const base = resolve(__dirname, "../../../../assets/engines/katago");
+	const boardgamesBase = resolve(__dirname, "../../../../../boardgames/assets/engines/katago");
+
+	const dirs = [base, boardgamesBase];
+
+	for (const dir of dirs) {
+		const binary = resolve(dir, "katago");
+		if (existsSync(binary)) {
+			log.info("found KataGo", { path: binary });
+			return binary;
+		}
+	}
+
+	log.warn("KataGo not found, Go will not be available");
+	return null;
+}
+
+export function resolveKataGoConfig(): { config: string; model: string } | null {
+	const base = resolve(__dirname, "../../../../assets/engines/katago");
+	const boardgamesBase = resolve(__dirname, "../../../../../boardgames/assets/engines/katago");
+
+	const dirs = [base, boardgamesBase];
+
+	for (const dir of dirs) {
+		const config = resolve(dir, "default_gtp.cfg");
+		const model = resolve(dir, "default_model.bin.gz");
+		if (existsSync(config) && existsSync(model)) {
+			return { config, model };
+		}
+	}
+
+	return null;
+}

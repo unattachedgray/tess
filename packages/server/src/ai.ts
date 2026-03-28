@@ -69,6 +69,69 @@ Under 120 words. Use **bold** for strategic/tactical terms on first use. End wit
 Include all bolded terms. Skip obvious ones (piece names, check, capture).`;
 }
 
+function formatGoSuggestions(suggestions: Suggestion[]): string {
+	return suggestions
+		.map((s, i) => {
+			const winrate = ((s.score + 5000) / 100).toFixed(1);
+			return `${i + 1}. ${s.san ?? s.move} (win: ${winrate}%)`;
+		})
+		.join("\n");
+}
+
+function buildGoPrompt(ctx: AnalysisContext): string {
+	const phase = getPhase("go", ctx.moveCount);
+	const playerSide = ctx.playerColor === "black" ? "Black" : "White";
+	const aiSide = ctx.playerColor === "black" ? "White" : "Black";
+
+	return `Go (Baduk) coach. Human=${playerSide}, Engine=${aiSide}. No greeting.
+
+Move ${ctx.moveCount}, ${phase}.
+
+${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent.` : "Game just started. Explain the opening position."}
+**Top engine suggestions:**
+${formatGoSuggestions(ctx.suggestions)}
+
+Analyze:
+${ctx.lastMove ? "1. Was the last move good or bad? Why?" : `1. What are the key opening principles for ${playerSide}?`}
+2. What should ${playerSide} focus on now? Pick the best suggestion and explain the strategic value.
+3. Key themes: influence vs territory, thickness, weak groups.
+
+Under 120 words. Use **bold** for Go terms on first use. End with:
+
+**Terms**
+- **term** — brief definition
+
+Include all bolded terms. Skip obvious ones (stone, capture, board).`;
+}
+
+function buildJanggiPrompt(ctx: AnalysisContext): string {
+	const phase = getPhase("janggi", ctx.moveCount);
+	const playerSide = ctx.playerColor === "white" ? "Blue (Cho)" : "Red (Han)";
+	const aiSide = ctx.playerColor === "white" ? "Red (Han)" : "Blue (Cho)";
+
+	return `Janggi (Korean Chess) coach. Human=${playerSide}, Engine=${aiSide}. No greeting.
+
+Pieces: General(K), Advisor(A), Elephant(B, 1orth+2diag), Horse(N, 1orth+1diag), Chariot(R), Cannon(C, jumps 1 piece), Soldier(P).
+
+Move ${ctx.moveCount}, ${phase}.
+
+${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent.` : "Game just started. Explain the opening position."}
+**Top engine suggestions:**
+${formatSuggestions(ctx.suggestions)}
+
+Analyze:
+${ctx.lastMove ? "1. Was the last move good or bad? Why?" : `1. What are the key opening principles for ${playerSide}?`}
+2. What should ${playerSide} focus on now? Pick the best suggestion and explain why.
+3. Key themes: piece activity, general safety, cannon effectiveness.
+
+Under 120 words. Use **bold** for strategic terms on first use. Do NOT use FEN notation in your explanation — use natural language only. End with:
+
+**Terms**
+- **term** — brief definition
+
+Include all bolded terms.`;
+}
+
 export interface AnalysisContext {
 	gameType: GameType;
 	fen: string;
@@ -99,11 +162,14 @@ export async function analyzePosition(ctx: AnalysisContext): Promise<string | nu
 
 	let prompt: string;
 	switch (ctx.gameType) {
-		case "chess":
-			prompt = buildChessPrompt(ctx);
+		case "go":
+			prompt = buildGoPrompt(ctx);
+			break;
+		case "janggi":
+			prompt = buildJanggiPrompt(ctx);
 			break;
 		default:
-			prompt = buildChessPrompt(ctx); // fallback for now
+			prompt = buildChessPrompt(ctx);
 	}
 
 	activeCalls++;

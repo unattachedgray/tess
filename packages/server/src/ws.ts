@@ -101,6 +101,7 @@ export function createWsServer(
 					gameType: msg.gameType,
 					difficulty: msg.difficulty,
 					playerColor: msg.playerColor,
+					boardSize: msg.boardSize,
 				});
 
 				state.room = room;

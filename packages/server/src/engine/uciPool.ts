@@ -37,10 +37,15 @@ export class UciPool {
 		log.info("pool ready", { size: this.poolSize, engine: this.enginePath });
 	}
 
-	async search(fen: string, movetime: number, multiPv = 1): Promise<UciSearchResult> {
+	async search(
+		fen: string,
+		movetime: number,
+		multiPv = 1,
+		variant?: string,
+	): Promise<UciSearchResult> {
 		const adapter = await this.checkout();
 		try {
-			return await adapter.search(fen, movetime, multiPv);
+			return await adapter.search(fen, movetime, multiPv, variant);
 		} finally {
 			this.release(adapter);
 		}

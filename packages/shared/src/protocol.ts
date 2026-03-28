@@ -59,7 +59,11 @@ export type ClientMessage = z.infer<typeof ClientMessage>;
 export const GameStatePayload = z.object({
 	type: z.literal("GAME_STATE"),
 	gameId: z.string(),
+	gameType: z.enum(["go", "chess", "janggi"]).optional(),
 	fen: z.string(),
+	boardState: z.array(z.array(z.string().nullable())).optional(),
+	boardSize: z.number().optional(),
+	prisoners: z.object({ black: z.number(), white: z.number() }).optional(),
 	playerColor: z.enum(["white", "black"]),
 	turn: z.enum(["white", "black"]),
 	legalMoves: z.record(z.string(), z.array(z.string())),

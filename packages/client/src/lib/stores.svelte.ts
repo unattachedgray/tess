@@ -30,6 +30,12 @@ class AppState {
 	isGameOver = $state(false);
 	result = $state<{ winner: "white" | "black" | "draw"; reason: string } | null>(null);
 
+	// Go-specific state
+	boardState = $state<(string | null)[][]>([]);
+	boardSize = $state(19);
+	prisoners = $state<{ black: number; white: number }>({ black: 0, white: 0 });
+	goLastMove = $state<{ x: number; y: number } | null>(null);
+
 	// AI coaching state
 	suggestions = $state<Suggestion[]>([]);
 	suggestionsStale = $state(false);
@@ -52,6 +58,7 @@ class AppState {
 
 	updateFromGameState(data: {
 		gameId: string;
+		gameType?: string;
 		fen: string;
 		turn: "white" | "black";
 		legalMoves: Record<string, string[]>;
@@ -60,8 +67,12 @@ class AppState {
 		isCheck: boolean;
 		isGameOver: boolean;
 		result?: { winner: "white" | "black" | "draw"; reason: string };
+		boardState?: (string | null)[][];
+		boardSize?: number;
+		prisoners?: { black: number; white: number };
 	}) {
 		this.gameId = data.gameId;
+		if (data.gameType) this.gameType = data.gameType as GameType;
 		this.fen = data.fen;
 		this.turn = data.turn;
 		this.legalMoves = data.legalMoves;
@@ -70,6 +81,9 @@ class AppState {
 		this.isCheck = data.isCheck;
 		this.isGameOver = data.isGameOver;
 		this.result = data.result ?? null;
+		if (data.boardState) this.boardState = data.boardState;
+		if (data.boardSize) this.boardSize = data.boardSize;
+		if (data.prisoners) this.prisoners = data.prisoners;
 	}
 
 	updateFromMove(data: {
@@ -80,6 +94,9 @@ class AppState {
 		isCheck: boolean;
 		isGameOver: boolean;
 		result?: { winner: "white" | "black" | "draw"; reason: string };
+		boardState?: (string | null)[][];
+		prisoners?: { black: number; white: number };
+		lastStone?: { x: number; y: number } | null;
 	}) {
 		this.moveHistory = [...this.moveHistory, data.move];
 		this.fen = data.move.fen;
@@ -89,6 +106,9 @@ class AppState {
 		this.isCheck = data.isCheck;
 		this.isGameOver = data.isGameOver;
 		this.result = data.result ?? null;
+		if (data.boardState) this.boardState = data.boardState;
+		if (data.prisoners) this.prisoners = data.prisoners;
+		if (data.lastStone !== undefined) this.goLastMove = data.lastStone;
 		this.suggestionsStale = true;
 		this.hintLevel = 0;
 		if (this.coachingEnabled) {
@@ -164,6 +184,10 @@ class AppState {
 		this.eval = 0;
 		this.lastMoveQuality = null;
 		this.hintLevel = 0;
+		this.boardState = [];
+		this.boardSize = 19;
+		this.prisoners = { black: 0, white: 0 };
+		this.goLastMove = null;
 	}
 }
 

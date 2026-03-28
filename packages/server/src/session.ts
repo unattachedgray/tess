@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { DifficultyId, GameType } from "@tess/shared";
+import type { KataGoAdapter } from "./engine/katago.js";
 import type { UciPool } from "./engine/uciPool.js";
 import { GameRoom } from "./gameRoom.js";
 import { createLogger } from "./logger.js";
@@ -9,18 +10,23 @@ const log = createLogger("session");
 export class SessionManager {
 	private rooms = new Map<string, GameRoom>();
 
-	constructor(private readonly uciPool: UciPool) {}
+	constructor(
+		private readonly uciPool: UciPool,
+		private readonly kataGo: KataGoAdapter | null,
+	) {}
 
 	createRoom(config: {
 		gameType: GameType;
 		difficulty: DifficultyId;
 		playerColor: "white" | "black";
+		boardSize?: number;
 	}): GameRoom {
 		const id = randomUUID().slice(0, 8);
 		const room = new GameRoom({
 			id,
 			...config,
 			uciPool: this.uciPool,
+			kataGo: this.kataGo,
 		});
 
 		this.rooms.set(id, room);

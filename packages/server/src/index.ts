@@ -1,5 +1,11 @@
 import { serve } from "@hono/node-server";
-import { resolveEnginePath, resolveNnuePath } from "./engine/resolve.js";
+import { KataGoAdapter } from "./engine/katago.js";
+import {
+	resolveEnginePath,
+	resolveKataGoConfig,
+	resolveKataGoPath,
+	resolveNnuePath,
+} from "./engine/resolve.js";
 import { UciPool } from "./engine/uciPool.js";
 import { createApp } from "./http.js";
 import { createLogger } from "./logger.js";
@@ -10,19 +16,44 @@ const log = createLogger("server");
 const PORT = Number.parseInt(process.env.PORT ?? "8082", 10);
 
 async function main() {
+	// Initialize Fairy-Stockfish
 	const stockfishPath = resolveEnginePath();
-	log.info("engine path resolved", { stockfish: stockfishPath });
+	log.info("Stockfish path resolved", { stockfish: stockfishPath });
 
 	const nnuePath = resolveNnuePath();
 	const opts: Record<string, string> = {};
 	if (nnuePath) opts.EvalFile = nnuePath;
 
 	const uciPool = new UciPool(stockfishPath, 2, opts);
-	log.info("initializing engine pool...");
+	log.info("initializing Stockfish pool...");
 	await uciPool.init();
-	log.info("engine pool ready");
+	log.info("Stockfish pool ready");
 
-	const sessionManager = new SessionManager(uciPool);
+	// Initialize KataGo (optional — Go won't work without it)
+	let kataGo: KataGoAdapter | null = null;
+	const kataGoPath = resolveKataGoPath();
+	const kataGoConfig = resolveKataGoConfig();
+
+	if (kataGoPath && kataGoConfig) {
+		try {
+			kataGo = new KataGoAdapter(kataGoPath, kataGoConfig.config, kataGoConfig.model, {
+				numSearchThreads: "4",
+				numAnalysisThreads: "2",
+			});
+			log.info("initializing KataGo...");
+			await kataGo.init();
+			log.info("KataGo ready");
+		} catch (err) {
+			log.warn("KataGo init failed, Go will not be available", {
+				error: (err as Error).message,
+			});
+			kataGo = null;
+		}
+	} else {
+		log.warn("KataGo not found, Go will not be available");
+	}
+
+	const sessionManager = new SessionManager(uciPool, kataGo);
 	const app = createApp(sessionManager);
 
 	const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
@@ -34,6 +65,7 @@ async function main() {
 	const shutdown = () => {
 		log.info("shutting down...");
 		uciPool.shutdown();
+		kataGo?.shutdown();
 		server.close();
 		process.exit(0);
 	};

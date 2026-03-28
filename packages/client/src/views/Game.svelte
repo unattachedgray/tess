@@ -3,6 +3,8 @@
 	import { playSound } from "../lib/sounds.ts";
 	import type { WsClient } from "../lib/ws.ts";
 	import ChessBoard from "../boards/ChessBoard.svelte";
+	import GoBoard from "../boards/GoBoard.svelte";
+	import JanggiBoard from "../boards/JanggiBoard.svelte";
 	import MoveHistory from "../components/MoveHistory.svelte";
 	import CapturedPieces from "../components/CapturedPieces.svelte";
 	import EvalBar from "../components/EvalBar.svelte";
@@ -34,8 +36,15 @@
 		lastMoveCount = currentCount;
 	});
 
+	const GO_COLS = "ABCDEFGHJKLMNOPQRST";
+
 	function onMove(from: string, to: string) {
 		ws.send({ type: "PLAY_MOVE", move: `${from}${to}` });
+	}
+
+	function onGoPlay(x: number, y: number) {
+		const coord = `${GO_COLS[x]}${appState.boardSize - y}`;
+		ws.send({ type: "PLAY_MOVE", move: coord });
 	}
 
 	function resign() {
@@ -102,21 +111,44 @@
 		<div class="board-with-eval">
 			<EvalBar score={appState.eval} orientation={appState.playerColor} />
 
-			<ChessBoard
-				fen={appState.fen}
-				orientation={appState.playerColor}
-				legalMoves={isMyTurn && !appState.isGameOver ? appState.legalMoves : {}}
-				lastMove={appState.moveHistory.length > 0
-					? (() => {
-						const last = appState.moveHistory[appState.moveHistory.length - 1];
-						return [last.uci.slice(0, 2), last.uci.slice(2, 4)];
-					})()
-					: undefined}
-				isCheck={appState.isCheck}
-				turn={appState.turn}
-				arrows={boardArrows}
-				{onMove}
-			/>
+			{#if appState.gameType === 'go'}
+				<GoBoard
+					boardState={appState.boardState}
+					boardSize={appState.boardSize}
+					orientation={appState.playerColor}
+					lastMove={appState.goLastMove}
+					onPlay={(x, y) => onGoPlay(x, y)}
+				/>
+			{:else if appState.gameType === 'janggi'}
+				<JanggiBoard
+					fen={appState.fen}
+					orientation={appState.playerColor}
+					legalMoves={isMyTurn && !appState.isGameOver ? appState.legalMoves : {}}
+					lastMove={appState.moveHistory.length > 0
+						? (() => {
+							const last = appState.moveHistory[appState.moveHistory.length - 1];
+							return [last.uci.slice(0, 2), last.uci.slice(2, 4)] as [string, string];
+						})()
+						: undefined}
+					onMove={(from, to) => onMove(from, to)}
+				/>
+			{:else}
+				<ChessBoard
+					fen={appState.fen}
+					orientation={appState.playerColor}
+					legalMoves={isMyTurn && !appState.isGameOver ? appState.legalMoves : {}}
+					lastMove={appState.moveHistory.length > 0
+						? (() => {
+							const last = appState.moveHistory[appState.moveHistory.length - 1];
+							return [last.uci.slice(0, 2), last.uci.slice(2, 4)];
+						})()
+						: undefined}
+					isCheck={appState.isCheck}
+					turn={appState.turn}
+					arrows={boardArrows}
+					{onMove}
+				/>
+			{/if}
 		</div>
 
 		<!-- Our captured pieces (pieces we've taken from opponent) -->
