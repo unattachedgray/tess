@@ -30,106 +30,33 @@ function getPhase(gameType: GameType, moveCount: number): string {
 	return names[2];
 }
 
-function formatSuggestions(suggestions: Suggestion[]): string {
+function fmtSuggestions(suggestions: Suggestion[], gameType: GameType): string {
+	if (suggestions.length === 0) return "None available";
 	return suggestions
+		.slice(0, 3)
 		.map((s, i) => {
-			const score =
-				Math.abs(s.score) > 9000
-					? `Mate in ${Math.abs(s.score) - 9000}`
-					: `${(s.score / 100).toFixed(1)} pawns`;
-			return `${i + 1}. ${s.san ?? s.move} (eval: ${score})`;
+			if (gameType === "go") {
+				const wr = ((s.score + 5000) / 100).toFixed(0);
+				return `${i + 1}. ${s.san ?? s.move} (${wr}%)`;
+			}
+			const sc = Math.abs(s.score) > 9000 ? "Mate" : `${(s.score / 100).toFixed(1)}`;
+			return `${i + 1}. ${s.san ?? s.move} (${sc})`;
 		})
-		.join("\n");
+		.join(", ");
 }
 
-function buildChessPrompt(ctx: AnalysisContext): string {
-	const phase = getPhase("chess", ctx.moveCount);
-	const playerSide = ctx.playerColor === "white" ? "White" : "Black";
-	const aiSide = ctx.playerColor === "white" ? "Black" : "White";
+function buildPrompt(ctx: AnalysisContext): string {
+	const phase = getPhase(ctx.gameType, ctx.moveCount);
+	const game = ctx.gameType === "go" ? "Go" : ctx.gameType === "janggi" ? "Janggi" : "Chess";
+	const player = ctx.playerColor === "white" ? "White" : "Black";
 
-	return `Chess coach. Human=${playerSide}, Engine=${aiSide}. No greeting.
+	const lastMoveStr = ctx.lastMove
+		? `Last move (${ctx.lastMoveColor}): ${ctx.lastMove}.`
+		: "Opening position.";
 
-Move ${ctx.moveCount}, ${phase}.
-FEN: ${ctx.fen}
+	const sugs = fmtSuggestions(ctx.suggestions, ctx.gameType);
 
-${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent and consequence.` : "Game just started. Explain the opening position."}
-**Top engine suggestions:**
-${formatSuggestions(ctx.suggestions)}
-
-Analyze:
-${ctx.lastMove ? "1. Was the last move good or bad? Why?" : `1. What are the key opening principles ${playerSide} should follow?`}
-2. What should ${playerSide} focus on now? Pick the best suggestion and explain why it's a strong opening move.
-3. Key strategic themes (piece activity, king safety, pawn structure).
-
-Under 120 words. Use **bold** for strategic/tactical terms on first use. End with:
-
-**Terms**
-- **term** — brief definition
-
-Include all bolded terms. Skip obvious ones (piece names, check, capture).`;
-}
-
-function formatGoSuggestions(suggestions: Suggestion[]): string {
-	return suggestions
-		.map((s, i) => {
-			const winrate = ((s.score + 5000) / 100).toFixed(1);
-			return `${i + 1}. ${s.san ?? s.move} (win: ${winrate}%)`;
-		})
-		.join("\n");
-}
-
-function buildGoPrompt(ctx: AnalysisContext): string {
-	const phase = getPhase("go", ctx.moveCount);
-	const playerSide = ctx.playerColor === "black" ? "Black" : "White";
-	const aiSide = ctx.playerColor === "black" ? "White" : "Black";
-
-	return `Go (Baduk) coach. Human=${playerSide}, Engine=${aiSide}. No greeting.
-
-Move ${ctx.moveCount}, ${phase}.
-
-${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent.` : "Game just started. Explain the opening position."}
-**Top engine suggestions:**
-${formatGoSuggestions(ctx.suggestions)}
-
-Analyze:
-${ctx.lastMove ? "1. Was the last move good or bad? Why?" : `1. What are the key opening principles for ${playerSide}?`}
-2. What should ${playerSide} focus on now? Pick the best suggestion and explain the strategic value.
-3. Key themes: influence vs territory, thickness, weak groups.
-
-Under 120 words. Use **bold** for Go terms on first use. End with:
-
-**Terms**
-- **term** — brief definition
-
-Include all bolded terms. Skip obvious ones (stone, capture, board).`;
-}
-
-function buildJanggiPrompt(ctx: AnalysisContext): string {
-	const phase = getPhase("janggi", ctx.moveCount);
-	const playerSide = ctx.playerColor === "white" ? "Blue (Cho)" : "Red (Han)";
-	const aiSide = ctx.playerColor === "white" ? "Red (Han)" : "Blue (Cho)";
-
-	return `Janggi (Korean Chess) coach. Human=${playerSide}, Engine=${aiSide}. No greeting.
-
-Pieces: General(K), Advisor(A), Elephant(B, 1orth+2diag), Horse(N, 1orth+1diag), Chariot(R), Cannon(C, jumps 1 piece), Soldier(P).
-
-Move ${ctx.moveCount}, ${phase}.
-
-${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent.` : "Game just started. Explain the opening position."}
-**Top engine suggestions:**
-${formatSuggestions(ctx.suggestions)}
-
-Analyze:
-${ctx.lastMove ? "1. Was the last move good or bad? Why?" : `1. What are the key opening principles for ${playerSide}?`}
-2. What should ${playerSide} focus on now? Pick the best suggestion and explain why.
-3. Key themes: piece activity, general safety, cannon effectiveness.
-
-Under 120 words. Use **bold** for strategic terms on first use. Do NOT use FEN notation in your explanation — use natural language only. End with:
-
-**Terms**
-- **term** — brief definition
-
-Include all bolded terms.`;
+	return `${game} coach, move ${ctx.moveCount} (${phase}). Human=${player}. ${lastMoveStr} Best moves: ${sugs}. In 2-3 sentences: explain the best suggestion and why. Use **bold** for key terms. Under 60 words.`;
 }
 
 export interface AnalysisContext {
@@ -143,7 +70,7 @@ export interface AnalysisContext {
 	pgn?: string;
 }
 
-const TIMEOUT_MS = 30000;
+const TIMEOUT_MS = 20000;
 const MAX_CONCURRENT = 2;
 let activeCalls = 0;
 
@@ -153,18 +80,7 @@ export async function analyzePosition(ctx: AnalysisContext): Promise<string | nu
 		return null;
 	}
 
-	let prompt: string;
-	switch (ctx.gameType) {
-		case "go":
-			prompt = buildGoPrompt(ctx);
-			break;
-		case "janggi":
-			prompt = buildJanggiPrompt(ctx);
-			break;
-		default:
-			prompt = buildChessPrompt(ctx);
-	}
-
+	const prompt = buildPrompt(ctx);
 	activeCalls++;
 
 	try {
