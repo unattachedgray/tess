@@ -145,6 +145,7 @@ class AppState {
 	lastMoveQuality = $state<MoveQuality>(null);
 	hintLevel = $state(0);
 	showArrows = $state(true);
+	opening = $state<{ eco: string; name: string } | null>(null);
 	autoplayActive = $state(false);
 	skillEval = $state<{
 		accuracy: number;
@@ -230,6 +231,7 @@ class AppState {
 		this.isCheck = data.isCheck;
 		this.isGameOver = data.isGameOver;
 		this.result = data.result ?? null;
+		if ((data as any).opening) this.opening = (data as any).opening;
 		if (data.boardState !== undefined) this.boardState = data.boardState;
 		if (data.boardSize !== undefined) this.boardSize = data.boardSize;
 		if (data.prisoners !== undefined) this.prisoners = data.prisoners;
@@ -258,6 +260,7 @@ class AppState {
 		if (data.boardState) this.boardState = data.boardState;
 		if (data.prisoners) this.prisoners = data.prisoners;
 		if (data.lastStone !== undefined) this.goLastMove = data.lastStone;
+		if ((data as any).opening) this.opening = (data as any).opening;
 		this.suggestionsStale = true;
 		this.hintLevel = 0;
 		if (this.coachingEnabled) this.analysisLoading = true;
@@ -301,6 +304,7 @@ class AppState {
 		this.hintLevel = 0;
 		this.skillEval = null;
 		this.autoplayActive = false;
+		this.opening = null;
 		this.gameSummary = null;
 		this.boardState = [];
 		this.prisoners = { black: 0, white: 0 };

@@ -5,6 +5,7 @@ import {
 	GoGame,
 	JanggiGame,
 	type Suggestion,
+	detectOpening,
 	gameAccuracy,
 	getSkillLevel,
 } from "@tess/shared";
@@ -153,6 +154,7 @@ export class GameRoom {
 
 		// Chess (default)
 		const game = this.chessGame!;
+		const history = game.getMoveHistory();
 		return {
 			type: "GAME_STATE" as const,
 			gameId: this.id,
@@ -161,12 +163,13 @@ export class GameRoom {
 			playerColor: this.playerColor,
 			turn: game.turn,
 			legalMoves: game.getLegalMovesObject(),
-			moveHistory: game.getMoveHistory(),
+			moveHistory: history,
 			capturedPieces: game.getCapturedPieces(),
 			isCheck: game.isCheck,
 			isGameOver: game.isGameOver,
 			result: game.getGameResult() ?? undefined,
 			difficulty: this.difficulty,
+			opening: detectOpening(history.map((m) => m.uci)) ?? undefined,
 		};
 	}
 
@@ -200,11 +203,13 @@ export class GameRoom {
 		}
 
 		const game = this.chessGame!;
+		const chessHistory = game.getMoveHistory();
 		return {
 			turn: game.turn,
 			legalMoves: game.getLegalMovesObject(),
 			capturedPieces: game.getCapturedPieces(),
 			isCheck: game.isCheck,
+			opening: detectOpening(chessHistory.map((m) => m.uci)) ?? undefined,
 			isGameOver: game.isGameOver,
 			result: game.getGameResult() ?? undefined,
 		};

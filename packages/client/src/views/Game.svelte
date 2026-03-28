@@ -160,7 +160,7 @@
 	<!-- Right panel: status + suggestions + analysis + moves + controls -->
 	<div class="panel-area">
 		<!-- Status bar -->
-		<div class="p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)]">
+		<div class="p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] space-y-1">
 			<div class="flex items-center justify-between">
 				<span class="text-sm font-medium {appState.isGameOver
 					? (appState.result?.winner === appState.playerColor ? 'text-[var(--success)]' : appState.result?.winner === 'draw' ? 'text-[var(--text-secondary)]' : 'text-[var(--danger)]')
@@ -172,6 +172,12 @@
 					Move {Math.ceil(appState.moveHistory.length / 2)}
 				</span>
 			</div>
+			{#if appState.opening}
+				<div class="text-xs text-[var(--text-muted)]">
+					<span class="font-mono text-[var(--accent)]">{appState.opening.eco}</span>
+					{appState.opening.name}
+				</div>
+			{/if}
 		</div>
 
 		<!-- Engine Suggestions -->
