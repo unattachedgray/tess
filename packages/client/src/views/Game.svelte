@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { appState } from "../lib/stores.svelte.ts";
 	import { playSound } from "../lib/sounds.ts";
+	import { t } from "../lib/i18n.ts";
 	import type { WsClient } from "../lib/ws.ts";
 	import ChessBoard from "../boards/ChessBoard.svelte";
 	import GoBoard from "../boards/GoBoard.svelte";
@@ -67,14 +68,16 @@
 	}
 
 	const isMyTurn = $derived(appState.turn === appState.playerColor);
+	// Force re-eval on language change by reading appState.language
 	const statusText = $derived.by(() => {
+		const _lang = appState.language; // reactive dependency
 		if (appState.isGameOver && appState.result) {
-			if (appState.result.winner === "draw") return `Draw - ${appState.result.reason}`;
-			const winner = appState.result.winner === appState.playerColor ? "You win" : "You lose";
+			if (appState.result.winner === "draw") return `${t("game.draw", _lang)} - ${appState.result.reason}`;
+			const winner = appState.result.winner === appState.playerColor ? t("game.youWin", _lang) : t("game.youLose", _lang);
 			return `${winner} - ${appState.result.reason}`;
 		}
-		if (appState.isCheck) return isMyTurn ? "You're in check!" : "Check!";
-		return isMyTurn ? "Your turn" : "AI is thinking...";
+		if (appState.isCheck) return isMyTurn ? t("game.inCheck", _lang) : t("game.check", _lang);
+		return isMyTurn ? t("game.yourTurn", _lang) : t("game.aiThinking", _lang);
 	});
 
 	// Split a move string into [from, to] — handles both chess (e2e4) and janggi (a10b10)
@@ -211,14 +214,14 @@
 					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-colors"
 					onclick={newGame}
 				>
-					New Game
+					{t("game.newGame", appState.language)}
 				</button>
 				{#if appState.gameType === 'chess'}
 					<button
 						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
 						onclick={() => { appState.reviewMoves = appState.moveHistory; appState.view = 'review'; }}
 					>
-						Review
+						{t("game.review", appState.language)}
 					</button>
 				{/if}
 			{:else}
@@ -226,13 +229,13 @@
 					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
 					onclick={requestHint}
 				>
-					Hint
+					{t("game.hint", appState.language)}
 				</button>
 				<button
 					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--danger)]/10 border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)]/20 transition-colors"
 					onclick={resign}
 				>
-					Resign
+					{t("game.resign", appState.language)}
 				</button>
 			{/if}
 		</div>

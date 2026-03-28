@@ -106,11 +106,13 @@ class AppState {
 	coachingEnabled = $state<boolean>(loadPref("coaching", true));
 	suggestionCount = $state<number>(loadPref("suggestions", 3));
 	suggestionStrength = $state<"fast" | "balanced" | "deep">(loadPref("suggestionStrength", "deep"));
-	language = $state<Language>((() => {
-		const lang = loadPref<Language>("language", "en");
-		setI18nLang(lang);
-		return lang;
-	})());
+	language = $state<Language>(
+		(() => {
+			const lang = loadPref<Language>("language", "en");
+			setI18nLang(lang);
+			return lang;
+		})(),
+	);
 	autoplayHumanElo = $state<number>(loadPref("autoplayHumanElo", 1200));
 	boardSize = $state<number>(loadPref("boardSize", 19));
 

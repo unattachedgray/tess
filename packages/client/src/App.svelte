@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { appState } from "./lib/stores.svelte.ts";
 	import { WsClient } from "./lib/ws.ts";
+	import { t } from "./lib/i18n.ts";
 	import Home from "./views/Home.svelte";
 	import Game from "./views/Game.svelte";
 	import Review from "./views/Review.svelte";
@@ -15,11 +16,10 @@
 
 	let showMenu = $state(false);
 
-	const GAME_NAMES: Record<string, string> = {
-		chess: "Chess",
-		go: "Go",
-		janggi: "Janggi",
-	};
+	// Reactive translation — re-evaluates when language changes
+	const tt = (key: string) => t(key, appState.language);
+
+	const gameName = $derived(tt(`game.${appState.gameType}`));
 
 	// Auto-start: register handlers and send NEW_GAME on first connect
 	let autoStarted = $state(false);
@@ -96,9 +96,9 @@
 				{/if}
 			</svg>
 			{#if appState.view === 'review'}
-				Back
+				{tt('header.back')}
 			{:else}
-				{showMenu ? 'Close' : GAME_NAMES[appState.gameType] ?? 'Menu'}
+				{showMenu ? tt('header.close') : gameName}
 			{/if}
 		</button>
 

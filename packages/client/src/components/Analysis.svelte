@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { AnalysisMessage } from "../lib/stores.svelte.ts";
+	import { appState } from "../lib/stores.svelte.ts";
+	import { t } from "../lib/i18n.ts";
 
 	let {
 		messages,
@@ -58,7 +60,7 @@
 <div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden flex flex-col min-h-0 flex-1">
 	<div class="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] flex-shrink-0">
 		<h3 class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-			AI Coach
+			{t("coach.title", appState.language)}
 		</h3>
 		{#if loading}
 			<div class="flex gap-1 ml-1">
@@ -105,7 +107,7 @@
 							<div class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 150ms"></div>
 							<div class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 300ms"></div>
 						</div>
-						<span class="text-xs text-[var(--text-muted)]">Writing review...</span>
+						<span class="text-xs text-[var(--text-muted)]">{t("coach.writing", appState.language)}</span>
 					</div>
 				{/if}
 			</div>
@@ -113,7 +115,7 @@
 
 		{#if messages.length === 0 && !loading && !skillEval}
 			<p class="text-sm text-[var(--text-muted)] text-center py-4">
-				Make a move to get coaching feedback
+				{t("coach.makeMove", appState.language)}
 			</p>
 		{/if}
 
@@ -122,7 +124,7 @@
 			<div class="analysis-entry {isCurrent ? 'latest' : 'older'}">
 				<div class="flex items-center gap-2 mb-1">
 					<span class="text-[10px] font-medium {isCurrent ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} uppercase">
-						After move {msg.moveNumber}
+						{t("coach.afterMove", appState.language)} {msg.moveNumber}
 						{#if msg.moveNumber < currentMoveNumber - 2}
 							<span class="text-[var(--text-muted)]">(earlier)</span>
 						{/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { appState } from "../lib/stores.svelte.ts";
+	import { t } from "../lib/i18n.ts";
 	import DifficultyPicker from "../components/DifficultyPicker.svelte";
 	import type { WsClient } from "../lib/ws.ts";
 	import type { DifficultyId, GameType } from "@tess/shared";
@@ -8,11 +9,7 @@
 
 	let boardSize = $state(19);
 
-	const GAME_LABELS: Record<GameType, string> = {
-		chess: "Chess",
-		go: "Go",
-		janggi: "Janggi",
-	};
+	const gameLabel = (g: GameType) => t(`game.${g}`, appState.language);
 
 	const DIFFICULTIES: Record<GameType, { id: DifficultyId; label: string; description: string }[]> = {
 		chess: [
@@ -39,9 +36,9 @@
 	};
 
 	const COLOR_LABELS = $derived.by(() => {
-		if (appState.gameType === "go") return { white: "White", black: "Black" };
-		if (appState.gameType === "janggi") return { white: "Blue (Cho)", black: "Red (Han)" };
-		return { white: "White", black: "Black" };
+		const _lang = appState.language;
+		if (appState.gameType === "janggi") return { white: t("color.blue", _lang), black: t("color.red", _lang) };
+		return { white: t("color.white", _lang), black: t("color.black", _lang) };
 	});
 
 	function selectGame(game: GameType) {
@@ -67,7 +64,7 @@
 
 		<!-- Game Type -->
 		<div class="space-y-3">
-			<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">Game</h2>
+			<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">{t("menu.game", appState.language)}</h2>
 			<div class="grid grid-cols-3 gap-2">
 				{#each (["chess", "go", "janggi"] as GameType[]) as game}
 					<button
@@ -76,7 +73,7 @@
 							: 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}"
 						onclick={() => selectGame(game)}
 					>
-						{GAME_LABELS[game]}
+						{gameLabel(game)}
 					</button>
 				{/each}
 			</div>
@@ -85,7 +82,7 @@
 		<!-- Board Size (Go only) -->
 		{#if appState.gameType === 'go'}
 			<div class="space-y-3">
-				<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">Board Size</h2>
+				<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">{t("menu.boardSize", appState.language)}</h2>
 				<div class="grid grid-cols-3 gap-2">
 					{#each [9, 13, 19] as size}
 						<button
@@ -103,7 +100,7 @@
 
 		<!-- Color -->
 		<div class="space-y-3">
-			<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">Play as</h2>
+			<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">{t("menu.playAs", appState.language)}</h2>
 			<div class="grid grid-cols-2 gap-2">
 				<button
 					class="px-4 py-3 rounded-xl text-sm font-medium transition-all {appState.playerColor === 'white'
@@ -132,7 +129,7 @@
 			class="w-full py-4 rounded-xl text-lg font-semibold bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-colors shadow-lg"
 			onclick={startGame}
 		>
-			Play {GAME_LABELS[appState.gameType]}
+			{t("menu.play", appState.language)} {gameLabel(appState.gameType)}
 		</button>
 	</div>
 </div>
