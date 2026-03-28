@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Tess
+Comment=Board Game Learning Platform
+Exec=bash -c 'cd /home/julian/dev/tess && ./tess.sh prod'
+Type=Application
+Categories=Game;BoardGame;
+Terminal=true

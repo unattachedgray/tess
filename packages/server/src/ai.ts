@@ -1,11 +1,13 @@
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { GameType, Suggestion } from "@tess/shared";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("ai");
 
-const SANDBOX_DIR = "/tmp/tess-claude-sandbox";
+const SANDBOX_DIR = join(tmpdir(), "tess-claude-sandbox");
 try {
 	mkdirSync(SANDBOX_DIR, { recursive: true });
 } catch {}
