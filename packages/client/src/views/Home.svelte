@@ -4,7 +4,7 @@
 	import type { WsClient } from "../lib/ws.ts";
 	import type { DifficultyId, GameType } from "@tess/shared";
 
-	let { ws }: { ws: WsClient } = $props();
+	let { ws, onStart }: { ws: WsClient; onStart?: () => void } = $props();
 
 	let boardSize = $state(19);
 
@@ -98,6 +98,7 @@
 		});
 
 		ws.send({ type: "SET_COACHING", enabled: appState.coachingEnabled });
+		onStart?.();
 	}
 </script>
 

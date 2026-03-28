@@ -11,30 +11,34 @@
 		return () => ws.disconnect();
 	});
 
+	let showMenu = $state(false);
+
 	const GAME_NAMES: Record<string, string> = {
 		chess: "Chess",
 		go: "Go",
 		janggi: "Janggi",
 	};
 
-	function goHome() {
-		appState.view = "home";
-		appState.reset();
+	function toggleMenu() {
+		showMenu = !showMenu;
 	}
 </script>
 
 <div class="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
 	<header class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] h-[44px]">
 		{#if appState.view === 'game' && appState.gameId}
-			<!-- Game header: back button + game info -->
 			<button
 				class="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
-				onclick={goHome}
+				onclick={toggleMenu}
 			>
 				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M10 12L6 8L10 4" />
+					{#if showMenu}
+						<path d="M4 4L12 12M12 4L4 12" />
+					{:else}
+						<path d="M2 4H14M2 8H14M2 12H14" />
+					{/if}
 				</svg>
-				Menu
+				{showMenu ? 'Close' : 'Menu'}
 			</button>
 
 			<span class="text-sm font-medium text-[var(--text-primary)]">
@@ -45,17 +49,21 @@
 				{appState.difficulty}
 			</span>
 		{:else}
-			<!-- Home header -->
 			<span class="text-lg font-bold tracking-tight text-[var(--accent)]">Tess</span>
 			<span></span>
 			<span></span>
 		{/if}
 	</header>
 
-	<main class="flex-1">
-		{#if appState.view === 'home'}
-			<Home {ws} />
-		{:else if appState.view === 'game'}
+	<main class="flex-1 relative">
+		{#if appState.view === 'home' || (showMenu && appState.view === 'game')}
+			<!-- Menu overlay (or full page on home) -->
+			<div class={appState.view === 'game' ? 'absolute inset-0 z-50 bg-[var(--bg-primary)]/95 backdrop-blur-sm overflow-y-auto' : ''}>
+				<Home {ws} onStart={() => showMenu = false} />
+			</div>
+		{/if}
+
+		{#if appState.view === 'game'}
 			<Game {ws} />
 		{/if}
 	</main>

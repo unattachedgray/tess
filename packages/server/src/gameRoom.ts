@@ -26,6 +26,31 @@ function randomDelay(range: [number, number]): number {
 	return range[0] + Math.random() * (range[1] - range[0]);
 }
 
+// Fairy-Stockfish Janggi uses 0-indexed rows (a0-i9), our game uses 1-indexed (a1-i10)
+function janggiEngineToGame(uci: string): string {
+	// e2e4 -> e3e5
+	const from = uci.slice(0, 2);
+	const to = uci.slice(2, 4);
+	const convert = (sq: string) => {
+		const col = sq[0];
+		const rank = Number.parseInt(sq.slice(1), 10) + 1;
+		return `${col}${rank}`;
+	};
+	return `${convert(from)}${convert(to)}`;
+}
+
+function janggiGameToEngine(uci: string): string {
+	// e3e5 -> e2e4
+	const from = uci.slice(0, 2);
+	const to = uci.slice(2, 4);
+	const convert = (sq: string) => {
+		const col = sq[0];
+		const rank = Number.parseInt(sq.slice(1), 10) - 1;
+		return `${col}${rank}`;
+	};
+	return `${convert(from)}${convert(to)}`;
+}
+
 export class GameRoom {
 	readonly id: string;
 	readonly gameType: GameType;
@@ -288,7 +313,7 @@ export class GameRoom {
 					this.uciPool.search(this.janggiGame.fen, tier.janggiMovetime, 1, "janggi"),
 					new Promise((r) => setTimeout(r, delay)),
 				]);
-				aiMoveStr = searchResult.bestmove;
+				aiMoveStr = janggiEngineToGame(searchResult.bestmove);
 			} else {
 				const [searchResult] = await Promise.all([
 					this.uciPool.search(this.chessGame!.fen, tier.chessMovetime),
@@ -400,18 +425,21 @@ export class GameRoom {
 				const fen = this.gameType === "janggi" ? this.janggiGame!.fen : this.chessGame!.fen;
 				const variant = this.gameType === "janggi" ? "janggi" : undefined;
 				const result = await this.uciPool.search(fen, FULL_STRENGTH_MOVETIME, topN, variant);
+				const isJanggi = this.gameType === "janggi";
 				suggestions = result.info
 					.filter((i) => i.pv.length > 0)
 					.sort((a, b) => a.multipv - b.multipv)
 					.slice(0, topN)
 					.map((info) => {
-						const game = this.gameType === "janggi" ? null : this.chessGame;
+						const rawMove = info.pv[0];
+						const move = isJanggi ? janggiEngineToGame(rawMove) : rawMove;
+						const san = this.chessGame?.uciToSan(rawMove) ?? move;
 						return {
-							move: info.pv[0],
-							san: game?.uciToSan(info.pv[0]) ?? info.pv[0],
+							move,
+							san,
 							score: info.mate !== null ? (info.mate > 0 ? 99999 : -99999) : info.score,
 							depth: info.depth,
-							pv: info.pv,
+							pv: isJanggi ? info.pv.map(janggiEngineToGame) : info.pv,
 						};
 					});
 			}
