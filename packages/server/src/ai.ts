@@ -66,7 +66,16 @@ function buildPrompt(ctx: AnalysisContext): string {
 		posContext = ` Moves so far: ${ctx.pgn}.`;
 	}
 
-	return `${game} coach, move ${ctx.moveCount} (${phase}). Human=${player}.${posContext} ${lastMoveStr} Best moves: ${sugs}. In 2-3 sentences: explain the best suggestion and why. Use **bold** for key terms. Under 60 words.`;
+	// Language instruction
+	const langMap: Record<string, string> = {
+		ko: " Respond in Korean.",
+		es: " Respond in Spanish.",
+		vi: " Respond in Vietnamese.",
+		mn: " Respond in Mongolian.",
+	};
+	const langInstr = ctx.language ? (langMap[ctx.language] ?? "") : "";
+
+	return `${game} coach, move ${ctx.moveCount} (${phase}). Human=${player}.${posContext} ${lastMoveStr} Best moves: ${sugs}. In 2-3 sentences: explain the best suggestion and why. Use **bold** for key terms. Under 60 words.${langInstr}`;
 }
 
 export interface AnalysisContext {
@@ -78,6 +87,7 @@ export interface AnalysisContext {
 	lastMoveColor?: string;
 	suggestions: Suggestion[];
 	pgn?: string;
+	language?: string;
 }
 
 const TIMEOUT_MS = 20000;
@@ -112,9 +122,10 @@ export interface GameSummaryContext {
 	skillLabel: string;
 	skillRating: string;
 	totalMoves: number;
-	result: string; // "White wins by checkmate", etc.
+	result: string;
 	pgn?: string;
 	moveAccuracies?: number[];
+	language?: string;
 }
 
 export async function generateGameSummary(ctx: GameSummaryContext): Promise<string | null> {
@@ -131,7 +142,7 @@ export async function generateGameSummary(ctx: GameSummaryContext): Promise<stri
 
 	const prompt = `${game} game review. Player=${player}. Result: ${ctx.result}. ${ctx.totalMoves} moves. Accuracy: ${ctx.accuracy}%, ACPL: ${ctx.acpl}. Skill: ${ctx.skillLabel} (~${ctx.skillRating}).${worstMoves}${ctx.pgn ? ` PGN: ${ctx.pgn}` : ""}
 
-Write a 3-4 sentence game summary for the player. Comment on their strengths, key mistakes, and one specific improvement tip. Be encouraging but honest. Use **bold** for key concepts. Under 80 words.`;
+Write a 3-4 sentence game summary for the player. Comment on their strengths, key mistakes, and one specific improvement tip. Be encouraging but honest. Use **bold** for key concepts. Under 80 words.${ctx.language && ctx.language !== "en" ? ` Respond in ${({ ko: "Korean", es: "Spanish", vi: "Vietnamese", mn: "Mongolian" })[ctx.language] ?? "English"}.` : ""}`;
 
 	try {
 		const result = await callClaudeOpus(prompt);

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { appState } from "../lib/stores.svelte.ts";
+	import { LANGUAGES, type Language } from "../lib/i18n.ts";
 	import type { WsClient } from "../lib/ws.ts";
 
 	let { ws }: { ws: WsClient } = $props();
@@ -30,6 +31,10 @@
 
 	function setHumanElo(elo: number) {
 		appState.setAutoplayHumanElo(elo);
+	}
+
+	function changeLanguage(lang: Language) {
+		appState.setLanguage(lang);
 	}
 
 	const ELO_PRESETS = [
@@ -101,6 +106,20 @@
 				>
 					<div class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform {appState.coachingEnabled ? 'translate-x-5' : 'translate-x-0.5'}"></div>
 				</button>
+			</div>
+
+			<!-- Language -->
+			<div class="space-y-1.5">
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Language</span>
+				<select
+					class="w-full py-1.5 px-2 rounded-lg text-xs bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)]"
+					onchange={(e) => changeLanguage((e.target as HTMLSelectElement).value as Language)}
+					value={appState.language}
+				>
+					{#each LANGUAGES as lang}
+						<option value={lang.code}>{lang.name}</option>
+					{/each}
+				</select>
 			</div>
 
 			<!-- Autoplay -->

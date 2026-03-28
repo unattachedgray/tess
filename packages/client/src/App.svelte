@@ -58,6 +58,7 @@
 			coaching: appState.coachingEnabled,
 			suggestionCount: appState.suggestionCount,
 			suggestionStrength: appState.suggestionStrength,
+			language: appState.language,
 		});
 		showMenu = false;
 	}
@@ -75,6 +76,7 @@
 				coaching: appState.coachingEnabled,
 				suggestionCount: appState.suggestionCount,
 				suggestionStrength: appState.suggestionStrength,
+			language: appState.language,
 			});
 		}
 	});

@@ -50,6 +50,7 @@ export class GameRoom {
 	coachingEnabled = true;
 	suggestionCount = 3;
 	suggestionStrength: "fast" | "balanced" | "deep" = "deep";
+	language = "en";
 	autoplay = false;
 	autoplayHumanElo: number | null = null;
 	private autoplayRunning = false;
@@ -416,6 +417,7 @@ export class GameRoom {
 			lastMoveColor: this.currentTurn === "white" ? "Black" : "White",
 			suggestions: this.lastSuggestions,
 			pgn: this.chessGame?.pgn,
+			language: this.language,
 		};
 
 		const moveNum = history.length;
@@ -641,6 +643,7 @@ export class GameRoom {
 				? `${gameResult.winner === this.playerColor ? "Player wins" : gameResult.winner === "draw" ? "Draw" : "Player loses"} — ${gameResult.reason}`
 				: "Unknown",
 			pgn: this.chessGame?.pgn,
+			language: this.language,
 			moveAccuracies: result.moveAccuracies,
 		});
 

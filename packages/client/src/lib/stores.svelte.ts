@@ -1,4 +1,5 @@
 import type { DifficultyId, GameType, Suggestion } from "@tess/shared";
+import { type Language, setLanguage as setI18nLang } from "./i18n.js";
 
 export type View = "home" | "game" | "review";
 export type MoveQuality = "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" | null;
@@ -105,6 +106,11 @@ class AppState {
 	coachingEnabled = $state<boolean>(loadPref("coaching", true));
 	suggestionCount = $state<number>(loadPref("suggestions", 3));
 	suggestionStrength = $state<"fast" | "balanced" | "deep">(loadPref("suggestionStrength", "deep"));
+	language = $state<Language>((() => {
+		const lang = loadPref<Language>("language", "en");
+		setI18nLang(lang);
+		return lang;
+	})());
 	autoplayHumanElo = $state<number>(loadPref("autoplayHumanElo", 1200));
 	boardSize = $state<number>(loadPref("boardSize", 19));
 
@@ -193,6 +199,12 @@ class AppState {
 	setSuggestionStrength(s: "fast" | "balanced" | "deep") {
 		this.suggestionStrength = s;
 		savePref("suggestionStrength", s);
+	}
+
+	setLanguage(lang: Language) {
+		this.language = lang;
+		setI18nLang(lang);
+		savePref("language", lang);
 	}
 
 	setAutoplayHumanElo(elo: number) {

@@ -127,6 +127,7 @@ export function createWsServer(
 				if (msg.suggestionCount !== undefined)
 					room.suggestionCount = Math.min(3, Math.max(0, msg.suggestionCount));
 				if (msg.suggestionStrength) room.suggestionStrength = msg.suggestionStrength;
+				if (msg.language) room.language = msg.language;
 
 				room.onMove((data) => send(state.ws, data));
 				send(state.ws, room.getState());
