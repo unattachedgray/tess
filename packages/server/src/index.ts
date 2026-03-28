@@ -18,6 +18,10 @@ const log = createLogger("server");
 const PORT = Number.parseInt(process.env.PORT ?? "8082", 10);
 
 async function main() {
+	// Initialize database
+	const { initDb } = await import("./db.js");
+	initDb();
+
 	// Chess engine pool (Fairy-Stockfish standard)
 	const stockfishPath = resolveEnginePath();
 	const nnuePath = resolveNnuePath();

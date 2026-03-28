@@ -9,12 +9,14 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@tess/shared": "workspace:*",
-		"hono": "^4.6.0",
 		"@hono/node-server": "^1.13.0",
+		"@tess/shared": "workspace:*",
+		"better-sqlite3": "^12.8.0",
+		"hono": "^4.6.0",
 		"ws": "^8.18.0"
 	},
 	"devDependencies": {
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^22.0.0",
 		"@types/ws": "^8.5.0",
 		"tsx": "^4.19.0",

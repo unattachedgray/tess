@@ -642,6 +642,33 @@ export class GameRoom {
 		if (summary) {
 			this.emit({ type: "GAME_SUMMARY", text: summary });
 		}
+
+		// Save game to database
+		try {
+			const { saveGame } = await import("./db.js");
+			saveGame({
+				id: this.id,
+				gameType: this.gameType,
+				whiteUserId: this.playerColor === "white" ? undefined : "ai",
+				blackUserId: this.playerColor === "black" ? undefined : "ai",
+				difficulty: this.difficulty,
+				result: gameResult?.winner,
+				resultReason: gameResult?.reason,
+				moves: history,
+				pgn: this.chessGame?.pgn,
+				boardSize: this.goGame?.size,
+				accuracyWhite: this.playerColor === "white" ? accuracy : undefined,
+				accuracyBlack: this.playerColor === "black" ? accuracy : undefined,
+				acplWhite: this.playerColor === "white" ? result.acpl : undefined,
+				acplBlack: this.playerColor === "black" ? result.acpl : undefined,
+				skillLabel: skill.label,
+				skillRating: skill.rating,
+				gameSummary: summary ?? undefined,
+				moveCount: history.length,
+			});
+		} catch (err) {
+			log.error("failed to save game", { error: (err as Error).message });
+		}
 	}
 
 	/** Run autoplay: both sides play as AI in rapid succession */
