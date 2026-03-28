@@ -126,6 +126,7 @@ export function createWsServer(
 				if (msg.coaching !== undefined) room.coachingEnabled = msg.coaching;
 				if (msg.suggestionCount !== undefined)
 					room.suggestionCount = Math.min(3, Math.max(0, msg.suggestionCount));
+				if (msg.suggestionStrength) room.suggestionStrength = msg.suggestionStrength;
 
 				room.onMove((data) => send(state.ws, data));
 				send(state.ws, room.getState());

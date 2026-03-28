@@ -10,6 +10,7 @@ export const NewGameMessage = z.object({
 	boardSize: z.number().optional(),
 	coaching: z.boolean().optional(),
 	suggestionCount: z.number().optional(),
+	suggestionStrength: z.enum(["fast", "balanced", "deep"]).optional(),
 });
 
 export const JoinGameMessage = z.object({

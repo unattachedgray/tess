@@ -42,10 +42,11 @@ export class UciPool {
 		movetime: number,
 		multiPv = 1,
 		variant?: string,
+		eloLimit?: number | null,
 	): Promise<UciSearchResult> {
 		const adapter = await this.checkout();
 		try {
-			return await adapter.search(fen, movetime, multiPv, variant);
+			return await adapter.search(fen, movetime, multiPv, variant, eloLimit);
 		} finally {
 			this.release(adapter);
 		}

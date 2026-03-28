@@ -56,6 +56,7 @@
 			playerColor: appState.playerColor,
 			coaching: appState.coachingEnabled,
 			suggestionCount: appState.suggestionCount,
+			suggestionStrength: appState.suggestionStrength,
 		});
 		showMenu = false;
 	}
@@ -74,6 +75,7 @@
 					playerColor: appState.playerColor,
 					coaching: appState.coachingEnabled,
 					suggestionCount: appState.suggestionCount,
+			suggestionStrength: appState.suggestionStrength,
 				});
 			}, 100);
 		}

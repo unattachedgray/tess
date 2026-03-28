@@ -16,25 +16,25 @@
 
 	const DIFFICULTIES: Record<GameType, { id: DifficultyId; label: string; description: string }[]> = {
 		chess: [
-			{ id: "beginner", label: "Beginner", description: "~1000 Elo" },
-			{ id: "casual", label: "Casual", description: "~1500 Elo" },
-			{ id: "club", label: "Club", description: "~2000 Elo" },
-			{ id: "pro", label: "Pro", description: "~2500 Elo" },
+			{ id: "beginner", label: "Beginner", description: "~800 Elo" },
+			{ id: "casual", label: "Casual", description: "~1200 Elo" },
+			{ id: "club", label: "Club", description: "~1600 Elo" },
+			{ id: "pro", label: "Pro", description: "~2200 Elo" },
 			{ id: "superhuman", label: "Superhuman", description: "~2800+ Elo" },
 		],
 		go: [
-			{ id: "beginner", label: "Beginner", description: "~20 kyu" },
-			{ id: "casual", label: "Casual", description: "~8 kyu" },
-			{ id: "club", label: "Club", description: "~3 dan" },
-			{ id: "pro", label: "Pro", description: "~9 dan" },
-			{ id: "superhuman", label: "Superhuman", description: "Superhuman" },
+			{ id: "beginner", label: "Beginner", description: "~18 kyu" },
+			{ id: "casual", label: "Casual", description: "~10 kyu" },
+			{ id: "club", label: "Club", description: "~4 kyu" },
+			{ id: "pro", label: "Pro", description: "~2 dan" },
+			{ id: "superhuman", label: "Superhuman", description: "Pro+" },
 		],
 		janggi: [
-			{ id: "beginner", label: "Beginner", description: "~9급" },
-			{ id: "casual", label: "Casual", description: "~5급" },
-			{ id: "club", label: "Club", description: "~2단" },
-			{ id: "pro", label: "Pro", description: "~5단" },
-			{ id: "superhuman", label: "Superhuman", description: "~7단+" },
+			{ id: "beginner", label: "Beginner", description: "~800 Elo" },
+			{ id: "casual", label: "Casual", description: "~1200 Elo" },
+			{ id: "club", label: "Club", description: "~1600 Elo" },
+			{ id: "pro", label: "Pro", description: "~2200 Elo" },
+			{ id: "superhuman", label: "Superhuman", description: "~2800+ Elo" },
 		],
 	};
 

@@ -81,12 +81,22 @@ export class UciAdapter {
 		movetime: number,
 		multiPv = 1,
 		variant?: string,
+		eloLimit?: number | null,
 	): Promise<UciSearchResult> {
 		if (!this.ready) throw new Error("Engine not ready");
 
 		if (variant) {
 			this.send(`setoption name UCI_Variant value ${variant}`);
 			this.send("setoption name Use NNUE value false");
+		}
+		// Set Elo limiting for realistic difficulty
+		if (eloLimit !== undefined) {
+			if (eloLimit !== null) {
+				this.send("setoption name UCI_LimitStrength value true");
+				this.send(`setoption name UCI_Elo value ${eloLimit}`);
+			} else {
+				this.send("setoption name UCI_LimitStrength value false");
+			}
 		}
 		this.send(`setoption name MultiPV value ${multiPv}`);
 		this.send("isready");

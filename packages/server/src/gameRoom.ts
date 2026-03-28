@@ -9,7 +9,7 @@ import {
 	getSkillLevel,
 } from "@tess/shared";
 import { type AnalysisContext, analyzePosition, generateGameSummary } from "./ai.js";
-import { FULL_STRENGTH_MOVETIME, getTier } from "./engine/difficulty.js";
+import { FULL_STRENGTH_MOVETIME, getElo, getTier } from "./engine/difficulty.js";
 import type { KataGoAdapter } from "./engine/katago.js";
 import type { UciPool } from "./engine/uciPool.js";
 import { createLogger } from "./logger.js";
@@ -48,6 +48,7 @@ export class GameRoom {
 	private lastSuggestions: Suggestion[] = [];
 	coachingEnabled = true;
 	suggestionCount = 3;
+	suggestionStrength: "fast" | "balanced" | "deep" = "deep";
 
 	constructor(config: {
 		id: string;
@@ -293,6 +294,8 @@ export class GameRoom {
 		try {
 			let aiMoveStr: string;
 
+			const elo = getElo(this.difficulty);
+
 			if (this.gameType === "go" && this.goGame && this.kataGo) {
 				const moves = this.goGame.getKataGoMoves();
 				const color = this.goGame.turn === "black" ? "b" : "w";
@@ -308,14 +311,14 @@ export class GameRoom {
 						tier.janggiMovetime,
 						1,
 						this.useJanggiVariant ? "janggi" : undefined,
+						elo,
 					),
 					new Promise((r) => setTimeout(r, delay)),
 				]);
 				aiMoveStr = searchResult.bestmove;
-				// Track eval before AI move (negated — from AI's perspective)
 			} else {
 				const [searchResult] = await Promise.all([
-					this.uciPool.search(this.chessGame!.fen, tier.chessMovetime),
+					this.uciPool.search(this.chessGame!.fen, tier.chessMovetime, 1, undefined, elo),
 					new Promise((r) => setTimeout(r, delay)),
 				]);
 				aiMoveStr = searchResult.bestmove;
@@ -405,29 +408,46 @@ export class GameRoom {
 		}
 	}
 
+	private getSuggestionParams(): { movetime: number; goVisits: number } {
+		switch (this.suggestionStrength) {
+			case "fast":
+				return { movetime: 200, goVisits: 50 };
+			case "balanced":
+				return { movetime: 500, goVisits: 200 };
+			default:
+				return { movetime: FULL_STRENGTH_MOVETIME, goVisits: 500 };
+		}
+	}
+
 	async getSuggestions(topN = 3) {
+		if (topN <= 0) return { type: "SUGGESTIONS" as const, suggestions: [] };
+
+		const params = this.getSuggestionParams();
+
 		try {
 			let suggestions: Suggestion[];
 
 			if (this.gameType === "go" && this.goGame && this.kataGo) {
 				const moves = this.goGame.getKataGoMoves();
 				const color = this.goGame.turn === "black" ? "b" : "w";
-				// Use moderate visit count for suggestions (high counts too slow on CPU)
-				const sugVisits = 500;
-				log.info("Go suggestions query", { moves: moves.length, color, topN, visits: sugVisits });
-				const results = await this.kataGo.analyze(moves, color, sugVisits, topN, this.goGame.size);
-				log.info("Go suggestions result", { count: results.length });
+				const results = await this.kataGo.analyze(
+					moves,
+					color,
+					params.goVisits,
+					topN,
+					this.goGame.size,
+				);
 				suggestions = results.map((info) => ({
 					move: info.move,
 					san: info.move,
-					score: Math.round(info.winrate * 10000 - 5000), // normalize to centipawn-like
+					score: Math.round(info.winrate * 10000 - 5000),
 					depth: info.visits,
 					pv: info.pv,
 				}));
 			} else {
 				const fen = this.gameType === "janggi" ? this.janggiGame!.fen : this.chessGame!.fen;
 				const variant = this.useJanggiVariant ? "janggi" : undefined;
-				const result = await this.uciPool.search(fen, FULL_STRENGTH_MOVETIME, topN, variant);
+				const result = await this.uciPool.search(fen, params.movetime, topN, variant, null);
 				suggestions = result.info
 					.filter((i) => i.pv.length > 0)
 					.sort((a, b) => a.multipv - b.multipv)
@@ -499,7 +519,7 @@ export class GameRoom {
 			for (const move of history) {
 				replay.moveUci(move.uci);
 				try {
-					const result = await this.uciPool.search(replay.fen, 500, 1);
+					const result = await this.uciPool.search(replay.fen, 500, 1, undefined, null);
 					// Eval from white's perspective
 					const score = result.info[0]?.score ?? 0;
 					const sideToMove = replay.turn;
@@ -523,7 +543,7 @@ export class GameRoom {
 				replay.moveUci(move.uci);
 				try {
 					const variant = this.useJanggiVariant ? "janggi" : undefined;
-					const result = await this.uciPool.search(replay.fen, 300, 1, variant);
+					const result = await this.uciPool.search(replay.fen, 300, 1, variant, null);
 					const score = result.info[0]?.score ?? 0;
 					evals.push(replay.turn === "white" ? score : -score);
 				} catch {

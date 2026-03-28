@@ -14,6 +14,11 @@
 		appState.setSuggestionCount(n);
 		ws.send({ type: "SET_SUGGESTIONS", count: n });
 	}
+
+	function setStrength(s: "fast" | "balanced" | "deep") {
+		appState.setSuggestionStrength(s);
+		// Will apply on next suggestion request
+	}
 </script>
 
 <div class="relative">
@@ -45,6 +50,23 @@
 							onclick={() => setSuggestions(n)}
 						>
 							{n}
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<!-- Suggestion strength -->
+			<div class="space-y-1.5">
+				<label class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Analysis depth</label>
+				<div class="flex gap-1">
+					{#each [["fast", "Fast"], ["balanced", "Mid"], ["deep", "Deep"]] as [val, label]}
+						<button
+							class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all {appState.suggestionStrength === val
+								? 'bg-[var(--accent)] text-[var(--bg-primary)]'
+								: 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+							onclick={() => setStrength(val as "fast" | "balanced" | "deep")}
+						>
+							{label}
 						</button>
 					{/each}
 				</div>

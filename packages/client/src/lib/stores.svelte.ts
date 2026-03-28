@@ -104,6 +104,7 @@ class AppState {
 	playerColor = $state<"white" | "black">(loadPref("playerColor", "white"));
 	coachingEnabled = $state<boolean>(loadPref("coaching", true));
 	suggestionCount = $state<number>(loadPref("suggestions", 3));
+	suggestionStrength = $state<"fast" | "balanced" | "deep">(loadPref("suggestionStrength", "deep"));
 	boardSize = $state<number>(loadPref("boardSize", 19));
 
 	// User identity (persistent)
@@ -183,6 +184,11 @@ class AppState {
 	setSuggestionCount(n: number) {
 		this.suggestionCount = n;
 		savePref("suggestions", n);
+	}
+
+	setSuggestionStrength(s: "fast" | "balanced" | "deep") {
+		this.suggestionStrength = s;
+		savePref("suggestionStrength", s);
 	}
 
 	setBoardSize(s: number) {
