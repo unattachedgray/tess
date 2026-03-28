@@ -37,9 +37,8 @@
 	};
 
 	function formatScore(s: Suggestion): string {
-		if (Math.abs(s.score) > 9000) {
-			const mate = Math.abs(s.score) - 9000;
-			return s.score > 0 ? `M${mate}` : `-M${mate}`;
+		if (Math.abs(s.score) > 90000) {
+			return s.score > 0 ? "Mate" : "-Mate";
 		}
 		const pawns = (s.score / 100).toFixed(1);
 		return s.score > 0 ? `+${pawns}` : pawns;

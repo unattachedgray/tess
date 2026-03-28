@@ -46,6 +46,7 @@ export class GameRoom {
 	private moveInProgress = false;
 	private destroyed = false;
 	private positionEvals: number[] = [0]; // track eval at each position for skill assessment
+	private moveQualities: string[] = []; // track per-move quality for accuracy
 	private lastSuggestions: Suggestion[] = [];
 	coachingEnabled = true;
 
@@ -312,12 +313,15 @@ export class GameRoom {
 					new Promise((r) => setTimeout(r, delay)),
 				]);
 				aiMoveStr = searchResult.bestmove;
+				// Track eval before AI move (negated — from AI's perspective)
+				if (searchResult.info[0]) this.positionEvals.push(-searchResult.info[0].score);
 			} else {
 				const [searchResult] = await Promise.all([
 					this.uciPool.search(this.chessGame!.fen, tier.chessMovetime),
 					new Promise((r) => setTimeout(r, delay)),
 				]);
 				aiMoveStr = searchResult.bestmove;
+				if (searchResult.info[0]) this.positionEvals.push(-searchResult.info[0].score);
 			}
 
 			const moveResult = this.executeMove(aiMoveStr);
@@ -348,10 +352,12 @@ export class GameRoom {
 				}
 
 				if (this.lastSuggestions.length > 0) {
+					const quality = this.assessMoveQuality(playerMove);
+					this.moveQualities.push(quality);
 					this.emit({
 						type: "MOVE_QUALITY",
 						move: playerMove,
-						quality: this.assessMoveQuality(playerMove),
+						quality,
 					});
 				}
 				// Now start analysis with suggestions context
@@ -473,23 +479,46 @@ export class GameRoom {
 	}
 
 	private emitSkillEvaluation(): void {
-		if (this.positionEvals.length < 6) return; // too few moves to evaluate
+		if (this.moveQualities.length < 3) return; // too few moves to evaluate
 
-		const result = gameAccuracy(this.positionEvals, this.playerColor);
-		const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
+		// Compute accuracy from move quality assessments
+		const QUALITY_SCORES: Record<string, number> = {
+			best: 100,
+			good: 80,
+			ok: 50,
+			inaccuracy: 30,
+			mistake: 15,
+			blunder: 5,
+		};
+
+		const scores = this.moveQualities.map((q) => QUALITY_SCORES[q] ?? 50);
+		const accuracy = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+
+		// Also try eval-based accuracy if we have enough evals
+		let evalAccuracy = accuracy;
+		if (this.positionEvals.length >= 6) {
+			const result = gameAccuracy(this.positionEvals, this.playerColor);
+			if (result.moveAccuracies.length > 0) {
+				evalAccuracy = Math.round(result.accuracy);
+			}
+		}
+
+		// Use the more meaningful of the two (prefer eval-based if available)
+		const finalAccuracy = this.positionEvals.length >= 6 ? evalAccuracy : accuracy;
+		const skill = getSkillLevel(finalAccuracy, this.gameType);
 
 		log.info("skill evaluation", {
-			accuracy: Math.round(result.accuracy),
-			acpl: result.acpl,
+			accuracy: finalAccuracy,
+			qualityAccuracy: accuracy,
+			evalAccuracy,
 			label: skill.label,
-			rating: skill.rating,
-			moves: result.moveAccuracies.length,
+			moves: this.moveQualities.length,
 		});
 
 		this.emit({
 			type: "SKILL_EVAL",
-			accuracy: Math.round(result.accuracy),
-			acpl: result.acpl,
+			accuracy: finalAccuracy,
+			acpl: 0,
 			skill,
 		});
 	}
