@@ -43,8 +43,13 @@ class AppState {
 	analysisLoading = $state(false);
 	eval = $state<number>(0); // centipawns from white's perspective
 	lastMoveQuality = $state<MoveQuality>(null);
-	hintLevel = $state(0); // 0=none, 1=piece, 2=destination, 3=full arrow
+	hintLevel = $state(0);
 	showArrows = $state(true);
+	skillEval = $state<{
+		accuracy: number;
+		acpl: number;
+		skill: { label: string; rating: string; description: string };
+	} | null>(null);
 
 	setDifficulty(d: DifficultyId) {
 		this.difficulty = d;
@@ -181,6 +186,7 @@ class AppState {
 		this.eval = 0;
 		this.lastMoveQuality = null;
 		this.hintLevel = 0;
+		this.skillEval = null;
 		this.boardState = [];
 		this.boardSize = 19;
 		this.prisoners = { black: 0, white: 0 };

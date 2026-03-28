@@ -159,6 +159,17 @@ export const HintPayload = z.object({
 	fullMove: z.string().optional(),
 });
 
+export const SkillEvalPayload = z.object({
+	type: z.literal("SKILL_EVAL"),
+	accuracy: z.number(),
+	acpl: z.number(),
+	skill: z.object({
+		label: z.string(),
+		rating: z.string(),
+		description: z.string(),
+	}),
+});
+
 export const DifficultyTiersPayload = z.object({
 	type: z.literal("DIFFICULTY_TIERS"),
 	tiers: z.array(
@@ -180,4 +191,5 @@ export type ServerMessage =
 	| z.infer<typeof ErrorPayload>
 	| z.infer<typeof DifficultyTiersPayload>
 	| z.infer<typeof MoveQualityPayload>
-	| z.infer<typeof HintPayload>;
+	| z.infer<typeof HintPayload>
+	| z.infer<typeof SkillEvalPayload>;

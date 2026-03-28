@@ -238,6 +238,34 @@
 					Resign
 				</button>
 			{/if}
+		<!-- Skill Evaluation (shown at game end) -->
+		{#if appState.skillEval}
+			<div class="p-4 rounded-xl bg-[var(--accent-glow)] border border-[var(--accent)] space-y-2">
+				<div class="flex items-center justify-between">
+					<span class="text-sm font-bold text-[var(--accent)]">
+						{appState.skillEval.skill.label} Level
+					</span>
+					<span class="text-xs text-[var(--text-secondary)]">
+						~{appState.skillEval.skill.rating}
+					</span>
+				</div>
+				<div class="text-xs text-[var(--text-secondary)]">
+					{appState.skillEval.skill.description}
+				</div>
+				<div class="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+					<span>Accuracy: {appState.skillEval.accuracy}%</span>
+					<span>ACPL: {appState.skillEval.acpl}</span>
+				</div>
+				<!-- Accuracy bar -->
+				<div class="h-2 rounded-full bg-[var(--bg-hover)] overflow-hidden">
+					<div
+						class="h-full rounded-full transition-all duration-1000 {appState.skillEval.accuracy >= 90 ? 'bg-[var(--success)]' : appState.skillEval.accuracy >= 70 ? 'bg-[var(--accent)]' : appState.skillEval.accuracy >= 50 ? 'bg-[var(--warning)]' : 'bg-[var(--danger)]'}"
+						style="width: {appState.skillEval.accuracy}%"
+					></div>
+				</div>
+			</div>
+		{/if}
+
 		</div>
 	</div>
 </div>

@@ -89,6 +89,10 @@
 			appState.hintLevel = msg.level;
 		});
 
+		ws.on("SKILL_EVAL", (msg) => {
+			appState.skillEval = msg as any;
+		});
+
 		ws.on("ERROR", (msg) => {
 			console.error("[game] server error:", (msg as { message: string }).message);
 		});

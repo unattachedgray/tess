@@ -5,6 +5,8 @@ import {
 	GoGame,
 	JanggiGame,
 	type Suggestion,
+	gameAccuracy,
+	getSkillLevel,
 } from "@tess/shared";
 import { type AnalysisContext, analyzePosition } from "./ai.js";
 import { FULL_STRENGTH_MOVETIME, getTier } from "./engine/difficulty.js";
@@ -43,6 +45,7 @@ export class GameRoom {
 	private moveCallbacks: ((data: unknown) => void)[] = [];
 	private moveInProgress = false;
 	private destroyed = false;
+	private positionEvals: number[] = [0]; // track eval at each position for skill assessment
 	private lastSuggestions: Suggestion[] = [];
 	coachingEnabled = true;
 
@@ -223,6 +226,8 @@ export class GameRoom {
 
 			if (!this.isGameOver) {
 				this.sendSuggestionsAndAnalysis(move);
+			} else {
+				this.emitSkillEvaluation();
 			}
 
 			return { success: true };
@@ -336,6 +341,12 @@ export class GameRoom {
 			.then((sugPayload) => {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;
+
+				// Track eval for skill assessment
+				if (sugPayload.suggestions.length > 0) {
+					this.positionEvals.push(sugPayload.suggestions[0].score);
+				}
+
 				if (this.lastSuggestions.length > 0) {
 					this.emit({
 						type: "MOVE_QUALITY",
@@ -459,6 +470,28 @@ export class GameRoom {
 			destination: bestMove.length >= 4 ? bestMove.slice(2, 4) : bestMove,
 			fullMove: bestMove,
 		};
+	}
+
+	private emitSkillEvaluation(): void {
+		if (this.positionEvals.length < 6) return; // too few moves to evaluate
+
+		const result = gameAccuracy(this.positionEvals, this.playerColor);
+		const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
+
+		log.info("skill evaluation", {
+			accuracy: Math.round(result.accuracy),
+			acpl: result.acpl,
+			label: skill.label,
+			rating: skill.rating,
+			moves: result.moveAccuracies.length,
+		});
+
+		this.emit({
+			type: "SKILL_EVAL",
+			accuracy: Math.round(result.accuracy),
+			acpl: result.acpl,
+			skill,
+		});
 	}
 
 	get pgn(): string {
