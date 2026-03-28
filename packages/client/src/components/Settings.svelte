@@ -17,8 +17,27 @@
 
 	function setStrength(s: "fast" | "balanced" | "deep") {
 		appState.setSuggestionStrength(s);
-		// Will apply on next suggestion request
 	}
+
+	function toggleAutoplay() {
+		appState.autoplayActive = !appState.autoplayActive;
+		ws.send({
+			type: "AUTOPLAY",
+			enabled: appState.autoplayActive,
+			humanElo: appState.autoplayHumanElo,
+		});
+	}
+
+	function setHumanElo(elo: number) {
+		appState.setAutoplayHumanElo(elo);
+	}
+
+	const ELO_PRESETS = [
+		{ elo: 800, label: "800" },
+		{ elo: 1200, label: "1200" },
+		{ elo: 1600, label: "1600" },
+		{ elo: 2200, label: "2200" },
+	];
 </script>
 
 <div class="relative">
@@ -81,6 +100,36 @@
 				>
 					<div class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform {appState.coachingEnabled ? 'translate-x-5' : 'translate-x-0.5'}"></div>
 				</button>
+			</div>
+
+			<!-- Autoplay -->
+			<div class="space-y-1.5 pt-2 border-t border-[var(--border)]">
+				<div class="flex items-center justify-between">
+					<label class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Autoplay</label>
+					<button
+						class="w-10 h-5 rounded-full transition-colors relative {appState.autoplayActive ? 'bg-[var(--success)]' : 'bg-[var(--bg-hover)]'}"
+						onclick={toggleAutoplay}
+					>
+						<div class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform {appState.autoplayActive ? 'translate-x-5' : 'translate-x-0.5'}"></div>
+					</button>
+				</div>
+				{#if appState.autoplayActive || true}
+					<div class="space-y-1">
+						<label class="text-[10px] text-[var(--text-muted)]">Human player Elo</label>
+						<div class="flex gap-1">
+							{#each ELO_PRESETS as { elo, label }}
+								<button
+									class="flex-1 py-1 rounded-lg text-[10px] font-medium transition-all {appState.autoplayHumanElo === elo
+										? 'bg-[var(--accent)] text-[var(--bg-primary)]'
+										: 'bg-[var(--bg-hover)] text-[var(--text-secondary)]'}"
+									onclick={() => setHumanElo(elo)}
+								>
+									{label}
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}

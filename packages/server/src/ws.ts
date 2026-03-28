@@ -181,6 +181,16 @@ export function createWsServer(
 				break;
 			}
 
+			case "AUTOPLAY": {
+				if (!state.room) return;
+				if (msg.enabled) {
+					state.room.startAutoplay(msg.humanElo ?? null);
+				} else {
+					state.room.stopAutoplay();
+				}
+				break;
+			}
+
 			case "SET_SUGGESTIONS": {
 				if (state.room) state.room.suggestionCount = Math.min(3, Math.max(0, msg.count));
 				break;

@@ -105,6 +105,7 @@ class AppState {
 	coachingEnabled = $state<boolean>(loadPref("coaching", true));
 	suggestionCount = $state<number>(loadPref("suggestions", 3));
 	suggestionStrength = $state<"fast" | "balanced" | "deep">(loadPref("suggestionStrength", "deep"));
+	autoplayHumanElo = $state<number>(loadPref("autoplayHumanElo", 1200));
 	boardSize = $state<number>(loadPref("boardSize", 19));
 
 	// User identity (persistent)
@@ -144,6 +145,7 @@ class AppState {
 	lastMoveQuality = $state<MoveQuality>(null);
 	hintLevel = $state(0);
 	showArrows = $state(true);
+	autoplayActive = $state(false);
 	skillEval = $state<{
 		accuracy: number;
 		acpl: number;
@@ -189,6 +191,11 @@ class AppState {
 	setSuggestionStrength(s: "fast" | "balanced" | "deep") {
 		this.suggestionStrength = s;
 		savePref("suggestionStrength", s);
+	}
+
+	setAutoplayHumanElo(elo: number) {
+		this.autoplayHumanElo = elo;
+		savePref("autoplayHumanElo", elo);
 	}
 
 	setBoardSize(s: number) {
@@ -293,6 +300,7 @@ class AppState {
 		this.lastMoveQuality = null;
 		this.hintLevel = 0;
 		this.skillEval = null;
+		this.autoplayActive = false;
 		this.gameSummary = null;
 		this.boardState = [];
 		this.prisoners = { black: 0, white: 0 };

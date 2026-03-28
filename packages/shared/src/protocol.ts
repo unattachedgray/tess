@@ -45,6 +45,12 @@ export const SetSuggestionsMessage = z.object({
 	count: z.number(),
 });
 
+export const AutoplayMessage = z.object({
+	type: z.literal("AUTOPLAY"),
+	enabled: z.boolean(),
+	humanElo: z.number().optional(),
+});
+
 export const RequestHintMessage = z.object({
 	type: z.literal("REQUEST_HINT"),
 });
@@ -58,6 +64,7 @@ export const ClientMessage = z.discriminatedUnion("type", [
 	RequestAnalysisMessage,
 	SetCoachingMessage,
 	SetSuggestionsMessage,
+	AutoplayMessage,
 	RequestHintMessage,
 ]);
 

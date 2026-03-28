@@ -49,6 +49,9 @@ export class GameRoom {
 	coachingEnabled = true;
 	suggestionCount = 3;
 	suggestionStrength: "fast" | "balanced" | "deep" = "deep";
+	autoplay = false;
+	autoplayHumanElo: number | null = null;
+	private autoplayRunning = false;
 
 	constructor(config: {
 		id: string;
@@ -630,6 +633,64 @@ export class GameRoom {
 		if (summary) {
 			this.emit({ type: "GAME_SUMMARY", text: summary });
 		}
+	}
+
+	/** Run autoplay: both sides play as AI in rapid succession */
+	async startAutoplay(humanElo: number | null): Promise<void> {
+		this.autoplay = true;
+		this.autoplayHumanElo = humanElo;
+		if (this.autoplayRunning) return;
+		this.autoplayRunning = true;
+
+		const aiElo = getElo(this.difficulty);
+
+		while (this.autoplay && !this.isGameOver && !this.destroyed) {
+			const isHumanTurn = this.currentTurn === this.playerColor;
+			const elo = isHumanTurn ? (this.autoplayHumanElo ?? aiElo) : aiElo;
+			const movetime = 200; // Fast play
+
+			try {
+				let moveStr: string;
+
+				if (this.gameType === "go" && this.goGame && this.kataGo) {
+					const moves = this.goGame.getKataGoMoves();
+					const color = this.goGame.turn === "black" ? "b" : "w";
+					const visits = isHumanTurn
+						? Math.min(50, getTier(this.difficulty)?.goVisits ?? 50)
+						: (getTier(this.difficulty)?.goVisits ?? 50);
+					moveStr = await this.kataGo.getMove(moves, color, visits, this.goGame.size);
+				} else {
+					const fen = this.gameType === "janggi" ? this.janggiGame!.fen : this.chessGame!.fen;
+					const variant = this.useJanggiVariant ? "janggi" : undefined;
+					const result = await this.uciPool.search(fen, movetime, 1, variant, elo);
+					moveStr = result.bestmove;
+				}
+
+				const moveResult = this.executeMove(moveStr);
+				if (!moveResult) {
+					log.error("autoplay illegal move", { move: moveStr });
+					break;
+				}
+
+				this.emit({ type: "MOVE", move: moveResult, ...this.buildMovePayload() });
+
+				// Small delay so the UI can render
+				await new Promise((r) => setTimeout(r, 150));
+			} catch (err) {
+				log.error("autoplay error", { error: (err as Error).message });
+				break;
+			}
+		}
+
+		this.autoplayRunning = false;
+
+		if (this.isGameOver) {
+			this.emitSkillEvaluation();
+		}
+	}
+
+	stopAutoplay(): void {
+		this.autoplay = false;
 	}
 
 	get pgn(): string {

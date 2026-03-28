@@ -85,6 +85,9 @@ export class UciAdapter {
 	): Promise<UciSearchResult> {
 		if (!this.ready) throw new Error("Engine not ready");
 
+		// Clear buffer before configuring — prevents stale readyok matches
+		this.buffer = "";
+
 		if (variant) {
 			this.send(`setoption name UCI_Variant value ${variant}`);
 			this.send("setoption name Use NNUE value false");
