@@ -110,6 +110,7 @@
 					width={cellSize} height={cellSize}
 					fill="transparent" class="cursor-pointer"
 					onclick={() => handleClick(x, y)}
+					onkeydown={() => {}}
 					onmouseenter={() => hoverPos = { x, y }}
 					onmouseleave={() => hoverPos = null}
 					role="button" tabindex="-1"

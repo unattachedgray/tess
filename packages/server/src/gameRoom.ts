@@ -675,6 +675,17 @@ export class GameRoom {
 					moveStr = result.bestmove;
 				}
 
+				// Engine returns "(none)" when no legal moves exist (checkmate/stalemate)
+				if (moveStr === "(none)") {
+					log.info("autoplay: engine returned (none), ending game");
+					if (this.janggiGame) {
+						this.janggiGame.forceGameOver();
+					}
+					// For chess, the game should already be over via isGameOver check,
+					// but break the loop regardless
+					break;
+				}
+
 				const moveResult = this.executeMove(moveStr);
 				if (!moveResult) {
 					log.error("autoplay illegal move", { move: moveStr });

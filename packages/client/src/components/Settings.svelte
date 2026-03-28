@@ -59,7 +59,7 @@
 		<div class="absolute right-0 top-8 z-50 w-56 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-xl p-3 space-y-3">
 			<!-- Suggestions count -->
 			<div class="space-y-1.5">
-				<label class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Suggestions</label>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Suggestions</span>
 				<div class="flex gap-1">
 					{#each [0, 1, 2, 3] as n}
 						<button
@@ -76,7 +76,7 @@
 
 			<!-- Suggestion strength -->
 			<div class="space-y-1.5">
-				<label class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Analysis depth</label>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Analysis depth</span>
 				<div class="flex gap-1">
 					{#each [["fast", "Fast"], ["balanced", "Mid"], ["deep", "Deep"]] as [val, label]}
 						<button
@@ -93,10 +93,11 @@
 
 			<!-- Coaching toggle -->
 			<div class="flex items-center justify-between">
-				<label class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">AI Coach</label>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">AI Coach</span>
 				<button
 					class="w-10 h-5 rounded-full transition-colors relative {appState.coachingEnabled ? 'bg-[var(--accent)]' : 'bg-[var(--bg-hover)]'}"
 					onclick={toggleCoaching}
+					aria-label="Toggle AI Coach"
 				>
 					<div class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform {appState.coachingEnabled ? 'translate-x-5' : 'translate-x-0.5'}"></div>
 				</button>
@@ -105,17 +106,18 @@
 			<!-- Autoplay -->
 			<div class="space-y-1.5 pt-2 border-t border-[var(--border)]">
 				<div class="flex items-center justify-between">
-					<label class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Autoplay</label>
+					<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Autoplay</span>
 					<button
 						class="w-10 h-5 rounded-full transition-colors relative {appState.autoplayActive ? 'bg-[var(--success)]' : 'bg-[var(--bg-hover)]'}"
 						onclick={toggleAutoplay}
+						aria-label="Toggle Autoplay"
 					>
 						<div class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform {appState.autoplayActive ? 'translate-x-5' : 'translate-x-0.5'}"></div>
 					</button>
 				</div>
 				{#if appState.autoplayActive || true}
 					<div class="space-y-1">
-						<label class="text-[10px] text-[var(--text-muted)]">Human player Elo</label>
+						<span class="text-[10px] text-[var(--text-muted)]">Human player Elo</span>
 						<div class="flex gap-1">
 							{#each ELO_PRESETS as { elo, label }}
 								<button

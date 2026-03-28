@@ -113,7 +113,7 @@ export class UciAdapter {
 		const bestmove = line.split(" ")[1];
 
 		if (!bestmove || bestmove === "(none)") {
-			throw new Error(`Invalid bestmove from engine: ${line}`);
+			return { bestmove: "(none)", info: [] };
 		}
 
 		const infoLines = this.buffer

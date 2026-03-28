@@ -118,6 +118,7 @@
 			<div
 				class="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-8 pb-8"
 				onclick={(e) => { if (e.target === e.currentTarget) showMenu = false; }}
+				onkeydown={(e: KeyboardEvent) => { if (e.key === 'Escape') showMenu = false; }}
 				role="dialog"
 			>
 				<div class="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-md mx-4 p-6" onclick={(e) => e.stopPropagation()}>

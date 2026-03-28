@@ -175,6 +175,7 @@
 					width="10" height="10" fill="transparent"
 					class="cursor-pointer"
 					onclick={() => handleClick(col, row)}
+					onkeydown={() => {}}
 					role="button" tabindex="-1"
 				/>
 			{/each}
