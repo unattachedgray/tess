@@ -6,10 +6,12 @@
 		"dev": "tsx watch src/index.ts",
 		"start": "node dist/index.js",
 		"build": "tsc",
-		"test": "vitest run"
+		"test": "vitest run",
+		"mcp": "tsx src/mcp.ts"
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.13.0",
+		"@modelcontextprotocol/sdk": "^1.28.0",
 		"@tess/shared": "workspace:*",
 		"better-sqlite3": "^12.8.0",
 		"hono": "^4.6.0",
