@@ -213,6 +213,14 @@
 				>
 					New Game
 				</button>
+				{#if appState.gameType === 'chess'}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+						onclick={() => { appState.reviewMoves = appState.moveHistory; appState.view = 'review'; }}
+					>
+						Review
+					</button>
+				{/if}
 			{:else}
 				<button
 					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"

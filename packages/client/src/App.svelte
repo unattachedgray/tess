@@ -3,6 +3,7 @@
 	import { WsClient } from "./lib/ws.ts";
 	import Home from "./views/Home.svelte";
 	import Game from "./views/Game.svelte";
+	import Review from "./views/Review.svelte";
 	import Settings from "./components/Settings.svelte";
 
 	const ws = new WsClient();
@@ -86,7 +87,7 @@
 	<header class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] h-[44px]">
 		<button
 			class="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
-			onclick={() => showMenu = !showMenu}
+			onclick={() => { if (appState.view === 'review') { appState.view = 'game'; } else { showMenu = !showMenu; } }}
 		>
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
 				{#if showMenu}
@@ -95,7 +96,11 @@
 					<path d="M2 4H14M2 8H14M2 12H14" />
 				{/if}
 			</svg>
-			{showMenu ? 'Close' : GAME_NAMES[appState.gameType] ?? 'Menu'}
+			{#if appState.view === 'review'}
+				Back
+			{:else}
+				{showMenu ? 'Close' : GAME_NAMES[appState.gameType] ?? 'Menu'}
+			{/if}
 		</button>
 
 		<div class="flex items-center gap-3">
@@ -127,6 +132,15 @@
 			</div>
 		{/if}
 
-		<Game {ws} />
+		{#if appState.view === 'review'}
+			<Review
+				moves={appState.reviewMoves}
+				accuracy={appState.skillEval?.accuracy}
+				skillLabel={appState.skillEval?.skill.label}
+				gameSummary={appState.gameSummary ?? undefined}
+			/>
+		{:else}
+			<Game {ws} />
+		{/if}
 	</main>
 </div>

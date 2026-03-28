@@ -1,6 +1,6 @@
 import type { DifficultyId, GameType, Suggestion } from "@tess/shared";
 
-export type View = "home" | "game";
+export type View = "home" | "game" | "review";
 export type MoveQuality = "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" | null;
 
 export interface AnalysisMessage {
@@ -121,6 +121,7 @@ class AppState {
 
 	// Active game state (not persisted)
 	view = $state<View>("game");
+	reviewMoves = $state<{ san: string; uci: string; fen: string; moveNumber: number }[]>([]);
 	gameId = $state<string | null>(null);
 	fen = $state("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 	turn = $state<"white" | "black">("white");
