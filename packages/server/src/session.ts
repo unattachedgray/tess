@@ -45,6 +45,8 @@ export class SessionManager {
 	}
 
 	removeRoom(id: string): void {
+		const room = this.rooms.get(id);
+		room?.destroy();
 		this.rooms.delete(id);
 		log.info("room removed", { id });
 	}

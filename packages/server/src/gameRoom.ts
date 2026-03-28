@@ -42,6 +42,7 @@ export class GameRoom {
 	private useJanggiVariant: boolean;
 	private moveCallbacks: ((data: unknown) => void)[] = [];
 	private moveInProgress = false;
+	private destroyed = false;
 	private lastSuggestions: Suggestion[] = [];
 	coachingEnabled = true;
 
@@ -81,7 +82,13 @@ export class GameRoom {
 	}
 
 	private emit(data: unknown): void {
+		if (this.destroyed) return;
 		for (const cb of this.moveCallbacks) cb(data);
+	}
+
+	destroy(): void {
+		this.destroyed = true;
+		this.moveCallbacks = [];
 	}
 
 	// --- State accessors ---
@@ -386,7 +393,7 @@ export class GameRoom {
 		const moveNum = history.length;
 		const text = await analyzePosition(ctx);
 		if (text) {
-			this.emit({ type: "ANALYSIS", text, moveNumber: moveNum });
+			this.emit({ type: "ANALYSIS", text, moveNumber: moveNum, gameId: this.id });
 		}
 	}
 

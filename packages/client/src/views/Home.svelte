@@ -75,7 +75,10 @@
 		});
 
 		ws.on("ANALYSIS", (msg) => {
-			appState.addAnalysis(msg.text, (msg as any).moveNumber);
+			const data = msg as any;
+			// Ignore analysis from a different game
+			if (data.gameId && data.gameId !== appState.gameId) return;
+			appState.addAnalysis(data.text, data.moveNumber);
 		});
 
 		ws.on("MOVE_QUALITY", (msg) => {
