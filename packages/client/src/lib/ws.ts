@@ -6,7 +6,9 @@ export class WsClient {
 	private ws: WebSocket | null = null;
 	private handlers = new Map<string, TypeHandler[]>();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private pendingMessages: string[] = [];
 	private url: string;
+	private connected = false;
 
 	constructor(url?: string) {
 		const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -15,23 +17,26 @@ export class WsClient {
 
 	connect(): void {
 		if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
-			return; // Already connected or connecting
+			return;
 		}
 		this.ws = new WebSocket(this.url);
 
 		this.ws.onopen = () => {
 			console.log("[ws] connected");
+			this.connected = true;
+			// Flush any messages queued while disconnected
+			for (const msg of this.pendingMessages) {
+				this.ws!.send(msg);
+			}
+			this.pendingMessages = [];
 		};
 
 		this.ws.onmessage = (event) => {
 			try {
 				const msg = JSON.parse(event.data as string) as ServerMessage;
-				console.log("[ws] recv:", msg.type);
 				const handlers = this.handlers.get(msg.type);
 				if (handlers) {
 					for (const h of handlers) h(msg);
-				} else {
-					console.warn("[ws] no handler for:", msg.type);
 				}
 			} catch (err) {
 				console.error("[ws] parse error:", err);
@@ -39,21 +44,20 @@ export class WsClient {
 		};
 
 		this.ws.onclose = () => {
-			console.log("[ws] disconnected, reconnecting in 2s...");
+			this.connected = false;
 			this.reconnectTimer = setTimeout(() => this.connect(), 2000);
 		};
 
-		this.ws.onerror = (err) => {
-			console.error("[ws] error:", err);
-		};
+		this.ws.onerror = () => {};
 	}
 
 	send(msg: ClientMessage): void {
+		const data = JSON.stringify(msg);
 		if (this.ws?.readyState === WebSocket.OPEN) {
-			console.log("[ws] send:", msg.type);
-			this.ws.send(JSON.stringify(msg));
+			this.ws.send(data);
 		} else {
-			console.error("[ws] not connected, can't send:", msg.type);
+			// Queue message to send when connected
+			this.pendingMessages.push(data);
 		}
 	}
 
@@ -78,5 +82,6 @@ export class WsClient {
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.ws?.close();
 		this.ws = null;
+		this.connected = false;
 	}
 }
