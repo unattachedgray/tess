@@ -45,8 +45,6 @@ export class GameRoom {
 	private moveCallbacks: ((data: unknown) => void)[] = [];
 	private moveInProgress = false;
 	private destroyed = false;
-	private positionEvals: number[] = [0]; // track eval at each position for skill assessment
-	private moveQualities: string[] = []; // track per-move quality for accuracy
 	private lastSuggestions: Suggestion[] = [];
 	coachingEnabled = true;
 
@@ -314,14 +312,12 @@ export class GameRoom {
 				]);
 				aiMoveStr = searchResult.bestmove;
 				// Track eval before AI move (negated — from AI's perspective)
-				if (searchResult.info[0]) this.positionEvals.push(-searchResult.info[0].score);
 			} else {
 				const [searchResult] = await Promise.all([
 					this.uciPool.search(this.chessGame!.fen, tier.chessMovetime),
 					new Promise((r) => setTimeout(r, delay)),
 				]);
 				aiMoveStr = searchResult.bestmove;
-				if (searchResult.info[0]) this.positionEvals.push(-searchResult.info[0].score);
 			}
 
 			const moveResult = this.executeMove(aiMoveStr);
@@ -346,14 +342,8 @@ export class GameRoom {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;
 
-				// Track eval for skill assessment
-				if (sugPayload.suggestions.length > 0) {
-					this.positionEvals.push(sugPayload.suggestions[0].score);
-				}
-
 				if (this.lastSuggestions.length > 0) {
 					const quality = this.assessMoveQuality(playerMove);
-					this.moveQualities.push(quality);
 					this.emit({
 						type: "MOVE_QUALITY",
 						move: playerMove,
@@ -478,49 +468,126 @@ export class GameRoom {
 		};
 	}
 
+	/** Batch-analyze all positions after game ends to compute player accuracy */
 	private emitSkillEvaluation(): void {
-		if (this.moveQualities.length < 3) return; // too few moves to evaluate
+		// Fire-and-forget: analyze the full game asynchronously
+		this.batchEvalGame().catch((err) => {
+			log.error("skill evaluation failed", { error: (err as Error).message });
+		});
+	}
 
-		// Compute accuracy from move quality assessments
-		const QUALITY_SCORES: Record<string, number> = {
-			best: 100,
-			good: 80,
-			ok: 50,
-			inaccuracy: 30,
-			mistake: 15,
-			blunder: 5,
-		};
+	private async batchEvalGame(): Promise<void> {
+		const history =
+			this.chessGame?.getMoveHistory() ??
+			this.janggiGame?.getMoveHistory() ??
+			this.goGame?.getMoveHistory().map((m) => ({
+				san: m.coord,
+				uci: m.coord,
+				fen: "",
+				moveNumber: m.moveNumber,
+			})) ??
+			[];
 
-		const scores = this.moveQualities.map((q) => QUALITY_SCORES[q] ?? 50);
-		const accuracy = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+		if (history.length < 6) return;
 
-		// Also try eval-based accuracy if we have enough evals
-		let evalAccuracy = accuracy;
-		if (this.positionEvals.length >= 6) {
-			const result = gameAccuracy(this.positionEvals, this.playerColor);
-			if (result.moveAccuracies.length > 0) {
-				evalAccuracy = Math.round(result.accuracy);
+		// For chess: replay game and eval each position
+		if (this.gameType === "chess") {
+			const evals: number[] = [0];
+			const replay = new ChessGame();
+
+			for (const move of history) {
+				replay.moveUci(move.uci);
+				try {
+					const result = await this.uciPool.search(replay.fen, 500, 1);
+					// Eval from white's perspective
+					const score = result.info[0]?.score ?? 0;
+					const sideToMove = replay.turn;
+					evals.push(sideToMove === "white" ? score : -score);
+				} catch {
+					evals.push(evals[evals.length - 1] ?? 0);
+				}
 			}
+
+			const result = gameAccuracy(evals, this.playerColor);
+			const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
+
+			log.info("skill evaluation", {
+				accuracy: Math.round(result.accuracy),
+				acpl: result.acpl,
+				label: skill.label,
+				moves: result.moveAccuracies.length,
+			});
+
+			this.emit({
+				type: "SKILL_EVAL",
+				accuracy: Math.round(result.accuracy),
+				acpl: result.acpl,
+				skill,
+			});
+			return;
 		}
 
-		// Use the more meaningful of the two (prefer eval-based if available)
-		const finalAccuracy = this.positionEvals.length >= 6 ? evalAccuracy : accuracy;
-		const skill = getSkillLevel(finalAccuracy, this.gameType);
+		// For Janggi: replay and eval each position
+		if (this.gameType === "janggi" && this.janggiGame) {
+			const evals: number[] = [0];
+			const replay = new JanggiGame();
 
-		log.info("skill evaluation", {
-			accuracy: finalAccuracy,
-			qualityAccuracy: accuracy,
-			evalAccuracy,
-			label: skill.label,
-			moves: this.moveQualities.length,
-		});
+			for (const move of history) {
+				replay.moveUci(move.uci);
+				try {
+					const variant = this.useJanggiVariant ? "janggi" : undefined;
+					const result = await this.uciPool.search(replay.fen, 300, 1, variant);
+					const score = result.info[0]?.score ?? 0;
+					evals.push(replay.turn === "white" ? score : -score);
+				} catch {
+					evals.push(evals[evals.length - 1] ?? 0);
+				}
+			}
 
-		this.emit({
-			type: "SKILL_EVAL",
-			accuracy: finalAccuracy,
-			acpl: 0,
-			skill,
-		});
+			const result = gameAccuracy(evals, this.playerColor);
+			const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
+			this.emit({
+				type: "SKILL_EVAL",
+				accuracy: Math.round(result.accuracy),
+				acpl: result.acpl,
+				skill,
+			});
+			return;
+		}
+
+		// For Go: eval each position with KataGo
+		if (this.gameType === "go" && this.goGame && this.kataGo) {
+			const evals: number[] = [0];
+			const goHistory = this.goGame.getKataGoMoves();
+
+			for (let i = 0; i <= goHistory.length; i++) {
+				const movesUpToHere = goHistory.slice(0, i);
+				const color = i % 2 === 0 ? "b" : "w";
+				try {
+					const results = await this.kataGo.analyze(movesUpToHere, color, 30, 1, this.goGame.size);
+					if (results.length > 0) {
+						// Convert winrate to centipawn-like score for the accuracy formula
+						evals.push(Math.round(results[0].winrate * 10000 - 5000));
+					} else {
+						evals.push(evals[evals.length - 1] ?? 0);
+					}
+				} catch {
+					evals.push(evals[evals.length - 1] ?? 0);
+				}
+			}
+
+			const result = gameAccuracy(evals, this.playerColor);
+			const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
+			this.emit({
+				type: "SKILL_EVAL",
+				accuracy: Math.round(result.accuracy),
+				acpl: result.acpl,
+				skill,
+			});
+			return;
+		}
+
+		log.info("skill evaluation skipped — unsupported game type");
 	}
 
 	get pgn(): string {
