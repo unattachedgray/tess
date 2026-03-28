@@ -52,13 +52,13 @@ function buildChessPrompt(ctx: AnalysisContext): string {
 Move ${ctx.moveCount}, ${phase}.
 FEN: ${ctx.fen}
 
-${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent and consequence.` : "Game just started."}
+${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent and consequence.` : "Game just started. Explain the opening position."}
 **Top engine suggestions:**
 ${formatSuggestions(ctx.suggestions)}
 
 Analyze:
-1. Was the last move good or bad? Why?
-2. What should ${playerSide} focus on now? Pick the best suggestion and explain why.
+${ctx.lastMove ? "1. Was the last move good or bad? Why?" : `1. What are the key opening principles ${playerSide} should follow?`}
+2. What should ${playerSide} focus on now? Pick the best suggestion and explain why it's a strong opening move.
 3. Key strategic themes (piece activity, king safety, pawn structure).
 
 Under 120 words. Use **bold** for strategic/tactical terms on first use. End with:

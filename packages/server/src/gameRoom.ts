@@ -290,5 +290,43 @@ export class GameRoom {
 		if (this.game.turn !== this.playerColor) {
 			await this.makeAiMove();
 		}
+		// Always send opening suggestions after game starts
+		this.sendOpeningSuggestions();
+	}
+
+	/** Fire-and-forget: sends initial suggestions and opening analysis */
+	private sendOpeningSuggestions(): void {
+		this.getSuggestions(3)
+			.then((sugPayload) => {
+				this.emit(sugPayload);
+				this.lastSuggestions = sugPayload.suggestions;
+
+				if (this.coachingEnabled) {
+					this.requestOpeningAnalysis();
+				}
+			})
+			.catch((err) => {
+				log.error("opening suggestions failed", { error: (err as Error).message });
+			});
+	}
+
+	private async requestOpeningAnalysis(): Promise<void> {
+		const history = this.game.getMoveHistory();
+		const ctx: AnalysisContext = {
+			gameType: this.gameType,
+			fen: this.game.fen,
+			moveCount: history.length,
+			playerColor: this.playerColor,
+			lastMove: history.length > 0 ? history[history.length - 1].san : undefined,
+			lastMoveColor:
+				history.length > 0 ? (this.game.turn === "white" ? "Black" : "White") : undefined,
+			suggestions: this.lastSuggestions,
+			pgn: this.game.pgn,
+		};
+
+		const text = await analyzePosition(ctx);
+		if (text) {
+			this.emit({ type: "ANALYSIS", text });
+		}
 	}
 }
