@@ -765,7 +765,7 @@ export class GameRoom {
 		this.sendOpeningSuggestions();
 	}
 
-	private sendOpeningSuggestions(): void {
+	private sendOpeningSuggestions(retries = 2): void {
 		this.getSuggestions(this.suggestionCount)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
@@ -773,7 +773,13 @@ export class GameRoom {
 				if (this.coachingEnabled) this.requestAnalysis();
 			})
 			.catch((err) => {
-				log.error("opening suggestions failed", { error: (err as Error).message });
+				log.error("opening suggestions failed", { error: (err as Error).message, retries });
+				if (retries > 0 && !this.destroyed) {
+					// Retry after a short delay (engine may still be warming up)
+					setTimeout(() => this.sendOpeningSuggestions(retries - 1), 1000);
+				} else {
+					this.emit({ type: "SUGGESTIONS", suggestions: [] });
+				}
 			});
 	}
 }

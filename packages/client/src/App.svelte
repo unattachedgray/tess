@@ -62,23 +62,20 @@
 		showMenu = false;
 	}
 
-	// Auto-start on first WS connect
+	// Auto-start: set up handlers immediately, send NEW_GAME (WS queues if not yet connected)
 	$effect(() => {
 		if (!autoStarted) {
 			autoStarted = true;
-			// Small delay to let WS connect
-			setTimeout(() => {
-				setupHandlers();
-				ws.send({
-					type: "NEW_GAME",
-					gameType: appState.gameType,
-					difficulty: appState.difficulty,
-					playerColor: appState.playerColor,
-					coaching: appState.coachingEnabled,
-					suggestionCount: appState.suggestionCount,
-			suggestionStrength: appState.suggestionStrength,
-				});
-			}, 100);
+			setupHandlers();
+			ws.send({
+				type: "NEW_GAME",
+				gameType: appState.gameType,
+				difficulty: appState.difficulty,
+				playerColor: appState.playerColor,
+				coaching: appState.coachingEnabled,
+				suggestionCount: appState.suggestionCount,
+				suggestionStrength: appState.suggestionStrength,
+			});
 		}
 	});
 </script>
