@@ -8,6 +8,7 @@ export const NewGameMessage = z.object({
 	difficulty: z.enum(["beginner", "casual", "club", "pro", "superhuman"]),
 	playerColor: z.enum(["white", "black"]).default("white"),
 	boardSize: z.number().optional(),
+	coaching: z.boolean().optional(),
 });
 
 export const JoinGameMessage = z.object({

@@ -105,6 +105,7 @@ export function createWsServer(
 				});
 
 				state.room = room;
+				if (msg.coaching !== undefined) room.coachingEnabled = msg.coaching;
 
 				room.onMove((data) => send(state.ws, data));
 				send(state.ws, room.getState());

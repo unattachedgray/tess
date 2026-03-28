@@ -508,7 +508,8 @@ export class GameRoom {
 				}
 			}
 
-			await this.emitAndSummarize(result, history);
+			const chessResult = gameAccuracy(evals, this.playerColor);
+			await this.emitAndSummarize(chessResult, history);
 			return;
 		}
 

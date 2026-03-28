@@ -107,9 +107,8 @@
 			difficulty: appState.difficulty,
 			playerColor: appState.playerColor,
 			boardSize: appState.gameType === "go" ? boardSize : undefined,
+			coaching: appState.coachingEnabled,
 		});
-
-		ws.send({ type: "SET_COACHING", enabled: appState.coachingEnabled });
 		onStart?.();
 	}
 </script>

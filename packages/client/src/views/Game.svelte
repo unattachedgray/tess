@@ -48,7 +48,8 @@
 	}
 
 	function playSuggestedMove(move: string) {
-		hoveredMove = null; // Clear highlight immediately
+		if (appState.suggestionsStale) return; // Don't play stale suggestions
+		hoveredMove = null;
 		ws.send({ type: "PLAY_MOVE", move });
 	}
 
