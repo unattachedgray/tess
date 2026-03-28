@@ -91,6 +91,9 @@ class AppState {
 		this.result = data.result ?? null;
 		this.suggestionsStale = true;
 		this.hintLevel = 0;
+		if (this.coachingEnabled) {
+			this.analysisLoading = true;
+		}
 	}
 
 	updateSuggestions(suggestions: Suggestion[]) {

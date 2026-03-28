@@ -51,7 +51,11 @@
 		<h3 class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
 			Engine
 			{#if stale && suggestions.length > 0}
-				<span class="inline-block w-3 h-3 ml-1 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin align-middle"></span>
+				<span class="inline-flex gap-0.5 ml-1 align-middle">
+					<span class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce inline-block" style="animation-delay: 0ms"></span>
+					<span class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce inline-block" style="animation-delay: 150ms"></span>
+					<span class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce inline-block" style="animation-delay: 300ms"></span>
+				</span>
 			{/if}
 		</h3>
 		{#if moveQuality}
