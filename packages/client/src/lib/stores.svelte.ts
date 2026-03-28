@@ -45,6 +45,7 @@ class AppState {
 	lastMoveQuality = $state<MoveQuality>(null);
 	hintLevel = $state(0);
 	showArrows = $state(true);
+	suggestionCount = $state(Number(localStorage.getItem("tess-suggestions") ?? "3"));
 	skillEval = $state<{
 		accuracy: number;
 		acpl: number;
@@ -55,6 +56,11 @@ class AppState {
 	setDifficulty(d: DifficultyId) {
 		this.difficulty = d;
 		localStorage.setItem("tess-difficulty", d);
+	}
+
+	setSuggestionCount(n: number) {
+		this.suggestionCount = n;
+		localStorage.setItem("tess-suggestions", String(n));
 	}
 
 	setCoaching(enabled: boolean) {

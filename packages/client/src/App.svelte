@@ -3,6 +3,7 @@
 	import { WsClient } from "./lib/ws.ts";
 	import Home from "./views/Home.svelte";
 	import Game from "./views/Game.svelte";
+	import Settings from "./components/Settings.svelte";
 
 	const ws = new WsClient();
 
@@ -19,63 +20,99 @@
 		janggi: "Janggi",
 	};
 
-	function toggleMenu() {
-		showMenu = !showMenu;
+	// Auto-start: register handlers and send NEW_GAME on first connect
+	let autoStarted = $state(false);
+
+	function setupHandlers() {
+		ws.clearHandlers();
+
+		ws.on("GAME_STATE", (msg) => {
+			appState.updateFromGameState(msg);
+			appState.view = "game";
+		});
+		ws.on("MOVE", (msg) => appState.updateFromMove(msg));
+		ws.on("GAME_OVER", (msg) => { appState.isGameOver = true; appState.result = msg.result; });
+		ws.on("SUGGESTIONS", (msg) => appState.updateSuggestions(msg.suggestions));
+		ws.on("ANALYSIS", (msg) => {
+			const data = msg as any;
+			if (data.gameId && data.gameId !== appState.gameId) return;
+			appState.addAnalysis(data.text, data.moveNumber);
+		});
+		ws.on("MOVE_QUALITY", (msg) => { appState.lastMoveQuality = (msg as any).quality; });
+		ws.on("HINT", (msg) => { appState.hintLevel = msg.level; });
+		ws.on("SKILL_EVAL", (msg) => { appState.skillEval = msg as any; });
+		ws.on("GAME_SUMMARY", (msg) => { appState.gameSummary = (msg as any).text; });
+		ws.on("ERROR", (msg) => { console.error("[game]", (msg as any).message); });
 	}
+
+	function startNewGame() {
+		appState.reset();
+		setupHandlers();
+		ws.send({
+			type: "NEW_GAME",
+			gameType: appState.gameType,
+			difficulty: appState.difficulty,
+			playerColor: appState.playerColor,
+			coaching: appState.coachingEnabled,
+			suggestionCount: appState.suggestionCount,
+		});
+		showMenu = false;
+	}
+
+	// Auto-start on first WS connect
+	$effect(() => {
+		if (!autoStarted) {
+			autoStarted = true;
+			// Small delay to let WS connect
+			setTimeout(() => {
+				setupHandlers();
+				ws.send({
+					type: "NEW_GAME",
+					gameType: appState.gameType,
+					difficulty: appState.difficulty,
+					playerColor: appState.playerColor,
+					coaching: appState.coachingEnabled,
+					suggestionCount: appState.suggestionCount,
+				});
+			}, 100);
+		}
+	});
 </script>
 
 <div class="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
 	<header class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] h-[44px]">
-		{#if appState.view === 'game' && appState.gameId}
-			<button
-				class="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
-				onclick={toggleMenu}
-			>
-				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-					{#if showMenu}
-						<path d="M4 4L12 12M12 4L4 12" />
-					{:else}
-						<path d="M2 4H14M2 8H14M2 12H14" />
-					{/if}
-				</svg>
-				{showMenu ? 'Close' : 'Menu'}
-			</button>
+		<button
+			class="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
+			onclick={() => showMenu = !showMenu}
+		>
+			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+				{#if showMenu}
+					<path d="M4 4L12 12M12 4L4 12" />
+				{:else}
+					<path d="M2 4H14M2 8H14M2 12H14" />
+				{/if}
+			</svg>
+			{showMenu ? 'Close' : GAME_NAMES[appState.gameType] ?? 'Menu'}
+		</button>
 
-			<span class="text-sm font-medium text-[var(--text-primary)]">
-				{GAME_NAMES[appState.gameType] ?? appState.gameType}
-			</span>
+		<span class="text-sm font-medium text-[var(--text-primary)]">Tess</span>
 
-			<span class="text-xs text-[var(--text-muted)] capitalize">
-				{appState.difficulty}
-			</span>
-		{:else}
-			<span class="text-lg font-bold tracking-tight text-[var(--accent)]">Tess</span>
-			<span></span>
-			<span></span>
-		{/if}
+		<Settings {ws} />
 	</header>
 
 	<main class="flex-1 relative">
-		{#if appState.view === 'home' || (showMenu && appState.view === 'game')}
-			<!-- Menu overlay (or full page on home) -->
-			{#if appState.view === 'game'}
-				<!-- biome-ignore lint: click backdrop to close -->
-				<div
-					class="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-8 pb-8"
-					onclick={(e) => { if (e.target === e.currentTarget) showMenu = false; }}
-					role="dialog"
-				>
-					<div class="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-md mx-4 p-6" onclick={(e) => e.stopPropagation()}>
-						<Home {ws} onStart={() => showMenu = false} compact />
-					</div>
+		{#if showMenu}
+			<div
+				class="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-8 pb-8"
+				onclick={(e) => { if (e.target === e.currentTarget) showMenu = false; }}
+				role="dialog"
+			>
+				<div class="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-md mx-4 p-6" onclick={(e) => e.stopPropagation()}>
+					<Home {ws} onStart={startNewGame} compact />
 				</div>
-			{:else}
-				<Home {ws} onStart={() => showMenu = false} />
-			{/if}
+			</div>
 		{/if}
 
-		{#if appState.view === 'game'}
-			<Game {ws} />
-		{/if}
+		<Game {ws} />
 	</main>
 </div>

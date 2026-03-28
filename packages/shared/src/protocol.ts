@@ -9,6 +9,7 @@ export const NewGameMessage = z.object({
 	playerColor: z.enum(["white", "black"]).default("white"),
 	boardSize: z.number().optional(),
 	coaching: z.boolean().optional(),
+	suggestionCount: z.number().optional(),
 });
 
 export const JoinGameMessage = z.object({
@@ -38,6 +39,11 @@ export const SetCoachingMessage = z.object({
 	enabled: z.boolean(),
 });
 
+export const SetSuggestionsMessage = z.object({
+	type: z.literal("SET_SUGGESTIONS"),
+	count: z.number(),
+});
+
 export const RequestHintMessage = z.object({
 	type: z.literal("REQUEST_HINT"),
 });
@@ -50,6 +56,7 @@ export const ClientMessage = z.discriminatedUnion("type", [
 	PassMessage,
 	RequestAnalysisMessage,
 	SetCoachingMessage,
+	SetSuggestionsMessage,
 	RequestHintMessage,
 ]);
 

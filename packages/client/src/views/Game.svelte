@@ -66,11 +66,6 @@
 		ws.send({ type: "REQUEST_HINT" });
 	}
 
-	function toggleCoaching() {
-		appState.setCoaching(!appState.coachingEnabled);
-		ws.send({ type: "SET_COACHING", enabled: appState.coachingEnabled });
-	}
-
 	const isMyTurn = $derived(appState.turn === appState.playerColor);
 	const statusText = $derived.by(() => {
 		if (appState.isGameOver && appState.result) {
@@ -216,21 +211,11 @@
 				<button
 					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
 					onclick={requestHint}
-					title="Get a hint"
 				>
 					Hint
 				</button>
 				<button
-					class="flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors {appState.coachingEnabled
-						? 'bg-[var(--accent-glow)] border border-[var(--accent)] text-[var(--accent)]'
-						: 'bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-muted)]'}"
-					onclick={toggleCoaching}
-					title="Toggle AI coaching"
-				>
-					Coach {appState.coachingEnabled ? 'ON' : 'OFF'}
-				</button>
-				<button
-					class="py-2.5 px-4 rounded-xl text-sm font-medium bg-[var(--danger)]/10 border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)]/20 transition-colors"
+					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--danger)]/10 border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)]/20 transition-colors"
 					onclick={resign}
 				>
 					Resign

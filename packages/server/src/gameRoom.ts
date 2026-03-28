@@ -47,6 +47,7 @@ export class GameRoom {
 	private destroyed = false;
 	private lastSuggestions: Suggestion[] = [];
 	coachingEnabled = true;
+	suggestionCount = 3;
 
 	constructor(config: {
 		id: string;
@@ -337,7 +338,7 @@ export class GameRoom {
 
 	private sendSuggestionsAndAnalysis(playerMove: string): void {
 		// Get suggestions first (fast), then start analysis with suggestion context
-		this.getSuggestions(3)
+		this.getSuggestions(this.suggestionCount)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;
@@ -632,7 +633,7 @@ export class GameRoom {
 	}
 
 	private sendOpeningSuggestions(): void {
-		this.getSuggestions(3)
+		this.getSuggestions(this.suggestionCount)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;

@@ -52,63 +52,7 @@
 	}
 
 	function startGame() {
-		// Reset state for new game
-		appState.reset();
-		ws.clearHandlers();
-
-		ws.on("GAME_STATE", (msg) => {
-			appState.updateFromGameState(msg);
-			appState.view = "game";
-		});
-
-		ws.on("MOVE", (msg) => {
-			appState.updateFromMove(msg);
-		});
-
-		ws.on("GAME_OVER", (msg) => {
-			appState.isGameOver = true;
-			appState.result = msg.result;
-		});
-
-		ws.on("SUGGESTIONS", (msg) => {
-			appState.updateSuggestions(msg.suggestions);
-		});
-
-		ws.on("ANALYSIS", (msg) => {
-			const data = msg as any;
-			// Ignore analysis from a different game
-			if (data.gameId && data.gameId !== appState.gameId) return;
-			appState.addAnalysis(data.text, data.moveNumber);
-		});
-
-		ws.on("MOVE_QUALITY", (msg) => {
-			appState.lastMoveQuality = msg.quality as any;
-		});
-
-		ws.on("HINT", (msg) => {
-			appState.hintLevel = msg.level;
-		});
-
-		ws.on("SKILL_EVAL", (msg) => {
-			appState.skillEval = msg as any;
-		});
-
-		ws.on("GAME_SUMMARY", (msg) => {
-			appState.gameSummary = (msg as any).text;
-		});
-
-		ws.on("ERROR", (msg) => {
-			console.error("[game] server error:", (msg as { message: string }).message);
-		});
-
-		ws.send({
-			type: "NEW_GAME",
-			gameType: appState.gameType,
-			difficulty: appState.difficulty,
-			playerColor: appState.playerColor,
-			boardSize: appState.gameType === "go" ? boardSize : undefined,
-			coaching: appState.coachingEnabled,
-		});
+		if (appState.gameType === "go") appState.boardSize = boardSize;
 		onStart?.();
 	}
 </script>

@@ -106,6 +106,8 @@ export function createWsServer(
 
 				state.room = room;
 				if (msg.coaching !== undefined) room.coachingEnabled = msg.coaching;
+				if (msg.suggestionCount !== undefined)
+					room.suggestionCount = Math.min(3, Math.max(0, msg.suggestionCount));
 
 				room.onMove((data) => send(state.ws, data));
 				send(state.ws, room.getState());
@@ -155,9 +157,12 @@ export function createWsServer(
 			}
 
 			case "SET_COACHING": {
-				if (state.room) {
-					state.room.coachingEnabled = msg.enabled;
-				}
+				if (state.room) state.room.coachingEnabled = msg.enabled;
+				break;
+			}
+
+			case "SET_SUGGESTIONS": {
+				if (state.room) state.room.suggestionCount = Math.min(3, Math.max(0, msg.count));
 				break;
 			}
 
