@@ -10,7 +10,7 @@ export class WsClient {
 
 	constructor(url?: string) {
 		const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-		this.url = url ?? `${proto}//${window.location.host}/ws`;
+		this.url = url ?? `${proto}//${window.location.host}/game-ws`;
 	}
 
 	connect(): void {

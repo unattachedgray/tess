@@ -7,7 +7,7 @@ export default defineConfig({
 	server: {
 		proxy: {
 			"/api": "http://localhost:8082",
-			"/ws": {
+			"/game-ws": {
 				target: "ws://localhost:8082",
 				ws: true,
 			},
