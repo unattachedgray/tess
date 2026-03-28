@@ -1,7 +1,6 @@
 import type { DifficultyId, GameType, Suggestion } from "@tess/shared";
 
 export type View = "home" | "game";
-
 export type MoveQuality = "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" | null;
 
 export interface AnalysisMessage {
@@ -10,16 +9,116 @@ export interface AnalysisMessage {
 	timestamp: number;
 }
 
-class AppState {
-	view = $state<View>("home");
-	gameType = $state<GameType>("chess");
-	difficulty = $state<DifficultyId>(
-		(localStorage.getItem("tess-difficulty") as DifficultyId) ?? "casual",
-	);
-	playerColor = $state<"white" | "black">("white");
-	coachingEnabled = $state(localStorage.getItem("tess-coaching") !== "false");
+// --- Persistent preferences (survive reload) ---
 
-	// Active game state
+function loadPref<T>(key: string, fallback: T): T {
+	try {
+		const v = localStorage.getItem(`tess-${key}`);
+		if (v === null) return fallback;
+		return JSON.parse(v) as T;
+	} catch {
+		return fallback;
+	}
+}
+
+function savePref(key: string, value: unknown): void {
+	localStorage.setItem(`tess-${key}`, JSON.stringify(value));
+}
+
+// --- Bird name generator ---
+
+const BIRDS = [
+	"Albatross",
+	"Bluebird",
+	"Cardinal",
+	"Dove",
+	"Eagle",
+	"Falcon",
+	"Goldfinch",
+	"Heron",
+	"Ibis",
+	"Jay",
+	"Kingfisher",
+	"Lark",
+	"Magpie",
+	"Nightingale",
+	"Oriole",
+	"Pelican",
+	"Quail",
+	"Robin",
+	"Sparrow",
+	"Toucan",
+	"Umber",
+	"Vireo",
+	"Warbler",
+	"Xenops",
+	"Yellowhammer",
+	"Zosterops",
+	"Crane",
+	"Darter",
+	"Egret",
+	"Finch",
+	"Grouse",
+	"Hawk",
+	"Jackdaw",
+	"Kestrel",
+	"Linnet",
+	"Martin",
+	"Nuthatch",
+	"Osprey",
+	"Pipit",
+	"Raven",
+	"Starling",
+	"Tanager",
+	"Wren",
+	"Swift",
+	"Thrush",
+	"Tern",
+];
+
+function generateUserId(): string {
+	const bird = BIRDS[Math.floor(Math.random() * BIRDS.length)];
+	const num = Math.floor(Math.random() * 9000) + 1000;
+	return `${bird}${num}`;
+}
+
+function getBrowserKey(): string {
+	const ua = navigator.userAgent;
+	const lang = navigator.language;
+	const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	// Simple hash
+	let hash = 0;
+	const str = `${ua}|${lang}|${tz}`;
+	for (let i = 0; i < str.length; i++) {
+		hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+	}
+	return Math.abs(hash).toString(36);
+}
+
+// --- App State ---
+
+class AppState {
+	// Persistent preferences
+	gameType = $state<GameType>(loadPref("gameType", "chess"));
+	difficulty = $state<DifficultyId>(loadPref("difficulty", "casual"));
+	playerColor = $state<"white" | "black">(loadPref("playerColor", "white"));
+	coachingEnabled = $state<boolean>(loadPref("coaching", true));
+	suggestionCount = $state<number>(loadPref("suggestions", 3));
+	boardSize = $state<number>(loadPref("boardSize", 19));
+
+	// User identity (persistent)
+	userId = $state<string>(
+		loadPref("userId", "") ||
+			(() => {
+				const id = generateUserId();
+				savePref("userId", id);
+				return id;
+			})(),
+	);
+	browserKey = $state<string>(getBrowserKey());
+
+	// Active game state (not persisted)
+	view = $state<View>("game");
 	gameId = $state<string | null>(null);
 	fen = $state("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 	turn = $state<"white" | "black">("white");
@@ -30,22 +129,20 @@ class AppState {
 	isGameOver = $state(false);
 	result = $state<{ winner: "white" | "black" | "draw"; reason: string } | null>(null);
 
-	// Go-specific state
+	// Go-specific
 	boardState = $state<(string | null)[][]>([]);
-	boardSize = $state(19);
 	prisoners = $state<{ black: number; white: number }>({ black: 0, white: 0 });
 	goLastMove = $state<{ x: number; y: number } | null>(null);
 
-	// AI coaching state
+	// AI coaching
 	suggestions = $state<Suggestion[]>([]);
 	suggestionsStale = $state(false);
 	analysisMessages = $state<AnalysisMessage[]>([]);
 	analysisLoading = $state(false);
-	eval = $state<number>(0); // centipawns from white's perspective
+	eval = $state<number>(0);
 	lastMoveQuality = $state<MoveQuality>(null);
 	hintLevel = $state(0);
 	showArrows = $state(true);
-	suggestionCount = $state(Number(localStorage.getItem("tess-suggestions") ?? "3"));
 	skillEval = $state<{
 		accuracy: number;
 		acpl: number;
@@ -53,20 +150,47 @@ class AppState {
 	} | null>(null);
 	gameSummary = $state<string | null>(null);
 
-	setDifficulty(d: DifficultyId) {
-		this.difficulty = d;
-		localStorage.setItem("tess-difficulty", d);
+	// Player counts (from server)
+	playerCounts = $state<{ chess: number; go: number; janggi: number; total: number }>({
+		chess: 0,
+		go: 0,
+		janggi: 0,
+		total: 0,
+	});
+
+	// --- Setters (persist on change) ---
+
+	setGameType(t: GameType) {
+		this.gameType = t;
+		savePref("gameType", t);
 	}
 
-	setSuggestionCount(n: number) {
-		this.suggestionCount = n;
-		localStorage.setItem("tess-suggestions", String(n));
+	setDifficulty(d: DifficultyId) {
+		this.difficulty = d;
+		savePref("difficulty", d);
+	}
+
+	setPlayerColor(c: "white" | "black") {
+		this.playerColor = c;
+		savePref("playerColor", c);
 	}
 
 	setCoaching(enabled: boolean) {
 		this.coachingEnabled = enabled;
-		localStorage.setItem("tess-coaching", String(enabled));
+		savePref("coaching", enabled);
 	}
+
+	setSuggestionCount(n: number) {
+		this.suggestionCount = n;
+		savePref("suggestions", n);
+	}
+
+	setBoardSize(s: number) {
+		this.boardSize = s;
+		savePref("boardSize", s);
+	}
+
+	// --- State updates ---
 
 	updateFromGameState(data: {
 		gameId: string;
@@ -123,44 +247,13 @@ class AppState {
 		if (data.lastStone !== undefined) this.goLastMove = data.lastStone;
 		this.suggestionsStale = true;
 		this.hintLevel = 0;
-		if (this.coachingEnabled) {
-			this.analysisLoading = true;
-		}
+		if (this.coachingEnabled) this.analysisLoading = true;
 	}
 
 	updateSuggestions(suggestions: Suggestion[]) {
 		this.suggestions = suggestions;
 		this.suggestionsStale = false;
-		if (suggestions.length > 0) {
-			this.eval = suggestions[0].score;
-		}
-	}
-
-	updateMoveQuality(userMove: string, suggestions: Suggestion[]) {
-		if (suggestions.length === 0) {
-			this.lastMoveQuality = null;
-			return;
-		}
-
-		const bestMove = suggestions[0].move;
-		if (userMove === bestMove) {
-			this.lastMoveQuality = "best";
-			return;
-		}
-
-		const inTop = suggestions.some((s) => s.move === userMove);
-		if (inTop) {
-			this.lastMoveQuality = "good";
-			return;
-		}
-
-		const bestScore = suggestions[0].score;
-		const cpLoss = Math.abs(bestScore - this.eval);
-
-		if (cpLoss < 30) this.lastMoveQuality = "ok";
-		else if (cpLoss < 80) this.lastMoveQuality = "inaccuracy";
-		else if (cpLoss < 200) this.lastMoveQuality = "mistake";
-		else this.lastMoveQuality = "blunder";
+		if (suggestions.length > 0) this.eval = suggestions[0].score;
 	}
 
 	addAnalysis(text: string, moveNumber?: number) {
@@ -196,7 +289,6 @@ class AppState {
 		this.skillEval = null;
 		this.gameSummary = null;
 		this.boardState = [];
-		this.boardSize = 19;
 		this.prisoners = { black: 0, white: 0 };
 		this.goLastMove = null;
 	}

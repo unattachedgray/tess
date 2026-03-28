@@ -45,14 +45,13 @@
 	});
 
 	function selectGame(game: GameType) {
-		appState.gameType = game;
-		// Reset color to sensible default
-		if (game === "go") appState.playerColor = "black";
-		else appState.playerColor = "white";
+		appState.setGameType(game);
+		if (game === "go") appState.setPlayerColor("black");
+		else appState.setPlayerColor("white");
 	}
 
 	function startGame() {
-		if (appState.gameType === "go") appState.boardSize = boardSize;
+		if (appState.gameType === "go") appState.setBoardSize(boardSize);
 		onStart?.();
 	}
 </script>
@@ -110,7 +109,7 @@
 					class="px-4 py-3 rounded-xl text-sm font-medium transition-all {appState.playerColor === 'white'
 						? 'bg-white text-gray-900 shadow-lg'
 						: 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}"
-					onclick={() => appState.playerColor = 'white'}
+					onclick={() => appState.setPlayerColor('white')}
 				>
 					{COLOR_LABELS.white}
 				</button>
@@ -118,7 +117,7 @@
 					class="px-4 py-3 rounded-xl text-sm font-medium transition-all {appState.playerColor === 'black'
 						? 'bg-gray-800 text-white shadow-lg border border-[var(--border)]'
 						: 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}"
-					onclick={() => appState.playerColor = 'black'}
+					onclick={() => appState.setPlayerColor('black')}
 				>
 					{COLOR_LABELS.black}
 				</button>

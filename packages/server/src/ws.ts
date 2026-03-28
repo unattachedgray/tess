@@ -10,6 +10,8 @@ const log = createLogger("ws");
 interface ClientState {
 	ws: WebSocket;
 	room: GameRoom | null;
+	userId?: string;
+	gameType?: string;
 }
 
 export function createWsServer(
@@ -43,6 +45,7 @@ export function createWsServer(
 		const state: ClientState = { ws, room: null };
 		clients.set(ws, state);
 		log.info("client connected", { clients: clients.size });
+		broadcastPlayerCounts();
 
 		let processing = Promise.resolve();
 
@@ -61,12 +64,26 @@ export function createWsServer(
 			}
 			clients.delete(ws);
 			log.info("client disconnected", { clients: clients.size });
+			broadcastPlayerCounts();
 		});
 
 		ws.on("error", (err) => {
 			log.error("ws error", { error: err.message });
 		});
 	});
+
+	function broadcastPlayerCounts(): void {
+		const counts = { chess: 0, go: 0, janggi: 0, total: clients.size };
+		for (const [, state] of clients) {
+			if (state.gameType === "chess") counts.chess++;
+			else if (state.gameType === "go") counts.go++;
+			else if (state.gameType === "janggi") counts.janggi++;
+		}
+		const msg = JSON.stringify({ type: "PLAYER_COUNT", ...counts });
+		for (const ws of wss.clients) {
+			if (ws.readyState === ws.OPEN) ws.send(msg);
+		}
+	}
 
 	function send(ws: WebSocket, data: unknown): void {
 		if (ws.readyState === ws.OPEN) {
@@ -105,12 +122,14 @@ export function createWsServer(
 				});
 
 				state.room = room;
+				state.gameType = msg.gameType;
 				if (msg.coaching !== undefined) room.coachingEnabled = msg.coaching;
 				if (msg.suggestionCount !== undefined)
 					room.suggestionCount = Math.min(3, Math.max(0, msg.suggestionCount));
 
 				room.onMove((data) => send(state.ws, data));
 				send(state.ws, room.getState());
+				broadcastPlayerCounts();
 
 				try {
 					await room.startIfAiFirst();

@@ -42,6 +42,7 @@
 		ws.on("HINT", (msg) => { appState.hintLevel = msg.level; });
 		ws.on("SKILL_EVAL", (msg) => { appState.skillEval = msg as any; });
 		ws.on("GAME_SUMMARY", (msg) => { appState.gameSummary = (msg as any).text; });
+		ws.on("PLAYER_COUNT", (msg) => { appState.playerCounts = msg as any; });
 		ws.on("ERROR", (msg) => { console.error("[game]", (msg as any).message); });
 	}
 
@@ -95,9 +96,19 @@
 			{showMenu ? 'Close' : GAME_NAMES[appState.gameType] ?? 'Menu'}
 		</button>
 
-		<span class="text-sm font-medium text-[var(--text-primary)]">Tess</span>
+		<div class="flex items-center gap-3">
+			<span class="text-sm font-medium text-[var(--text-primary)]">Tess</span>
+			{#if appState.playerCounts.total > 0}
+				<span class="text-[10px] text-[var(--text-muted)]" title="Players online: {appState.playerCounts.chess} chess, {appState.playerCounts.go} go, {appState.playerCounts.janggi} janggi">
+					{appState.playerCounts.total} online
+				</span>
+			{/if}
+		</div>
 
-		<Settings {ws} />
+		<div class="flex items-center gap-3">
+			<span class="text-xs text-[var(--text-muted)]" title="Your ID">{appState.userId}</span>
+			<Settings {ws} />
+		</div>
 	</header>
 
 	<main class="flex-1 relative">
