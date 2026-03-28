@@ -5,7 +5,6 @@ import {
 	GoGame,
 	JanggiGame,
 	type Suggestion,
-	splitJanggiUci,
 } from "@tess/shared";
 import { type AnalysisContext, analyzePosition } from "./ai.js";
 import { FULL_STRENGTH_MOVETIME, getTier } from "./engine/difficulty.js";
@@ -27,23 +26,8 @@ function randomDelay(range: [number, number]): number {
 	return range[0] + Math.random() * (range[1] - range[0]);
 }
 
-// Fairy-Stockfish Janggi uses 0-indexed rows (a0-i9), our game uses 1-indexed (a1-i10)
-// Engine moves are always 4 chars (2+2), game moves can be 4-6 chars (rank 10 = 3 chars)
-function janggiEngineToGame(uci: string): string {
-	// Engine always 2+2: e2e4 -> e3e5
-	const from = uci.slice(0, 2);
-	const to = uci.slice(2, 4);
-	const convert = (sq: string) => `${sq[0]}${Number.parseInt(sq[1], 10) + 1}`;
-	return `${convert(from)}${convert(to)}`;
-}
-
-function janggiGameToEngine(uci: string): string {
-	// Game can be variable length: e3e5 -> e2e4, or a10b10 -> a9b9
-	const parsed = splitJanggiUci(uci);
-	if (!parsed) return uci;
-	const convert = (sq: string) => `${sq[0]}${Number.parseInt(sq.slice(1), 10) - 1}`;
-	return `${convert(parsed[0])}${convert(parsed[1])}`;
-}
+// Fairy-Stockfish Janggi uses the same 1-indexed coordinates as our game (a1-i10).
+// No conversion needed — engine and game use identical coordinate systems.
 
 export class GameRoom {
 	readonly id: string;
@@ -315,7 +299,7 @@ export class GameRoom {
 					),
 					new Promise((r) => setTimeout(r, delay)),
 				]);
-				aiMoveStr = janggiEngineToGame(searchResult.bestmove);
+				aiMoveStr = searchResult.bestmove;
 			} else {
 				const [searchResult] = await Promise.all([
 					this.uciPool.search(this.chessGame!.fen, tier.chessMovetime),
@@ -366,15 +350,14 @@ export class GameRoom {
 		userMove: string,
 	): "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" {
 		if (this.lastSuggestions.length === 0) return "ok";
-		const bestMove = this.lastSuggestions[0].move;
-		if (userMove.startsWith(bestMove) || bestMove.startsWith(userMove)) return "best";
-		if (this.lastSuggestions.some((s) => s.move === userMove || userMove.startsWith(s.move)))
-			return "good";
-		const bestScore = Math.abs(this.lastSuggestions[0].score);
-		if (bestScore < 30) return "ok";
-		if (bestScore < 80) return "inaccuracy";
-		if (bestScore < 200) return "mistake";
-		return "blunder";
+		// Check if user's move matches any suggestion
+		const normalize = (m: string) => m.toLowerCase().replace(/\s/g, "");
+		const normalizedUser = normalize(userMove);
+		const bestMove = normalize(this.lastSuggestions[0].move);
+		if (normalizedUser === bestMove) return "best";
+		if (this.lastSuggestions.some((s) => normalize(s.move) === normalizedUser)) return "good";
+		// For non-matching moves, be generous — we don't have proper eval delta
+		return "ok";
 	}
 
 	private async requestAnalysis(): Promise<void> {
@@ -431,21 +414,19 @@ export class GameRoom {
 				const fen = this.gameType === "janggi" ? this.janggiGame!.fen : this.chessGame!.fen;
 				const variant = this.useJanggiVariant ? "janggi" : undefined;
 				const result = await this.uciPool.search(fen, FULL_STRENGTH_MOVETIME, topN, variant);
-				const isJanggi = this.gameType === "janggi";
 				suggestions = result.info
 					.filter((i) => i.pv.length > 0)
 					.sort((a, b) => a.multipv - b.multipv)
 					.slice(0, topN)
 					.map((info) => {
-						const rawMove = info.pv[0];
-						const move = isJanggi ? janggiEngineToGame(rawMove) : rawMove;
-						const san = this.chessGame?.uciToSan(rawMove) ?? move;
+						const move = info.pv[0];
+						const san = this.chessGame?.uciToSan(move) ?? move;
 						return {
 							move,
 							san,
 							score: info.mate !== null ? (info.mate > 0 ? 99999 : -99999) : info.score,
 							depth: info.depth,
-							pv: isJanggi ? info.pv.map(janggiEngineToGame) : info.pv,
+							pv: info.pv,
 						};
 					});
 			}

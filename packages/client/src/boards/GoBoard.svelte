@@ -6,12 +6,14 @@
 		boardSize = 19,
 		orientation = "black",
 		lastMove,
+		highlightedMove,
 		onPlay,
 	}: {
 		boardState: (string | null)[][];
 		boardSize: number;
 		orientation: string;
 		lastMove?: { x: number; y: number } | null;
+		highlightedMove?: string | null;
 		onPlay: (x: number, y: number) => void;
 	} = $props();
 
@@ -33,6 +35,16 @@
 	});
 
 	let hoverPos = $state<{ x: number; y: number } | null>(null);
+
+	// Convert GTP coord to board position for highlighting
+	const highlightPos = $derived.by(() => {
+		if (!highlightedMove) return null;
+		const col = GO_COLS.indexOf(highlightedMove[0]?.toUpperCase());
+		if (col < 0) return null;
+		const row = parseInt(highlightedMove.slice(1), 10);
+		if (isNaN(row)) return null;
+		return { x: col, y: boardSize - row };
+	});
 
 	function handleClick(x: number, y: number) {
 		const stone = boardState[y]?.[x];
@@ -124,6 +136,18 @@
 				{/if}
 			{/each}
 		{/each}
+
+		<!-- Suggestion highlight -->
+		{#if highlightPos}
+			<circle
+				cx={coordToSvg(highlightPos.x)}
+				cy={coordToSvg(highlightPos.y)}
+				r={cellSize * STONE_RADIUS + cellSize * 0.1}
+				fill="none"
+				stroke="rgba(34,197,94,0.7)"
+				stroke-width={cellSize * 0.08}
+			/>
+		{/if}
 
 		<!-- Hover ghost stone -->
 		{#if hoverPos && !boardState[hoverPos.y]?.[hoverPos.x] && boardState.length > 0}

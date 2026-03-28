@@ -135,6 +135,7 @@
 					boardSize={appState.boardSize}
 					orientation={appState.playerColor}
 					lastMove={appState.goLastMove}
+					highlightedMove={hoveredMove ?? (appState.suggestions[0]?.move)}
 					onPlay={(x, y) => onGoPlay(x, y)}
 				/>
 			{:else if appState.gameType === 'janggi'}

@@ -136,6 +136,18 @@
 		<line x1={8 + 3 * 10.5} y1={8 + 7 * 10.5} x2={8 + 5 * 10.5} y2={8 + 9 * 10.5} stroke="#8B6914" stroke-width="0.2" />
 		<line x1={8 + 5 * 10.5} y1={8 + 7 * 10.5} x2={8 + 3 * 10.5} y2={8 + 9 * 10.5} stroke="#8B6914" stroke-width="0.2" />
 
+		<!-- Coordinate labels -->
+		{#each Array(9) as _, c}
+			<text x={8 + c * 10.5} y="4" text-anchor="middle" font-size="3" fill="#8B6914" class="select-none">
+				{String.fromCharCode(97 + c)}
+			</text>
+		{/each}
+		{#each Array(10) as _, r}
+			<text x="3" y={8 + r * 10.5 + 1} text-anchor="middle" font-size="3" fill="#8B6914" class="select-none">
+				{10 - r}
+			</text>
+		{/each}
+
 		<!-- Click targets and pieces -->
 		{#each Array(10) as _, row}
 			{#each Array(9) as _, col}
