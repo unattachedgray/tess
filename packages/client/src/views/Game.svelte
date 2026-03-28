@@ -47,6 +47,16 @@
 		ws.send({ type: "PLAY_MOVE", move: coord });
 	}
 
+	function playSuggestedMove(move: string) {
+		if (appState.gameType === "go") {
+			// Go suggestions are GTP coords like "Q16"
+			ws.send({ type: "PLAY_MOVE", move });
+		} else {
+			// Chess/Janggi suggestions are UCI like "e2e4"
+			ws.send({ type: "PLAY_MOVE", move });
+		}
+	}
+
 	function resign() {
 		ws.send({ type: "RESIGN" });
 	}
@@ -182,7 +192,7 @@
 			moveQuality={appState.lastMoveQuality}
 			onHoverMove={(move) => hoveredMove = move}
 			onClearHover={() => hoveredMove = null}
-			onPlayMove={(move) => onMove(move.slice(0, 2), move.slice(2, 4))}
+			onPlayMove={(move) => playSuggestedMove(move)}
 		/>
 
 		<!-- AI Coach -->

@@ -85,6 +85,10 @@
 			appState.hintLevel = msg.level;
 		});
 
+		ws.on("ERROR", (msg) => {
+			console.error("[game] server error:", (msg as { message: string }).message);
+		});
+
 		ws.send({
 			type: "NEW_GAME",
 			gameType: appState.gameType,

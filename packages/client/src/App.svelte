@@ -10,23 +10,45 @@
 		ws.connect();
 		return () => ws.disconnect();
 	});
+
+	const GAME_NAMES: Record<string, string> = {
+		chess: "Chess",
+		go: "Go",
+		janggi: "Janggi",
+	};
+
+	function goHome() {
+		appState.view = "home";
+		appState.reset();
+	}
 </script>
 
 <div class="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-	<header class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-		<button
-			class="text-xl font-bold tracking-tight text-[var(--accent)] hover:opacity-80 transition-opacity"
-			onclick={() => { appState.view = 'home'; appState.reset(); }}
-		>
-			Tess
-		</button>
-
+	<header class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] h-[44px]">
 		{#if appState.view === 'game' && appState.gameId}
-			<div class="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
-				<span class="capitalize">{appState.gameType}</span>
-				<span class="text-[var(--text-muted)]">|</span>
-				<span class="capitalize">{appState.difficulty}</span>
-			</div>
+			<!-- Game header: back button + game info -->
+			<button
+				class="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
+				onclick={goHome}
+			>
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M10 12L6 8L10 4" />
+				</svg>
+				Menu
+			</button>
+
+			<span class="text-sm font-medium text-[var(--text-primary)]">
+				{GAME_NAMES[appState.gameType] ?? appState.gameType}
+			</span>
+
+			<span class="text-xs text-[var(--text-muted)] capitalize">
+				{appState.difficulty}
+			</span>
+		{:else}
+			<!-- Home header -->
+			<span class="text-lg font-bold tracking-tight text-[var(--accent)]">Tess</span>
+			<span></span>
+			<span></span>
 		{/if}
 	</header>
 

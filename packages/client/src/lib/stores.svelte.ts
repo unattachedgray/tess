@@ -81,9 +81,9 @@ class AppState {
 		this.isCheck = data.isCheck;
 		this.isGameOver = data.isGameOver;
 		this.result = data.result ?? null;
-		if (data.boardState) this.boardState = data.boardState;
-		if (data.boardSize) this.boardSize = data.boardSize;
-		if (data.prisoners) this.prisoners = data.prisoners;
+		if (data.boardState !== undefined) this.boardState = data.boardState;
+		if (data.boardSize !== undefined) this.boardSize = data.boardSize;
+		if (data.prisoners !== undefined) this.prisoners = data.prisoners;
 	}
 
 	updateFromMove(data: {

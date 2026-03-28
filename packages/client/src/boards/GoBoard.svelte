@@ -35,7 +35,8 @@
 	let hoverPos = $state<{ x: number; y: number } | null>(null);
 
 	function handleClick(x: number, y: number) {
-		if (boardState[y]?.[x] !== null) return;
+		const stone = boardState[y]?.[x];
+		if (stone) return; // occupied (has a stone)
 		onPlay(x, y);
 	}
 </script>
@@ -111,7 +112,7 @@
 		{/each}
 
 		<!-- Hover ghost stone -->
-		{#if hoverPos && !boardState[hoverPos.y]?.[hoverPos.x]}
+		{#if hoverPos && !boardState[hoverPos.y]?.[hoverPos.x] && boardState.length > 0}
 			<circle
 				cx={coordToSvg(hoverPos.x)}
 				cy={coordToSvg(hoverPos.y)}
