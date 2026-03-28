@@ -50,6 +50,7 @@ class AppState {
 		acpl: number;
 		skill: { label: string; rating: string; description: string };
 	} | null>(null);
+	gameSummary = $state<string | null>(null);
 
 	setDifficulty(d: DifficultyId) {
 		this.difficulty = d;
@@ -187,6 +188,7 @@ class AppState {
 		this.lastMoveQuality = null;
 		this.hintLevel = 0;
 		this.skillEval = null;
+		this.gameSummary = null;
 		this.boardState = [];
 		this.boardSize = 19;
 		this.prisoners = { black: 0, white: 0 };

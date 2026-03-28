@@ -8,7 +8,7 @@ import {
 	gameAccuracy,
 	getSkillLevel,
 } from "@tess/shared";
-import { type AnalysisContext, analyzePosition } from "./ai.js";
+import { type AnalysisContext, analyzePosition, generateGameSummary } from "./ai.js";
 import { FULL_STRENGTH_MOVETIME, getTier } from "./engine/difficulty.js";
 import type { KataGoAdapter } from "./engine/katago.js";
 import type { UciPool } from "./engine/uciPool.js";
@@ -508,22 +508,7 @@ export class GameRoom {
 				}
 			}
 
-			const result = gameAccuracy(evals, this.playerColor);
-			const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
-
-			log.info("skill evaluation", {
-				accuracy: Math.round(result.accuracy),
-				acpl: result.acpl,
-				label: skill.label,
-				moves: result.moveAccuracies.length,
-			});
-
-			this.emit({
-				type: "SKILL_EVAL",
-				accuracy: Math.round(result.accuracy),
-				acpl: result.acpl,
-				skill,
-			});
+			await this.emitAndSummarize(result, history);
 			return;
 		}
 
@@ -545,13 +530,7 @@ export class GameRoom {
 			}
 
 			const result = gameAccuracy(evals, this.playerColor);
-			const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
-			this.emit({
-				type: "SKILL_EVAL",
-				accuracy: Math.round(result.accuracy),
-				acpl: result.acpl,
-				skill,
-			});
+			await this.emitAndSummarize(result, history);
 			return;
 		}
 
@@ -566,7 +545,6 @@ export class GameRoom {
 				try {
 					const results = await this.kataGo.analyze(movesUpToHere, color, 30, 1, this.goGame.size);
 					if (results.length > 0) {
-						// Convert winrate to centipawn-like score for the accuracy formula
 						evals.push(Math.round(results[0].winrate * 10000 - 5000));
 					} else {
 						evals.push(evals[evals.length - 1] ?? 0);
@@ -577,17 +555,59 @@ export class GameRoom {
 			}
 
 			const result = gameAccuracy(evals, this.playerColor);
-			const skill = getSkillLevel(Math.round(result.accuracy), this.gameType);
-			this.emit({
-				type: "SKILL_EVAL",
-				accuracy: Math.round(result.accuracy),
-				acpl: result.acpl,
-				skill,
-			});
+			await this.emitAndSummarize(result, history);
 			return;
 		}
 
 		log.info("skill evaluation skipped — unsupported game type");
+	}
+
+	private async emitAndSummarize(
+		result: { accuracy: number; acpl: number; moveAccuracies: number[] },
+		history: { san: string; uci: string }[],
+	): Promise<void> {
+		const accuracy = Math.round(result.accuracy);
+		const skill = getSkillLevel(accuracy, this.gameType);
+
+		log.info("skill evaluation", {
+			accuracy,
+			acpl: result.acpl,
+			label: skill.label,
+			moves: result.moveAccuracies.length,
+		});
+
+		// Emit engine-based eval immediately
+		this.emit({
+			type: "SKILL_EVAL",
+			accuracy,
+			acpl: result.acpl,
+			skill,
+		});
+
+		// Fire off LLM narrative summary (arrives later)
+		const gameResult =
+			this.chessGame?.getGameResult() ??
+			this.janggiGame?.getGameResult() ??
+			this.goGame?.getGameResult();
+
+		const summary = await generateGameSummary({
+			gameType: this.gameType,
+			playerColor: this.playerColor,
+			accuracy,
+			acpl: result.acpl,
+			skillLabel: skill.label,
+			skillRating: skill.rating,
+			totalMoves: history.length,
+			result: gameResult
+				? `${gameResult.winner === this.playerColor ? "Player wins" : gameResult.winner === "draw" ? "Draw" : "Player loses"} — ${gameResult.reason}`
+				: "Unknown",
+			pgn: this.chessGame?.pgn,
+			moveAccuracies: result.moveAccuracies,
+		});
+
+		if (summary) {
+			this.emit({ type: "GAME_SUMMARY", text: summary });
+		}
 	}
 
 	get pgn(): string {

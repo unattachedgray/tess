@@ -5,10 +5,14 @@
 		messages,
 		loading = false,
 		currentMoveNumber = 0,
+		skillEval = null,
+		gameSummary = null,
 	}: {
 		messages: AnalysisMessage[];
 		loading: boolean;
 		currentMoveNumber: number;
+		skillEval?: { accuracy: number; acpl: number; skill: { label: string; rating: string; description: string } } | null;
+		gameSummary?: string | null;
 	} = $props();
 
 	// Sort by move number descending — highest move number first (most relevant)
@@ -66,7 +70,48 @@
 	</div>
 
 	<div class="flex-1 overflow-y-auto p-3 space-y-3">
-		{#if messages.length === 0 && !loading}
+		<!-- Game Review (pinned at top when available) -->
+		{#if skillEval}
+			<div class="p-3 rounded-lg bg-[var(--accent-glow)] border border-[var(--accent)]/30 space-y-2">
+				<div class="flex items-center justify-between">
+					<span class="text-lg font-bold text-[var(--accent)]">{skillEval.skill.label}</span>
+					<span class="text-xs text-[var(--text-secondary)]">~{skillEval.skill.rating}</span>
+				</div>
+				<div class="space-y-1">
+					<div class="flex justify-between text-xs text-[var(--text-muted)]">
+						<span>Accuracy</span>
+						<span>{skillEval.accuracy}%</span>
+					</div>
+					<div class="h-2 rounded-full bg-[var(--bg-hover)] overflow-hidden">
+						<div
+							class="h-full rounded-full transition-all duration-1000 {skillEval.accuracy >= 90 ? 'bg-[var(--success)]' : skillEval.accuracy >= 70 ? 'bg-[var(--accent)]' : skillEval.accuracy >= 50 ? 'bg-[var(--warning)]' : 'bg-[var(--danger)]'}"
+							style="width: {skillEval.accuracy}%"
+						></div>
+					</div>
+				</div>
+				{#if skillEval.acpl > 0}
+					<div class="text-xs text-[var(--text-muted)]">ACPL: {skillEval.acpl}</div>
+				{/if}
+				{#if gameSummary}
+					<div class="text-sm text-[var(--text-primary)] leading-relaxed pt-2 border-t border-[var(--accent)]/20">
+						{@html gameSummary
+							.replace(/\*\*(.+?)\*\*/g, '<strong class="text-[var(--accent)]">$1</strong>')
+							.replace(/\n/g, '<br>')}
+					</div>
+				{:else}
+					<div class="flex items-center gap-2 pt-2">
+						<div class="flex gap-1">
+							<div class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 0ms"></div>
+							<div class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 150ms"></div>
+							<div class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 300ms"></div>
+						</div>
+						<span class="text-xs text-[var(--text-muted)]">Writing review...</span>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		{#if messages.length === 0 && !loading && !skillEval}
 			<p class="text-sm text-[var(--text-muted)] text-center py-4">
 				Make a move to get coaching feedback
 			</p>

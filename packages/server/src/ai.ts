@@ -104,6 +104,84 @@ export async function analyzePosition(ctx: AnalysisContext): Promise<string | nu
 	}
 }
 
+export interface GameSummaryContext {
+	gameType: "chess" | "go" | "janggi";
+	playerColor: "white" | "black";
+	accuracy: number;
+	acpl: number;
+	skillLabel: string;
+	skillRating: string;
+	totalMoves: number;
+	result: string; // "White wins by checkmate", etc.
+	pgn?: string;
+	moveAccuracies?: number[];
+}
+
+export async function generateGameSummary(ctx: GameSummaryContext): Promise<string | null> {
+	const game = ctx.gameType === "go" ? "Go" : ctx.gameType === "janggi" ? "Janggi" : "Chess";
+	const player = ctx.playerColor === "white" ? "White" : "Black";
+
+	// Find worst moves (lowest accuracy indices)
+	let worstMoves = "";
+	if (ctx.moveAccuracies && ctx.moveAccuracies.length > 0) {
+		const indexed = ctx.moveAccuracies.map((acc, i) => ({ acc, moveNum: i + 1 }));
+		const worst = indexed.sort((a, b) => a.acc - b.acc).slice(0, 3);
+		worstMoves = ` Weakest moments at moves ${worst.map((w) => `${w.moveNum} (${Math.round(w.acc)}%)`).join(", ")}.`;
+	}
+
+	const prompt = `${game} game review. Player=${player}. Result: ${ctx.result}. ${ctx.totalMoves} moves. Accuracy: ${ctx.accuracy}%, ACPL: ${ctx.acpl}. Skill: ${ctx.skillLabel} (~${ctx.skillRating}).${worstMoves}${ctx.pgn ? ` PGN: ${ctx.pgn}` : ""}
+
+Write a 3-4 sentence game summary for the player. Comment on their strengths, key mistakes, and one specific improvement tip. Be encouraging but honest. Use **bold** for key concepts. Under 80 words.`;
+
+	try {
+		const result = await callClaudeOpus(prompt);
+		return result;
+	} catch (err) {
+		log.error("game summary failed", { error: (err as Error).message });
+		return null;
+	}
+}
+
+function callClaudeOpus(prompt: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(new Error("Claude CLI timeout"));
+		}, 45000);
+
+		execFile(
+			"claude",
+			[
+				"--print",
+				"--output-format",
+				"text",
+				"--no-session-persistence",
+				"--max-turns",
+				"1",
+				"--model",
+				"claude-sonnet-4-6",
+				"-p",
+				prompt,
+			],
+			{
+				timeout: 45000,
+				cwd: SANDBOX_DIR,
+				maxBuffer: 1024 * 1024,
+			},
+			(error, stdout, stderr) => {
+				clearTimeout(timer);
+				if (error) {
+					reject(error);
+					return;
+				}
+				if (stderr) {
+					log.debug("claude opus stderr", { stderr: stderr.trim() });
+				}
+				resolve(stdout.trim());
+			},
+		);
+	});
+}
+
 function callClaude(prompt: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const timer = setTimeout(() => {

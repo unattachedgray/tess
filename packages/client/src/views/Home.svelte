@@ -93,6 +93,10 @@
 			appState.skillEval = msg as any;
 		});
 
+		ws.on("GAME_SUMMARY", (msg) => {
+			appState.gameSummary = (msg as any).text;
+		});
+
 		ws.on("ERROR", (msg) => {
 			console.error("[game] server error:", (msg as { message: string }).message);
 		});
