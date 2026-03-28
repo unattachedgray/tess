@@ -63,7 +63,7 @@ function buildPrompt(ctx: AnalysisContext): string {
 	if (ctx.gameType === "chess" && ctx.fen) {
 		posContext = ` FEN: ${ctx.fen}.`;
 	} else if (ctx.gameType === "janggi" && ctx.fen) {
-		posContext = ` FEN: ${ctx.fen}. Janggi board: 9x10, pieces: K=General A=Advisor B=Elephant(2+3step) N=Horse(L-shape) R=Chariot C=Cannon(jumps) P=Soldier. Uppercase=Blue(human) lowercase=Red.`;
+		posContext = ` FEN: ${ctx.fen}.`;
 	} else if (ctx.gameType === "go" && ctx.pgn) {
 		posContext = ` Moves so far: ${ctx.pgn}.`;
 	}
@@ -92,7 +92,7 @@ export interface AnalysisContext {
 	language?: string;
 }
 
-const TIMEOUT_MS = 20000;
+const TIMEOUT_MS = 30000;
 const MAX_CONCURRENT = 2;
 let activeCalls = 0;
 

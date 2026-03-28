@@ -103,7 +103,7 @@
 		</button>
 
 		<div class="flex items-center gap-3">
-			<span class="text-sm font-medium text-[var(--text-primary)]">Tess</span>
+			<span class="text-sm font-bold tracking-tight text-[var(--accent)]">Chess Chess Tess</span>
 			{#if appState.playerCounts.total > 0}
 				<span class="text-[10px] text-[var(--text-muted)]" title="Players online: {appState.playerCounts.chess} chess, {appState.playerCounts.go} go, {appState.playerCounts.janggi} janggi">
 					{appState.playerCounts.total} online
