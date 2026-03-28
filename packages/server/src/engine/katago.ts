@@ -90,7 +90,8 @@ export class KataGoAdapter {
 	}
 
 	private async warmup(): Promise<void> {
-		await this.analyze([], "b", 1, 1);
+		// Use enough visits to force full NN load (1 visit may not trigger it)
+		await this.analyze([], "b", 10, 1);
 	}
 
 	async analyze(

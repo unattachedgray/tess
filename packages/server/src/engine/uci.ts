@@ -50,7 +50,7 @@ export class UciAdapter {
 			});
 
 			this.process.stdout!.on("data", (data: Buffer) => {
-				this.buffer += data.toString();
+				this.buffer += data.toString().replace(/\r/g, "");
 			});
 
 			this.process.stderr!.on("data", (data: Buffer) => {
@@ -114,7 +114,12 @@ export class UciAdapter {
 			byPv.set(parsed.multipv, l);
 		}
 
-		const info = [...byPv.values()].map((l) => this.parseInfo(l));
+		let info = [...byPv.values()].map((l) => this.parseInfo(l));
+
+		// If no info lines (some engines don't output them), create synthetic entry from bestmove
+		if (info.length === 0 && bestmove) {
+			info = [{ depth: 1, multipv: 1, score: 0, mate: null, pv: [bestmove] }];
+		}
 
 		return { bestmove, info };
 	}

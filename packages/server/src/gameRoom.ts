@@ -415,8 +415,10 @@ export class GameRoom {
 			if (this.gameType === "go" && this.goGame && this.kataGo) {
 				const moves = this.goGame.getKataGoMoves();
 				const color = this.goGame.turn === "black" ? "b" : "w";
-				log.info("Go suggestions query", { moves: moves.length, color, topN });
-				const results = await this.kataGo.analyze(moves, color, 10000, topN, this.goGame.size);
+				// Use moderate visit count for suggestions (high counts too slow on CPU)
+				const sugVisits = 100;
+				log.info("Go suggestions query", { moves: moves.length, color, topN, visits: sugVisits });
+				const results = await this.kataGo.analyze(moves, color, sugVisits, topN, this.goGame.size);
 				log.info("Go suggestions result", { count: results.length });
 				suggestions = results.map((info) => ({
 					move: info.move,
