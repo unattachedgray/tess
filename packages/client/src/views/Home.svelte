@@ -52,6 +52,9 @@
 	}
 
 	function startGame() {
+		// Clear previous handlers to avoid stacking
+		ws.clearHandlers();
+
 		ws.on("GAME_STATE", (msg) => {
 			appState.updateFromGameState(msg);
 			appState.view = "game";

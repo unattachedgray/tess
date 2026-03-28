@@ -14,6 +14,9 @@ export class WsClient {
 	}
 
 	connect(): void {
+		if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
+			return; // Already connected or connecting
+		}
 		this.ws = new WebSocket(this.url);
 
 		this.ws.onopen = () => {
@@ -23,9 +26,12 @@ export class WsClient {
 		this.ws.onmessage = (event) => {
 			try {
 				const msg = JSON.parse(event.data as string) as ServerMessage;
+				console.log("[ws] recv:", msg.type);
 				const handlers = this.handlers.get(msg.type);
 				if (handlers) {
 					for (const h of handlers) h(msg);
+				} else {
+					console.warn("[ws] no handler for:", msg.type);
 				}
 			} catch (err) {
 				console.error("[ws] parse error:", err);
@@ -44,7 +50,10 @@ export class WsClient {
 
 	send(msg: ClientMessage): void {
 		if (this.ws?.readyState === WebSocket.OPEN) {
+			console.log("[ws] send:", msg.type);
 			this.ws.send(JSON.stringify(msg));
+		} else {
+			console.error("[ws] not connected, can't send:", msg.type);
 		}
 	}
 
@@ -59,6 +68,10 @@ export class WsClient {
 
 	off(type: string): void {
 		this.handlers.delete(type);
+	}
+
+	clearHandlers(): void {
+		this.handlers.clear();
 	}
 
 	disconnect(): void {
