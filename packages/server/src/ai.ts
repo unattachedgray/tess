@@ -56,7 +56,17 @@ function buildPrompt(ctx: AnalysisContext): string {
 
 	const sugs = fmtSuggestions(ctx.suggestions, ctx.gameType);
 
-	return `${game} coach, move ${ctx.moveCount} (${phase}). Human=${player}. ${lastMoveStr} Best moves: ${sugs}. In 2-3 sentences: explain the best suggestion and why. Use **bold** for key terms. Under 60 words.`;
+	// Include position context so the AI can reason about the board
+	let posContext = "";
+	if (ctx.gameType === "chess" && ctx.fen) {
+		posContext = ` FEN: ${ctx.fen}.`;
+	} else if (ctx.gameType === "janggi" && ctx.fen) {
+		posContext = ` FEN: ${ctx.fen}. Janggi board: 9x10, pieces: K=General A=Advisor B=Elephant(2+3step) N=Horse(L-shape) R=Chariot C=Cannon(jumps) P=Soldier. Uppercase=Blue(human) lowercase=Red.`;
+	} else if (ctx.gameType === "go" && ctx.pgn) {
+		posContext = ` Moves so far: ${ctx.pgn}.`;
+	}
+
+	return `${game} coach, move ${ctx.moveCount} (${phase}). Human=${player}.${posContext} ${lastMoveStr} Best moves: ${sugs}. In 2-3 sentences: explain the best suggestion and why. Use **bold** for key terms. Under 60 words.`;
 }
 
 export interface AnalysisContext {

@@ -97,23 +97,11 @@
 		return null;
 	}
 
-	// Build arrow shapes for suggestions
+	// Build arrow shapes — only on hover, not automatically
 	const boardArrows = $derived.by(() => {
-		if (!appState.showArrows || appState.suggestionsStale) return [];
-
-		const arrows: [string, string][] = [];
-
-		if (hoveredMove) {
-			const split = splitMove(hoveredMove);
-			if (split) arrows.push(split);
-			return arrows;
-		}
-
-		if (appState.suggestions.length > 0) {
-			const split = splitMove(appState.suggestions[0].move);
-			if (split) arrows.push(split);
-		}
-		return arrows;
+		if (!hoveredMove || appState.suggestionsStale) return [];
+		const split = splitMove(hoveredMove);
+		return split ? [split] : [];
 	});
 </script>
 
@@ -135,7 +123,7 @@
 					boardSize={appState.boardSize}
 					orientation={appState.playerColor}
 					lastMove={appState.goLastMove}
-					highlightedMove={hoveredMove ?? (appState.suggestions[0]?.move)}
+					highlightedMove={hoveredMove}
 					onPlay={(x, y) => onGoPlay(x, y)}
 				/>
 			{:else if appState.gameType === 'janggi'}
