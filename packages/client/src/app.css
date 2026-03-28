@@ -1,0 +1,69 @@
+@import "tailwindcss";
+@import "chessground/assets/chessground.base.css";
+@import "chessground/assets/chessground.brown.css";
+@import "chessground/assets/chessground.cburnett.css";
+
+/* Midnight Theme (default) */
+:root {
+	--bg-primary: #0f172a;
+	--bg-secondary: #1e293b;
+	--bg-panel: #1e293b;
+	--bg-hover: #334155;
+	--text-primary: #f1f5f9;
+	--text-secondary: #94a3b8;
+	--text-muted: #64748b;
+	--accent: #38bdf8;
+	--accent-hover: #0ea5e9;
+	--accent-glow: rgba(56, 189, 248, 0.15);
+	--success: #22c55e;
+	--danger: #ef4444;
+	--warning: #f59e0b;
+	--border: #334155;
+	--border-radius: 12px;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	min-height: 100vh;
+}
+
+#app {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Chessground overrides for theme integration */
+.cg-wrap {
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+cg-board {
+	background-color: #b58863;
+}
+
+/* Move highlight */
+cg-board square.last-move {
+	background-color: rgba(56, 189, 248, 0.3) !important;
+}
+
+cg-board square.selected {
+	background-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+cg-board square.move-dest {
+	background: radial-gradient(rgba(56, 189, 248, 0.4) 22%, transparent 22%);
+}
+
+cg-board square.move-dest.oc {
+	background: radial-gradient(transparent 0%, transparent 80%, rgba(56, 189, 248, 0.4) 80%);
+}
