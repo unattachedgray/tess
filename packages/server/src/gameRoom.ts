@@ -225,7 +225,12 @@ export class GameRoom {
 			this.emit({ type: "MOVE", move: moveResult, ...this.buildMovePayload() });
 
 			if (!this.isGameOver) {
-				await this.makeAiMove();
+				try {
+					await this.makeAiMove();
+				} catch (err) {
+					log.error("AI move failed, skipping", { error: (err as Error).message });
+					this.emit({ type: "ERROR", message: "AI failed to respond" });
+				}
 			}
 
 			if (!this.isGameOver) {
@@ -330,13 +335,13 @@ export class GameRoom {
 			const moveResult = this.executeMove(aiMoveStr);
 			if (!moveResult) {
 				log.error("AI produced illegal move", { move: aiMoveStr, gameType: this.gameType });
-				return;
+				throw new Error(`AI illegal move: ${aiMoveStr}`);
 			}
 
 			this.emit({ type: "MOVE", move: moveResult, ...this.buildMovePayload() });
 		} catch (err) {
 			log.error("AI move failed", { error: (err as Error).message });
-			this.emit({ type: "ERROR", message: "AI failed to respond." });
+			throw err; // Propagate so playMove can handle it
 		}
 	}
 
@@ -362,7 +367,11 @@ export class GameRoom {
 					this.requestAnalysis();
 				}
 			})
-			.catch((err) => log.error("suggestions failed", { error: (err as Error).message }));
+			.catch((err) => {
+				log.error("suggestions failed", { error: (err as Error).message });
+				// Emit empty suggestions so UI doesn't stay stuck with loading dots
+				this.emit({ type: "SUGGESTIONS", suggestions: [] });
+			});
 	}
 
 	private assessMoveQuality(
