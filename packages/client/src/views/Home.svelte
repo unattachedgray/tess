@@ -75,7 +75,7 @@
 		});
 
 		ws.on("ANALYSIS", (msg) => {
-			appState.addAnalysis(msg.text);
+			appState.addAnalysis(msg.text, (msg as any).moveNumber);
 		});
 
 		ws.on("MOVE_QUALITY", (msg) => {

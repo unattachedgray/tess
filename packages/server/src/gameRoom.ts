@@ -324,7 +324,7 @@ export class GameRoom {
 	// --- Suggestions & Analysis ---
 
 	private sendSuggestionsAndAnalysis(playerMove: string): void {
-		// Run suggestions and analysis in parallel for speed
+		// Get suggestions first (fast), then start analysis with suggestion context
 		this.getSuggestions(3)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
@@ -336,13 +336,12 @@ export class GameRoom {
 						quality: this.assessMoveQuality(playerMove),
 					});
 				}
+				// Now start analysis with suggestions context
+				if (this.coachingEnabled) {
+					this.requestAnalysis();
+				}
 			})
 			.catch((err) => log.error("suggestions failed", { error: (err as Error).message }));
-
-		// Start analysis immediately without waiting for suggestions
-		if (this.coachingEnabled) {
-			this.requestAnalysis();
-		}
 	}
 
 	private assessMoveQuality(
@@ -384,9 +383,10 @@ export class GameRoom {
 			pgn: this.chessGame?.pgn,
 		};
 
+		const moveNum = history.length;
 		const text = await analyzePosition(ctx);
 		if (text) {
-			this.emit({ type: "ANALYSIS", text });
+			this.emit({ type: "ANALYSIS", text, moveNumber: moveNum });
 		}
 	}
 

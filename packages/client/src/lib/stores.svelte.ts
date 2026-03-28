@@ -151,14 +151,12 @@ class AppState {
 		else this.lastMoveQuality = "blunder";
 	}
 
-	addAnalysis(text: string) {
-		const moveNum = this.moveHistory.length;
+	addAnalysis(text: string, moveNumber?: number) {
+		const moveNum = moveNumber ?? this.moveHistory.length;
 		this.analysisMessages = [
 			...this.analysisMessages,
 			{ moveNumber: moveNum, text, timestamp: Date.now() },
 		];
-		// Only clear loading if this is the latest move's analysis
-		// (user might have already moved again)
 		this.analysisLoading = false;
 	}
 

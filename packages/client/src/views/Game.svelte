@@ -210,6 +210,7 @@
 			<Analysis
 				messages={appState.analysisMessages}
 				loading={appState.analysisLoading}
+				currentMoveNumber={appState.moveHistory.length}
 			/>
 		{/if}
 

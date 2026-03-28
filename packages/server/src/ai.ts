@@ -193,6 +193,8 @@ function callClaude(prompt: string): Promise<string> {
 				"--no-session-persistence",
 				"--max-turns",
 				"1",
+				"--model",
+				"claude-haiku-4-5-20251001",
 				"-p",
 				prompt,
 			],

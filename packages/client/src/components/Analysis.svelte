@@ -4,13 +4,17 @@
 	let {
 		messages,
 		loading = false,
+		currentMoveNumber = 0,
 	}: {
 		messages: AnalysisMessage[];
 		loading: boolean;
+		currentMoveNumber: number;
 	} = $props();
 
-	// Reverse order: latest first
-	const reversed = $derived([...messages].reverse());
+	// Sort by move number descending — highest move number first (most relevant)
+	const sorted = $derived(
+		[...messages].sort((a, b) => b.moveNumber - a.moveNumber),
+	);
 
 	function renderMarkdown(text: string): string {
 		// First pass: extract **Terms** / **Tooltips** section and build a lookup
@@ -68,17 +72,18 @@
 			</p>
 		{/if}
 
-		{#each reversed as msg, i}
-			<div class="analysis-entry {i === 0 ? 'latest' : 'older'}">
+		{#each sorted as msg, i}
+			{@const isCurrent = msg.moveNumber >= currentMoveNumber - 1}
+			<div class="analysis-entry {isCurrent ? 'latest' : 'older'}">
 				<div class="flex items-center gap-2 mb-1">
-					<span class="text-[10px] font-medium {i === 0 ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} uppercase">
-						Move {msg.moveNumber}
-						{#if i === 0}
-							— Latest
+					<span class="text-[10px] font-medium {isCurrent ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} uppercase">
+						After move {msg.moveNumber}
+						{#if msg.moveNumber < currentMoveNumber - 2}
+							<span class="text-[var(--text-muted)]">(earlier)</span>
 						{/if}
 					</span>
 				</div>
-				<div class="text-sm leading-relaxed analysis-content {i === 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}">
+				<div class="text-sm leading-relaxed analysis-content {isCurrent ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}">
 					{@html renderMarkdown(msg.text)}
 				</div>
 			</div>
