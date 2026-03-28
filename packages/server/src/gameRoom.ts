@@ -324,11 +324,11 @@ export class GameRoom {
 	// --- Suggestions & Analysis ---
 
 	private sendSuggestionsAndAnalysis(playerMove: string): void {
+		// Run suggestions and analysis in parallel for speed
 		this.getSuggestions(3)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;
-
 				if (this.lastSuggestions.length > 0) {
 					this.emit({
 						type: "MOVE_QUALITY",
@@ -336,14 +336,13 @@ export class GameRoom {
 						quality: this.assessMoveQuality(playerMove),
 					});
 				}
-
-				if (this.coachingEnabled) {
-					this.requestAnalysis();
-				}
 			})
-			.catch((err) => {
-				log.error("suggestions+analysis failed", { error: (err as Error).message });
-			});
+			.catch((err) => log.error("suggestions failed", { error: (err as Error).message }));
+
+		// Start analysis immediately without waiting for suggestions
+		if (this.coachingEnabled) {
+			this.requestAnalysis();
+		}
 	}
 
 	private assessMoveQuality(

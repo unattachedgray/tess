@@ -59,13 +59,15 @@
 		{#if appState.view === 'home' || (showMenu && appState.view === 'game')}
 			<!-- Menu overlay (or full page on home) -->
 			{#if appState.view === 'game'}
-				<!-- biome-ignore lint: click outside to close -->
+				<!-- biome-ignore lint: click backdrop to close -->
 				<div
-					class="absolute inset-0 z-50 bg-[var(--bg-primary)]/95 backdrop-blur-sm overflow-y-auto"
+					class="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto flex items-start justify-center pt-8 pb-8"
 					onclick={(e) => { if (e.target === e.currentTarget) showMenu = false; }}
 					role="dialog"
 				>
-					<Home {ws} onStart={() => showMenu = false} />
+					<div class="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border)] shadow-2xl w-full max-w-md mx-4 p-6" onclick={(e) => e.stopPropagation()}>
+						<Home {ws} onStart={() => showMenu = false} compact />
+					</div>
 				</div>
 			{:else}
 				<Home {ws} onStart={() => showMenu = false} />

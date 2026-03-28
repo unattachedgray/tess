@@ -4,7 +4,7 @@
 	import type { WsClient } from "../lib/ws.ts";
 	import type { DifficultyId, GameType } from "@tess/shared";
 
-	let { ws, onStart }: { ws: WsClient; onStart?: () => void } = $props();
+	let { ws, onStart, compact = false }: { ws: WsClient; onStart?: () => void; compact?: boolean } = $props();
 
 	let boardSize = $state(19);
 
@@ -103,12 +103,14 @@
 	}
 </script>
 
-<div class="flex flex-col items-center justify-center min-h-[calc(100vh-57px)] px-4">
-	<div class="w-full max-w-md space-y-8">
-		<div class="text-center space-y-2">
-			<h1 class="text-4xl font-bold text-[var(--accent)]">Tess</h1>
-			<p class="text-[var(--text-secondary)]">Play board games against AI</p>
-		</div>
+<div class={compact ? '' : 'flex flex-col items-center justify-center min-h-[calc(100vh-57px)] px-4'}>
+	<div class="w-full max-w-md {compact ? 'space-y-5' : 'space-y-8'}">
+		{#if !compact}
+			<div class="text-center space-y-2">
+				<h1 class="text-4xl font-bold text-[var(--accent)]">Tess</h1>
+				<p class="text-[var(--text-secondary)]">Play board games against AI</p>
+			</div>
+		{/if}
 
 		<!-- Game Type -->
 		<div class="space-y-3">

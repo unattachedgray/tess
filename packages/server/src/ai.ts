@@ -143,20 +143,13 @@ export interface AnalysisContext {
 	pgn?: string;
 }
 
-let activeCalls = 0;
-let lastCallTime = 0;
-const COOLDOWN_MS = 3000;
 const TIMEOUT_MS = 30000;
+const MAX_CONCURRENT = 2;
+let activeCalls = 0;
 
 export async function analyzePosition(ctx: AnalysisContext): Promise<string | null> {
-	if (activeCalls > 0) {
-		log.debug("skipping analysis, call in progress");
-		return null;
-	}
-
-	const now = Date.now();
-	if (now - lastCallTime < COOLDOWN_MS) {
-		log.debug("skipping analysis, cooldown");
+	if (activeCalls >= MAX_CONCURRENT) {
+		log.debug("skipping analysis, too many concurrent calls");
 		return null;
 	}
 
@@ -173,7 +166,6 @@ export async function analyzePosition(ctx: AnalysisContext): Promise<string | nu
 	}
 
 	activeCalls++;
-	lastCallTime = now;
 
 	try {
 		const result = await callClaude(prompt);

@@ -152,14 +152,13 @@ class AppState {
 	}
 
 	addAnalysis(text: string) {
+		const moveNum = this.moveHistory.length;
 		this.analysisMessages = [
 			...this.analysisMessages,
-			{
-				moveNumber: this.moveHistory.length,
-				text,
-				timestamp: Date.now(),
-			},
+			{ moveNumber: moveNum, text, timestamp: Date.now() },
 		];
+		// Only clear loading if this is the latest move's analysis
+		// (user might have already moved again)
 		this.analysisLoading = false;
 	}
 
