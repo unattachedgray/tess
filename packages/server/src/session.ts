@@ -11,7 +11,8 @@ export class SessionManager {
 	private rooms = new Map<string, GameRoom>();
 
 	constructor(
-		private readonly uciPool: UciPool,
+		private readonly chessPool: UciPool,
+		private readonly janggiPool: UciPool | null,
 		private readonly kataGo: KataGoAdapter | null,
 	) {}
 
@@ -22,11 +23,16 @@ export class SessionManager {
 		boardSize?: number;
 	}): GameRoom {
 		const id = randomUUID().slice(0, 8);
+		// Use Janggi pool if available, otherwise fall back to chess pool
+		const uciPool =
+			config.gameType === "janggi" && this.janggiPool ? this.janggiPool : this.chessPool;
+
 		const room = new GameRoom({
 			id,
 			...config,
-			uciPool: this.uciPool,
+			uciPool,
 			kataGo: this.kataGo,
+			useJanggiVariant: config.gameType === "janggi" && !this.janggiPool,
 		});
 
 		this.rooms.set(id, room);

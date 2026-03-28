@@ -86,24 +86,32 @@
 		return isMyTurn ? "Your turn" : "AI is thinking...";
 	});
 
+	// Split a move string into [from, to] — handles both chess (e2e4) and janggi (a10b10)
+	function splitMove(move: string): [string, string] | null {
+		if (appState.gameType === "go") return null; // Go moves are single coords
+		// Janggi: variable length squares (a1-i10)
+		const match = move.match(/^([a-i]\d{1,2})([a-i]\d{1,2})$/);
+		if (match) return [match[1], match[2]];
+		// Chess: always 4-5 chars
+		if (move.length >= 4) return [move.slice(0, 2), move.slice(2, 4)];
+		return null;
+	}
+
 	// Build arrow shapes for suggestions
 	const boardArrows = $derived.by(() => {
 		if (!appState.showArrows || appState.suggestionsStale) return [];
 
 		const arrows: [string, string][] = [];
 
-		// Show hovered suggestion arrow
-		if (hoveredMove && hoveredMove.length >= 4) {
-			arrows.push([hoveredMove.slice(0, 2), hoveredMove.slice(2, 4)]);
+		if (hoveredMove) {
+			const split = splitMove(hoveredMove);
+			if (split) arrows.push(split);
 			return arrows;
 		}
 
-		// Show best move arrow
 		if (appState.suggestions.length > 0) {
-			const best = appState.suggestions[0].move;
-			if (best.length >= 4) {
-				arrows.push([best.slice(0, 2), best.slice(2, 4)]);
-			}
+			const split = splitMove(appState.suggestions[0].move);
+			if (split) arrows.push(split);
 		}
 		return arrows;
 	});
@@ -137,9 +145,10 @@
 					lastMove={appState.moveHistory.length > 0
 						? (() => {
 							const last = appState.moveHistory[appState.moveHistory.length - 1];
-							return [last.uci.slice(0, 2), last.uci.slice(2, 4)] as [string, string];
+							return splitMove(last.uci) ?? undefined;
 						})()
 						: undefined}
+					arrows={boardArrows}
 					onMove={(from, to) => onMove(from, to)}
 				/>
 			{:else}

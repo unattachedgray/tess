@@ -5,6 +5,7 @@ import {
 	GoGame,
 	JanggiGame,
 	type Suggestion,
+	splitJanggiUci,
 } from "@tess/shared";
 import { type AnalysisContext, analyzePosition } from "./ai.js";
 import { FULL_STRENGTH_MOVETIME, getTier } from "./engine/difficulty.js";
@@ -27,28 +28,21 @@ function randomDelay(range: [number, number]): number {
 }
 
 // Fairy-Stockfish Janggi uses 0-indexed rows (a0-i9), our game uses 1-indexed (a1-i10)
+// Engine moves are always 4 chars (2+2), game moves can be 4-6 chars (rank 10 = 3 chars)
 function janggiEngineToGame(uci: string): string {
-	// e2e4 -> e3e5
+	// Engine always 2+2: e2e4 -> e3e5
 	const from = uci.slice(0, 2);
 	const to = uci.slice(2, 4);
-	const convert = (sq: string) => {
-		const col = sq[0];
-		const rank = Number.parseInt(sq.slice(1), 10) + 1;
-		return `${col}${rank}`;
-	};
+	const convert = (sq: string) => `${sq[0]}${Number.parseInt(sq[1], 10) + 1}`;
 	return `${convert(from)}${convert(to)}`;
 }
 
 function janggiGameToEngine(uci: string): string {
-	// e3e5 -> e2e4
-	const from = uci.slice(0, 2);
-	const to = uci.slice(2, 4);
-	const convert = (sq: string) => {
-		const col = sq[0];
-		const rank = Number.parseInt(sq.slice(1), 10) - 1;
-		return `${col}${rank}`;
-	};
-	return `${convert(from)}${convert(to)}`;
+	// Game can be variable length: e3e5 -> e2e4, or a10b10 -> a9b9
+	const parsed = splitJanggiUci(uci);
+	if (!parsed) return uci;
+	const convert = (sq: string) => `${sq[0]}${Number.parseInt(sq.slice(1), 10) - 1}`;
+	return `${convert(parsed[0])}${convert(parsed[1])}`;
 }
 
 export class GameRoom {
@@ -61,6 +55,7 @@ export class GameRoom {
 	private janggiGame: JanggiGame | null = null;
 	private uciPool: UciPool;
 	private kataGo: KataGoAdapter | null;
+	private useJanggiVariant: boolean;
 	private moveCallbacks: ((data: unknown) => void)[] = [];
 	private moveInProgress = false;
 	private lastSuggestions: Suggestion[] = [];
@@ -74,6 +69,7 @@ export class GameRoom {
 		uciPool: UciPool;
 		kataGo: KataGoAdapter | null;
 		boardSize?: number;
+		useJanggiVariant?: boolean;
 	}) {
 		this.id = config.id;
 		this.gameType = config.gameType;
@@ -81,6 +77,7 @@ export class GameRoom {
 		this.playerColor = config.playerColor;
 		this.uciPool = config.uciPool;
 		this.kataGo = config.kataGo;
+		this.useJanggiVariant = config.useJanggiVariant ?? false;
 
 		switch (config.gameType) {
 			case "chess":
@@ -310,7 +307,12 @@ export class GameRoom {
 				aiMoveStr = moveResult;
 			} else if (this.gameType === "janggi" && this.janggiGame) {
 				const [searchResult] = await Promise.all([
-					this.uciPool.search(this.janggiGame.fen, tier.janggiMovetime, 1, "janggi"),
+					this.uciPool.search(
+						this.janggiGame.fen,
+						tier.janggiMovetime,
+						1,
+						this.useJanggiVariant ? "janggi" : undefined,
+					),
 					new Promise((r) => setTimeout(r, delay)),
 				]);
 				aiMoveStr = janggiEngineToGame(searchResult.bestmove);
@@ -413,7 +415,9 @@ export class GameRoom {
 			if (this.gameType === "go" && this.goGame && this.kataGo) {
 				const moves = this.goGame.getKataGoMoves();
 				const color = this.goGame.turn === "black" ? "b" : "w";
+				log.info("Go suggestions query", { moves: moves.length, color, topN });
 				const results = await this.kataGo.analyze(moves, color, 10000, topN, this.goGame.size);
+				log.info("Go suggestions result", { count: results.length });
 				suggestions = results.map((info) => ({
 					move: info.move,
 					san: info.move,
@@ -423,7 +427,7 @@ export class GameRoom {
 				}));
 			} else {
 				const fen = this.gameType === "janggi" ? this.janggiGame!.fen : this.chessGame!.fen;
-				const variant = this.gameType === "janggi" ? "janggi" : undefined;
+				const variant = this.useJanggiVariant ? "janggi" : undefined;
 				const result = await this.uciPool.search(fen, FULL_STRENGTH_MOVETIME, topN, variant);
 				const isJanggi = this.gameType === "janggi";
 				suggestions = result.info

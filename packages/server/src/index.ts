@@ -2,6 +2,8 @@ import { serve } from "@hono/node-server";
 import { KataGoAdapter } from "./engine/katago.js";
 import {
 	resolveEnginePath,
+	resolveJanggiEnginePath,
+	resolveJanggiNnuePath,
 	resolveKataGoConfig,
 	resolveKataGoPath,
 	resolveNnuePath,
@@ -16,20 +18,42 @@ const log = createLogger("server");
 const PORT = Number.parseInt(process.env.PORT ?? "8082", 10);
 
 async function main() {
-	// Initialize Fairy-Stockfish
+	// Chess engine pool (Fairy-Stockfish standard)
 	const stockfishPath = resolveEnginePath();
-	log.info("Stockfish path resolved", { stockfish: stockfishPath });
-
 	const nnuePath = resolveNnuePath();
-	const opts: Record<string, string> = {};
-	if (nnuePath) opts.EvalFile = nnuePath;
+	const chessOpts: Record<string, string> = {};
+	if (nnuePath) chessOpts.EvalFile = nnuePath;
 
-	const uciPool = new UciPool(stockfishPath, 2, opts);
-	log.info("initializing Stockfish pool...");
-	await uciPool.init();
-	log.info("Stockfish pool ready");
+	const chessPool = new UciPool(stockfishPath, 2, chessOpts);
+	log.info("initializing Chess engine pool...");
+	await chessPool.init();
+	log.info("Chess engine pool ready");
 
-	// Initialize KataGo (optional — Go won't work without it)
+	// Janggi engine pool (Fairy-Stockfish largeboard)
+	let janggiPool: UciPool | null = null;
+	const janggiPath = resolveJanggiEnginePath();
+	if (janggiPath) {
+		const janggiOpts: Record<string, string> = {
+			UCI_Variant: "janggi",
+			"Use NNUE": "false",
+		};
+		const janggiNnue = resolveJanggiNnuePath();
+		if (janggiNnue) janggiOpts.EvalFile = janggiNnue;
+
+		janggiPool = new UciPool(janggiPath, 2, janggiOpts);
+		log.info("initializing Janggi engine pool...");
+		try {
+			await janggiPool.init();
+			log.info("Janggi engine pool ready");
+		} catch (err) {
+			log.warn("Janggi engine init failed", { error: (err as Error).message });
+			janggiPool = null;
+		}
+	} else {
+		log.warn("Janggi largeboard engine not found, Janggi will use standard Stockfish");
+	}
+
+	// KataGo (Go engine)
 	let kataGo: KataGoAdapter | null = null;
 	const kataGoPath = resolveKataGoPath();
 	const kataGoConfig = resolveKataGoConfig();
@@ -49,11 +73,9 @@ async function main() {
 			});
 			kataGo = null;
 		}
-	} else {
-		log.warn("KataGo not found, Go will not be available");
 	}
 
-	const sessionManager = new SessionManager(uciPool, kataGo);
+	const sessionManager = new SessionManager(chessPool, janggiPool, kataGo);
 	const app = createApp(sessionManager);
 
 	const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
@@ -64,7 +86,8 @@ async function main() {
 
 	const shutdown = () => {
 		log.info("shutting down...");
-		uciPool.shutdown();
+		chessPool.shutdown();
+		janggiPool?.shutdown();
 		kataGo?.shutdown();
 		server.close();
 		process.exit(0);

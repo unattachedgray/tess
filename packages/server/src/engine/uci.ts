@@ -87,8 +87,6 @@ export class UciAdapter {
 		if (variant) {
 			this.send(`setoption name UCI_Variant value ${variant}`);
 			this.send("setoption name Use NNUE value false");
-		} else {
-			this.send("setoption name UCI_Variant value chess");
 		}
 		this.send(`setoption name MultiPV value ${multiPv}`);
 		this.send("isready");

@@ -58,9 +58,18 @@
 	<main class="flex-1 relative">
 		{#if appState.view === 'home' || (showMenu && appState.view === 'game')}
 			<!-- Menu overlay (or full page on home) -->
-			<div class={appState.view === 'game' ? 'absolute inset-0 z-50 bg-[var(--bg-primary)]/95 backdrop-blur-sm overflow-y-auto' : ''}>
+			{#if appState.view === 'game'}
+				<!-- biome-ignore lint: click outside to close -->
+				<div
+					class="absolute inset-0 z-50 bg-[var(--bg-primary)]/95 backdrop-blur-sm overflow-y-auto"
+					onclick={(e) => { if (e.target === e.currentTarget) showMenu = false; }}
+					role="dialog"
+				>
+					<Home {ws} onStart={() => showMenu = false} />
+				</div>
+			{:else}
 				<Home {ws} onStart={() => showMenu = false} />
-			</div>
+			{/if}
 		{/if}
 
 		{#if appState.view === 'game'}

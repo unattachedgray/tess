@@ -52,7 +52,8 @@
 	}
 
 	function startGame() {
-		// Clear previous handlers to avoid stacking
+		// Reset state for new game
+		appState.reset();
 		ws.clearHandlers();
 
 		ws.on("GAME_STATE", (msg) => {

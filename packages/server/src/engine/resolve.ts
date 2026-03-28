@@ -41,6 +41,43 @@ export function resolveNnuePath(): string | null {
 	return null;
 }
 
+export function resolveJanggiEnginePath(): string | null {
+	const base = resolve(__dirname, "../../../../assets/engines");
+	const boardgamesBase = resolve(__dirname, "../../../../../boardgames/assets/engines");
+
+	const candidates = [
+		resolve(base, "fairy-stockfish-largeboard"),
+		resolve(boardgamesBase, "fairy-stockfish-largeboard"),
+		resolve(base, "fairy-stockfish-largeboard_x86-64-bmi2.exe"),
+		resolve(boardgamesBase, "fairy-stockfish-largeboard_x86-64-bmi2.exe"),
+	];
+
+	for (const p of candidates) {
+		if (existsSync(p)) {
+			log.info("found Janggi engine", { path: p });
+			return p;
+		}
+	}
+
+	log.warn("Janggi largeboard engine not found");
+	return null;
+}
+
+export function resolveJanggiNnuePath(): string | null {
+	const base = resolve(__dirname, "../../../../assets/engines");
+	const boardgamesBase = resolve(__dirname, "../../../../../boardgames/assets/engines");
+
+	const candidates = [
+		resolve(base, "janggi-9991472750de.nnue"),
+		resolve(boardgamesBase, "janggi-9991472750de.nnue"),
+	];
+
+	for (const p of candidates) {
+		if (existsSync(p)) return p;
+	}
+	return null;
+}
+
 export function resolveKataGoPath(): string | null {
 	const base = resolve(__dirname, "../../../../assets/engines/katago");
 	const boardgamesBase = resolve(__dirname, "../../../../../boardgames/assets/engines/katago");

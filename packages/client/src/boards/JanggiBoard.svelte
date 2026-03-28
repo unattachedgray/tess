@@ -4,12 +4,14 @@
 		orientation = "white",
 		legalMoves = {},
 		lastMove,
+		arrows = [],
 		onMove,
 	}: {
 		fen: string;
 		orientation: string;
 		legalMoves: Record<string, string[]>;
 		lastMove?: [string, string];
+		arrows?: [string, string][];
 		onMove: (from: string, to: string) => void;
 	} = $props();
 
@@ -51,6 +53,14 @@
 		c: { char: "砲", color: "#c01c28" },
 		p: { char: "卒", color: "#c01c28" },
 	};
+
+	function sqToSvg(sq: string): { x: number; y: number } | null {
+		const col = sq.charCodeAt(0) - 97;
+		const rank = parseInt(sq.slice(1), 10);
+		const row = 10 - rank;
+		if (col < 0 || col > 8 || row < 0 || row > 9) return null;
+		return { x: 8 + col * 10.5, y: 8 + row * 10.5 };
+	}
 
 	function toSquare(col: number, row: number): string {
 		return `${String.fromCharCode(97 + col)}${10 - row}`;
@@ -174,6 +184,26 @@
 				{/if}
 			{/each}
 		{/each}
+		<!-- Suggestion arrows -->
+		{#each arrows as [fromSq, toSq], i}
+			{@const f = sqToSvg(fromSq)}
+			{@const t = sqToSvg(toSq)}
+			{#if f && t}
+				<line
+					x1={f.x} y1={f.y} x2={t.x} y2={t.y}
+					stroke={i === 0 ? "rgba(34,197,94,0.6)" : "rgba(59,130,246,0.4)"}
+					stroke-width="1.5"
+					stroke-linecap="round"
+					marker-end="url(#arrowhead)"
+				/>
+			{/if}
+		{/each}
+
+		<defs>
+			<marker id="arrowhead" markerWidth="4" markerHeight="3" refX="3" refY="1.5" orient="auto">
+				<polygon points="0 0, 4 1.5, 0 3" fill="rgba(34,197,94,0.8)" />
+			</marker>
+		</defs>
 	</svg>
 </div>
 

@@ -7,6 +7,14 @@
 
 const STARTING_FEN = "rnba1abnr/4k4/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/4K4/RNBA1ABNR w - - 0 1";
 
+/** Split a Janggi UCI string like "a4a5" or "a10b10" into [from, to] */
+export function splitJanggiUci(uci: string): [string, string] | null {
+	// Squares are letter + 1-2 digit number: a1-i10
+	const match = uci.match(/^([a-i]\d{1,2})([a-i]\d{1,2})$/);
+	if (!match) return null;
+	return [match[1], match[2]];
+}
+
 const PIECE_NAMES: Record<string, string> = {
 	R: "車",
 	N: "馬",
@@ -114,9 +122,9 @@ export class JanggiGame {
 
 	moveUci(uci: string): { from: string; to: string } | null {
 		if (uci.length < 4) return null;
-		const from = uci.slice(0, 2);
-		const to = uci.slice(2, 4);
-		return this.move(from, to);
+		const parsed = splitJanggiUci(uci);
+		if (!parsed) return null;
+		return this.move(parsed[0], parsed[1]);
 	}
 
 	// --- Legal move generation ---

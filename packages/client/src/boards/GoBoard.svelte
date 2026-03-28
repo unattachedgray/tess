@@ -15,7 +15,7 @@
 		onPlay: (x: number, y: number) => void;
 	} = $props();
 
-	const PADDING = 30;
+	const GO_COLS = "ABCDEFGHJKLMNOPQRST";
 	const STONE_RADIUS = 0.45;
 
 	const cellSize = $derived(100 / (boardSize + 1));
@@ -60,6 +60,20 @@
 				x2={coordToSvg(boardSize - 1)} y2={coordToSvg(i)}
 				stroke="#5C4A1E" stroke-width="0.15"
 			/>
+		{/each}
+
+		<!-- Coordinate labels -->
+		{#each Array(boardSize) as _, i}
+			<!-- Column letters (top) -->
+			<text
+				x={coordToSvg(i)} y={cellSize * 0.45}
+				text-anchor="middle" font-size={cellSize * 0.4} fill="#8B6914" class="select-none"
+			>{GO_COLS[i]}</text>
+			<!-- Row numbers (left) -->
+			<text
+				x={cellSize * 0.4} y={coordToSvg(i) + cellSize * 0.15}
+				text-anchor="middle" font-size={cellSize * 0.4} fill="#8B6914" class="select-none"
+			>{boardSize - i}</text>
 		{/each}
 
 		<!-- Star points -->
@@ -133,5 +147,10 @@
 	.go-board {
 		width: 100%;
 		height: 100%;
+	}
+
+	.select-none {
+		user-select: none;
+		pointer-events: none;
 	}
 </style>
