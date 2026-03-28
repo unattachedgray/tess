@@ -32,6 +32,15 @@ export const RequestAnalysisMessage = z.object({
 	type: z.literal("REQUEST_ANALYSIS"),
 });
 
+export const SetCoachingMessage = z.object({
+	type: z.literal("SET_COACHING"),
+	enabled: z.boolean(),
+});
+
+export const RequestHintMessage = z.object({
+	type: z.literal("REQUEST_HINT"),
+});
+
 export const ClientMessage = z.discriminatedUnion("type", [
 	NewGameMessage,
 	JoinGameMessage,
@@ -39,6 +48,8 @@ export const ClientMessage = z.discriminatedUnion("type", [
 	ResignMessage,
 	PassMessage,
 	RequestAnalysisMessage,
+	SetCoachingMessage,
+	RequestHintMessage,
 ]);
 
 export type ClientMessage = z.infer<typeof ClientMessage>;
@@ -130,6 +141,20 @@ export const ErrorPayload = z.object({
 	message: z.string(),
 });
 
+export const MoveQualityPayload = z.object({
+	type: z.literal("MOVE_QUALITY"),
+	move: z.string(),
+	quality: z.enum(["best", "good", "ok", "inaccuracy", "mistake", "blunder"]),
+});
+
+export const HintPayload = z.object({
+	type: z.literal("HINT"),
+	level: z.number(),
+	piece: z.string().optional(),
+	destination: z.string().optional(),
+	fullMove: z.string().optional(),
+});
+
 export const DifficultyTiersPayload = z.object({
 	type: z.literal("DIFFICULTY_TIERS"),
 	tiers: z.array(
@@ -149,4 +174,6 @@ export type ServerMessage =
 	| z.infer<typeof AnalysisPayload>
 	| z.infer<typeof GameOverPayload>
 	| z.infer<typeof ErrorPayload>
-	| z.infer<typeof DifficultyTiersPayload>;
+	| z.infer<typeof DifficultyTiersPayload>
+	| z.infer<typeof MoveQualityPayload>
+	| z.infer<typeof HintPayload>;

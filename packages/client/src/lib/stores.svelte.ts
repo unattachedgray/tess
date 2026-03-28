@@ -1,6 +1,14 @@
-import type { DifficultyId, GameType } from "@tess/shared";
+import type { DifficultyId, GameType, Suggestion } from "@tess/shared";
 
 export type View = "home" | "game";
+
+export type MoveQuality = "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" | null;
+
+export interface AnalysisMessage {
+	moveNumber: number;
+	text: string;
+	timestamp: number;
+}
 
 class AppState {
 	view = $state<View>("home");
@@ -9,6 +17,7 @@ class AppState {
 		(localStorage.getItem("tess-difficulty") as DifficultyId) ?? "casual",
 	);
 	playerColor = $state<"white" | "black">("white");
+	coachingEnabled = $state(localStorage.getItem("tess-coaching") !== "false");
 
 	// Active game state
 	gameId = $state<string | null>(null);
@@ -21,9 +30,24 @@ class AppState {
 	isGameOver = $state(false);
 	result = $state<{ winner: "white" | "black" | "draw"; reason: string } | null>(null);
 
+	// AI coaching state
+	suggestions = $state<Suggestion[]>([]);
+	suggestionsStale = $state(false);
+	analysisMessages = $state<AnalysisMessage[]>([]);
+	analysisLoading = $state(false);
+	eval = $state<number>(0); // centipawns from white's perspective
+	lastMoveQuality = $state<MoveQuality>(null);
+	hintLevel = $state(0); // 0=none, 1=piece, 2=destination, 3=full arrow
+	showArrows = $state(true);
+
 	setDifficulty(d: DifficultyId) {
 		this.difficulty = d;
 		localStorage.setItem("tess-difficulty", d);
+	}
+
+	setCoaching(enabled: boolean) {
+		this.coachingEnabled = enabled;
+		localStorage.setItem("tess-coaching", String(enabled));
 	}
 
 	updateFromGameState(data: {
@@ -65,6 +89,59 @@ class AppState {
 		this.isCheck = data.isCheck;
 		this.isGameOver = data.isGameOver;
 		this.result = data.result ?? null;
+		this.suggestionsStale = true;
+		this.hintLevel = 0;
+	}
+
+	updateSuggestions(suggestions: Suggestion[]) {
+		this.suggestions = suggestions;
+		this.suggestionsStale = false;
+		if (suggestions.length > 0) {
+			this.eval = suggestions[0].score;
+		}
+	}
+
+	updateMoveQuality(userMove: string, suggestions: Suggestion[]) {
+		if (suggestions.length === 0) {
+			this.lastMoveQuality = null;
+			return;
+		}
+
+		const bestMove = suggestions[0].move;
+		if (userMove === bestMove) {
+			this.lastMoveQuality = "best";
+			return;
+		}
+
+		const inTop = suggestions.some((s) => s.move === userMove);
+		if (inTop) {
+			this.lastMoveQuality = "good";
+			return;
+		}
+
+		const bestScore = suggestions[0].score;
+		const cpLoss = Math.abs(bestScore - this.eval);
+
+		if (cpLoss < 30) this.lastMoveQuality = "ok";
+		else if (cpLoss < 80) this.lastMoveQuality = "inaccuracy";
+		else if (cpLoss < 200) this.lastMoveQuality = "mistake";
+		else this.lastMoveQuality = "blunder";
+	}
+
+	addAnalysis(text: string) {
+		this.analysisMessages = [
+			...this.analysisMessages,
+			{
+				moveNumber: this.moveHistory.length,
+				text,
+				timestamp: Date.now(),
+			},
+		];
+		this.analysisLoading = false;
+	}
+
+	requestHint() {
+		if (this.hintLevel < 3) this.hintLevel++;
 	}
 
 	reset() {
@@ -77,6 +154,13 @@ class AppState {
 		this.isCheck = false;
 		this.isGameOver = false;
 		this.result = null;
+		this.suggestions = [];
+		this.suggestionsStale = false;
+		this.analysisMessages = [];
+		this.analysisLoading = false;
+		this.eval = 0;
+		this.lastMoveQuality = null;
+		this.hintLevel = 0;
 	}
 }
 

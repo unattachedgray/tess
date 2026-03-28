@@ -29,12 +29,31 @@
 			appState.result = msg.result;
 		});
 
+		ws.on("SUGGESTIONS", (msg) => {
+			appState.updateSuggestions(msg.suggestions);
+		});
+
+		ws.on("ANALYSIS", (msg) => {
+			appState.addAnalysis(msg.text);
+		});
+
+		ws.on("MOVE_QUALITY", (msg) => {
+			appState.lastMoveQuality = msg.quality as any;
+		});
+
+		ws.on("HINT", (msg) => {
+			appState.hintLevel = msg.level;
+		});
+
 		ws.send({
 			type: "NEW_GAME",
 			gameType: appState.gameType,
 			difficulty: appState.difficulty,
 			playerColor: appState.playerColor,
 		});
+
+		// Send coaching preference
+		ws.send({ type: "SET_COACHING", enabled: appState.coachingEnabled });
 	}
 </script>
 

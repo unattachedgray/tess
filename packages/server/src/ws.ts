@@ -152,6 +152,23 @@ export function createWsServer(
 				break;
 			}
 
+			case "SET_COACHING": {
+				if (state.room) {
+					state.room.coachingEnabled = msg.enabled;
+				}
+				break;
+			}
+
+			case "REQUEST_HINT": {
+				if (!state.room) {
+					send(state.ws, { type: "ERROR", message: "No active game" });
+					return;
+				}
+				const hint = await state.room.getHint();
+				if (hint) send(state.ws, hint);
+				break;
+			}
+
 			case "PASS":
 			case "JOIN_GAME":
 				send(state.ws, { type: "ERROR", message: "Not implemented yet" });

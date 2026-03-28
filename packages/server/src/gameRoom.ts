@@ -1,4 +1,5 @@
-import { ChessGame, type DifficultyId, type GameType } from "@tess/shared";
+import { ChessGame, type DifficultyId, type GameType, type Suggestion } from "@tess/shared";
+import { type AnalysisContext, analyzePosition } from "./ai.js";
 import { FULL_STRENGTH_MOVETIME, getTier } from "./engine/difficulty.js";
 import type { UciPool } from "./engine/uciPool.js";
 import { createLogger } from "./logger.js";
@@ -26,6 +27,8 @@ export class GameRoom {
 	private uciPool: UciPool;
 	private moveCallbacks: ((data: unknown) => void)[] = [];
 	private moveInProgress = false;
+	private lastSuggestions: Suggestion[] = [];
+	coachingEnabled = true;
 
 	constructor(config: {
 		id: string;
@@ -104,6 +107,11 @@ export class GameRoom {
 				await this.makeAiMove();
 			}
 
+			// After AI responds, send suggestions + analysis (fire-and-forget)
+			if (!this.game.isGameOver) {
+				this.sendSuggestionsAndAnalysis(uci);
+			}
+
 			return { success: true };
 		} finally {
 			this.moveInProgress = false;
@@ -124,7 +132,10 @@ export class GameRoom {
 
 			const aiMove = this.game.moveUci(searchResult.bestmove);
 			if (!aiMove) {
-				log.error("AI produced illegal move", { move: searchResult.bestmove, fen: this.game.fen });
+				log.error("AI produced illegal move", {
+					move: searchResult.bestmove,
+					fen: this.game.fen,
+				});
 				return;
 			}
 
@@ -145,6 +156,74 @@ export class GameRoom {
 		}
 	}
 
+	/** Fire-and-forget: sends suggestions then analysis to client */
+	private sendSuggestionsAndAnalysis(playerMove: string): void {
+		this.getSuggestions(3)
+			.then((sugPayload) => {
+				this.emit(sugPayload);
+				this.lastSuggestions = sugPayload.suggestions;
+
+				// Send move quality based on previous suggestions
+				if (this.lastSuggestions.length > 0) {
+					this.emit({
+						type: "MOVE_QUALITY",
+						move: playerMove,
+						quality: this.assessMoveQuality(playerMove),
+					});
+				}
+
+				// Request AI analysis if coaching enabled
+				if (this.coachingEnabled) {
+					this.requestAnalysis();
+				}
+			})
+			.catch((err) => {
+				log.error("suggestions+analysis failed", { error: (err as Error).message });
+			});
+	}
+
+	private assessMoveQuality(
+		userMove: string,
+	): "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" {
+		if (this.lastSuggestions.length === 0) return "ok";
+
+		const bestMove = this.lastSuggestions[0].move;
+		if (userMove.startsWith(bestMove) || bestMove.startsWith(userMove)) return "best";
+
+		const inTop = this.lastSuggestions.some(
+			(s) => s.move === userMove || userMove.startsWith(s.move),
+		);
+		if (inTop) return "good";
+
+		// Score difference from the previous best
+		const bestScore = Math.abs(this.lastSuggestions[0].score);
+		if (bestScore < 30) return "ok";
+		if (bestScore < 80) return "inaccuracy";
+		if (bestScore < 200) return "mistake";
+		return "blunder";
+	}
+
+	private async requestAnalysis(): Promise<void> {
+		const history = this.game.getMoveHistory();
+		const lastMoveEntry = history.length > 0 ? history[history.length - 1] : null;
+
+		const ctx: AnalysisContext = {
+			gameType: this.gameType,
+			fen: this.game.fen,
+			moveCount: history.length,
+			playerColor: this.playerColor,
+			lastMove: lastMoveEntry?.san,
+			lastMoveColor: this.game.turn === "white" ? "Black" : "White",
+			suggestions: this.lastSuggestions,
+			pgn: this.game.pgn,
+		};
+
+		const text = await analyzePosition(ctx);
+		if (text) {
+			this.emit({ type: "ANALYSIS", text });
+		}
+	}
+
 	async getSuggestions(topN = 3) {
 		try {
 			const result = await this.uciPool.search(this.game.fen, FULL_STRENGTH_MOVETIME, topN);
@@ -160,11 +239,43 @@ export class GameRoom {
 					pv: info.pv,
 				}));
 
+			this.lastSuggestions = suggestions;
 			return { type: "SUGGESTIONS" as const, suggestions };
 		} catch (err) {
 			log.error("suggestions failed", { error: (err as Error).message });
 			return { type: "SUGGESTIONS" as const, suggestions: [] };
 		}
+	}
+
+	get pgn(): string {
+		return this.game.pgn;
+	}
+
+	async getHint(): Promise<{
+		type: "HINT";
+		level: number;
+		piece?: string;
+		destination?: string;
+		fullMove?: string;
+	} | null> {
+		if (this.lastSuggestions.length === 0) {
+			const sug = await this.getSuggestions(1);
+			this.lastSuggestions = sug.suggestions;
+		}
+		if (this.lastSuggestions.length === 0) return null;
+
+		const bestMove = this.lastSuggestions[0].move;
+		const piece = bestMove.slice(0, 2);
+		const dest = bestMove.slice(2, 4);
+
+		// Progressive hints: call multiple times for more detail
+		return {
+			type: "HINT",
+			level: 3,
+			piece,
+			destination: dest,
+			fullMove: bestMove,
+		};
 	}
 
 	resign(color: "white" | "black") {

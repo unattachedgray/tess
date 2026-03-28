@@ -1,0 +1,159 @@
+import { execFile } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import type { GameType, Suggestion } from "@tess/shared";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("ai");
+
+const SANDBOX_DIR = "/tmp/tess-claude-sandbox";
+try {
+	mkdirSync(SANDBOX_DIR, { recursive: true });
+} catch {}
+
+const PHASE_THRESHOLDS: Record<GameType, [number, number]> = {
+	chess: [10, 30],
+	go: [40, 150],
+	janggi: [10, 40],
+};
+
+const PHASE_NAMES: Record<GameType, [string, string, string]> = {
+	chess: ["Opening", "Middlegame", "Endgame"],
+	go: ["Opening (fuseki)", "Middle game (chuban)", "Endgame (yose)"],
+	janggi: ["Opening", "Middlegame", "Endgame"],
+};
+
+function getPhase(gameType: GameType, moveCount: number): string {
+	const [mid, end] = PHASE_THRESHOLDS[gameType];
+	const names = PHASE_NAMES[gameType];
+	if (moveCount <= mid) return names[0];
+	if (moveCount <= end) return names[1];
+	return names[2];
+}
+
+function formatSuggestions(suggestions: Suggestion[]): string {
+	return suggestions
+		.map((s, i) => {
+			const score =
+				Math.abs(s.score) > 9000
+					? `Mate in ${Math.abs(s.score) - 9000}`
+					: `${(s.score / 100).toFixed(1)} pawns`;
+			return `${i + 1}. ${s.san ?? s.move} (eval: ${score})`;
+		})
+		.join("\n");
+}
+
+function buildChessPrompt(ctx: AnalysisContext): string {
+	const phase = getPhase("chess", ctx.moveCount);
+	const playerSide = ctx.playerColor === "white" ? "White" : "Black";
+	const aiSide = ctx.playerColor === "white" ? "Black" : "White";
+
+	return `Chess coach. Human=${playerSide}, Engine=${aiSide}. No greeting.
+
+Move ${ctx.moveCount}, ${phase}.
+FEN: ${ctx.fen}
+
+${ctx.lastMove ? `**Last move (${ctx.lastMoveColor}):** ${ctx.lastMove} — explain the intent and consequence.` : "Game just started."}
+**Top engine suggestions:**
+${formatSuggestions(ctx.suggestions)}
+
+Analyze:
+1. Was the last move good or bad? Why?
+2. What should ${playerSide} focus on now? Pick the best suggestion and explain why.
+3. Key strategic themes (piece activity, king safety, pawn structure).
+
+Under 120 words. Use **bold** for strategic/tactical terms on first use. End with:
+
+**Terms**
+- **term** — brief definition
+
+Include all bolded terms. Skip obvious ones (piece names, check, capture).`;
+}
+
+export interface AnalysisContext {
+	gameType: GameType;
+	fen: string;
+	moveCount: number;
+	playerColor: "white" | "black";
+	lastMove?: string;
+	lastMoveColor?: string;
+	suggestions: Suggestion[];
+	pgn?: string;
+}
+
+let activeCalls = 0;
+let lastCallTime = 0;
+const COOLDOWN_MS = 3000;
+const TIMEOUT_MS = 30000;
+
+export async function analyzePosition(ctx: AnalysisContext): Promise<string | null> {
+	if (activeCalls > 0) {
+		log.debug("skipping analysis, call in progress");
+		return null;
+	}
+
+	const now = Date.now();
+	if (now - lastCallTime < COOLDOWN_MS) {
+		log.debug("skipping analysis, cooldown");
+		return null;
+	}
+
+	let prompt: string;
+	switch (ctx.gameType) {
+		case "chess":
+			prompt = buildChessPrompt(ctx);
+			break;
+		default:
+			prompt = buildChessPrompt(ctx); // fallback for now
+	}
+
+	activeCalls++;
+	lastCallTime = now;
+
+	try {
+		const result = await callClaude(prompt);
+		return result;
+	} catch (err) {
+		log.error("analysis failed", { error: (err as Error).message });
+		return null;
+	} finally {
+		activeCalls--;
+	}
+}
+
+function callClaude(prompt: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(new Error("Claude CLI timeout"));
+		}, TIMEOUT_MS);
+
+		execFile(
+			"claude",
+			[
+				"--print",
+				"--output-format",
+				"text",
+				"--no-session-persistence",
+				"--max-turns",
+				"1",
+				"-p",
+				prompt,
+			],
+			{
+				timeout: TIMEOUT_MS,
+				cwd: SANDBOX_DIR,
+				maxBuffer: 1024 * 1024,
+			},
+			(error, stdout, stderr) => {
+				clearTimeout(timer);
+				if (error) {
+					reject(error);
+					return;
+				}
+				if (stderr) {
+					log.debug("claude stderr", { stderr: stderr.trim() });
+				}
+				resolve(stdout.trim());
+			},
+		);
+	});
+}
