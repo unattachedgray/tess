@@ -33,16 +33,22 @@ export class WsClient {
 
 		this.ws.onmessage = (event) => {
 			try {
-				const msg = JSON.parse(event.data as string) as ServerMessage;
-				// Debug: log all non-routine messages
-				if (!["PLAYER_COUNT", "CLOCK_UPDATE"].includes(msg.type)) {
-					console.log("[ws] <<", msg.type, JSON.stringify(msg).slice(0, 150));
+				const msg = JSON.parse(event.data as string);
+				// Basic type guard — reject messages without a valid type field
+				if (!msg || typeof msg.type !== "string") {
+					console.warn("[ws] invalid message (no type)");
+					return;
 				}
-				const handlers = this.handlers.get(msg.type);
+				const typedMsg = msg as ServerMessage;
+				// Debug: log all non-routine messages
+				if (!["PLAYER_COUNT", "CLOCK_UPDATE"].includes(typedMsg.type)) {
+					console.log("[ws] <<", typedMsg.type, JSON.stringify(typedMsg).slice(0, 150));
+				}
+				const handlers = this.handlers.get(typedMsg.type);
 				if (handlers) {
-					for (const h of handlers) h(msg);
+					for (const h of handlers) h(typedMsg);
 				} else {
-					console.warn("[ws] no handler for", msg.type);
+					console.warn("[ws] no handler for", typedMsg.type);
 				}
 			} catch (err) {
 				console.error("[ws] parse error:", err);

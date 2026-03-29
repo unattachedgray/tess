@@ -21,8 +21,11 @@ import { createLogger } from "./logger.js";
 
 const log = createLogger("federation");
 
-// Discovery topic — all Tess instances announce under this
-const TOPIC = createHash("sha256").update("tess-board-game-discovery-v1").digest();
+// Discovery topic — customizable via TESS_DISCOVERY_TOPIC env var.
+// Default: public topic (all Tess instances find each other).
+// Set a custom value to create a private discovery group (e.g., friends-only).
+const TOPIC_SEED = process.env.TESS_DISCOVERY_TOPIC ?? "tess-board-game-discovery-v1";
+const TOPIC = createHash("sha256").update(TOPIC_SEED).digest();
 
 // Timings
 const HEARTBEAT_INTERVAL = 5 * 60 * 1000;  // verify peers every 5 min

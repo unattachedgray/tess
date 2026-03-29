@@ -5,7 +5,20 @@ import { getGame, getRecentGames, getUserStats, upsertUser } from "./db.js";
 import type { FederationService } from "./federation.js";
 import type { SessionManager } from "./session.js";
 
+/** Simple per-IP rate limiter — returns true if request should be blocked */
+function rateLimit(store: Map<string, { count: number; reset: number }>, ip: string, maxPerMinute: number): boolean {
+	const now = Date.now();
+	const entry = store.get(ip);
+	if (!entry || now > entry.reset) {
+		store.set(ip, { count: 1, reset: now + 60_000 });
+		return false;
+	}
+	entry.count++;
+	return entry.count > maxPerMinute;
+}
+
 export function createApp(sessionManager: SessionManager, federation?: FederationService): Hono {
+	const apiRateLimits = new Map<string, { count: number; reset: number }>();
 	const app = new Hono();
 
 	// CORS: allow same-origin in production, permissive in development
@@ -29,16 +42,13 @@ export function createApp(sessionManager: SessionManager, federation?: Federatio
 	});
 
 	app.get("/api/admin", (c) => {
+		// Redact sensitive internals — only expose what's useful for debugging
 		return c.json({
 			uptime: Math.round(process.uptime()),
 			activeGames: sessionManager.activeRoomCount,
 			memory: {
-				heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-				heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-				rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+				heapMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
 			},
-			pid: process.pid,
-			nodeVersion: process.version,
 		});
 	});
 
@@ -92,6 +102,10 @@ export function createApp(sessionManager: SessionManager, federation?: Federatio
 	});
 
 	app.post("/api/users", async (c) => {
+		const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+		if (rateLimit(apiRateLimits, `user:${ip}`, 20)) {
+			return c.json({ error: "Too many requests" }, 429);
+		}
 		const body = await c.req.json();
 		if (!body.id || !body.displayName) {
 			return c.json({ error: "id and displayName required" }, 400);
@@ -154,6 +168,10 @@ export function createApp(sessionManager: SessionManager, federation?: Federatio
 	app.post("/api/federation/peers", async (c) => {
 		if (!discoveryEnabled()) {
 			return c.json({ error: "Federation disabled on this server" }, 403);
+		}
+		const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+		if (rateLimit(apiRateLimits, `peer:${ip}`, 10)) {
+			return c.json({ error: "Too many requests" }, 429);
 		}
 		const body = await c.req.json();
 		if (!body.url || typeof body.url !== "string") {
