@@ -243,6 +243,37 @@
 		{/if}
 	</div>
 
+	<!-- Recent Opponents -->
+	{#if appState.recentOpponents.length > 0}
+		<div class="recent-section">
+			<h3 class="section-label">{t("lobby.recentPlayers", lang)}</h3>
+			<div class="recent-list">
+				{#each appState.recentOpponents as opp}
+					<div class="recent-card">
+						<div class="recent-info">
+							<span class="recent-name">{opp.name}</span>
+							<span class="recent-meta">
+								{opp.gameType}
+								{#if opp.result}
+									<span class="recent-result {opp.result}">
+										{opp.result === "win" ? "W" : opp.result === "loss" ? "L" : "D"}
+									</span>
+								{/if}
+							</span>
+						</div>
+						<button
+							class="accept-btn"
+							onclick={() => {
+								createGameType = (opp.gameType as "chess" | "go" | "janggi") ?? "chess";
+								showCreate = true;
+							}}
+						>{t("lobby.create", lang)}</button>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
 	<!-- Federation -->
 	<div class="federation-section">
 		<div class="federation-header">
@@ -336,6 +367,68 @@
 	.count-dot.remote {
 		background: var(--accent);
 	}
+
+	.recent-section {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.section-label {
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		color: var(--text-muted);
+		letter-spacing: 0.05em;
+	}
+
+	.recent-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.recent-card {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8px 12px;
+		border-radius: 10px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+	}
+
+	.recent-info {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.recent-name {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+
+	.recent-meta {
+		font-size: 11px;
+		color: var(--text-muted);
+		text-transform: capitalize;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.recent-result {
+		font-size: 10px;
+		font-weight: 700;
+		padding: 1px 5px;
+		border-radius: 4px;
+	}
+
+	.recent-result.win { color: var(--success); background: color-mix(in srgb, var(--success) 15%, transparent); }
+	.recent-result.loss { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent); }
+	.recent-result.draw { color: var(--text-muted); background: var(--bg-hover); }
 
 	.federation-section {
 		padding: 12px 14px;

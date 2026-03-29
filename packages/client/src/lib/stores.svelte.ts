@@ -119,6 +119,21 @@ class AppState {
 	theme = $state<Theme>(loadPref("theme", "midnight"));
 	nickname = $state<string>(loadPref("nickname", ""));
 
+	// Recent opponents (persisted)
+	recentOpponents = $state<{ name: string; lastPlayed: number; gameType: string; result?: string }[]>(
+		loadPref("recentOpponents", []),
+	);
+
+	addRecentOpponent(name: string, gameType: string, result?: string) {
+		// Remove duplicate, add to front, cap at 20
+		const filtered = this.recentOpponents.filter((o) => o.name !== name);
+		this.recentOpponents = [
+			{ name, lastPlayed: Date.now(), gameType, result },
+			...filtered,
+		].slice(0, 20);
+		savePref("recentOpponents", this.recentOpponents);
+	}
+
 	// Connection state
 	wsConnected = $state(false);
 

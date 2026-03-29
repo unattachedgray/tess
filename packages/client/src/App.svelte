@@ -71,8 +71,13 @@
 			appState.suggestionsStale = false;
 			if (appState.isMultiplayer) {
 				appState.suggestions = [];
-				// Show loading in AI Coach while waiting for post-game evaluation
 				appState.analysisLoading = true;
+				// Record opponent for recent players list
+				if (appState.opponentName) {
+					const r = msg.result as any;
+					const resultStr = r?.winner === appState.playerColor ? "win" : r?.winner === "draw" ? "draw" : "loss";
+					appState.addRecentOpponent(appState.opponentName, appState.gameType, resultStr);
+				}
 			} else {
 				appState.analysisLoading = false;
 			}
