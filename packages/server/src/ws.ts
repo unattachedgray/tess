@@ -71,8 +71,9 @@ export function createWsServer(
 			(ws as unknown as { isAlive: boolean }).isAlive = true;
 		});
 
+		const clientId = ++nextClientId;
 		const state: ClientState = {
-			_id: ++nextClientId,
+			_id: clientId,
 			ws,
 			room: null,
 			mpRoom: null,
@@ -81,7 +82,7 @@ export function createWsServer(
 			suggestionCount: 3,
 			autoplayElo: 2800,
 			language: undefined,
-			userId: `player-${++nextClientId}`,
+			userId: `player-${clientId}-${Date.now().toString(36)}`,
 		};
 		log.info(`client #${state._id} connected`);
 		// Subscribe to lobby for challenge notifications
@@ -91,8 +92,23 @@ export function createWsServer(
 		broadcastPlayerCounts();
 
 		let processing = Promise.resolve();
+		// Rate limiting: max 30 messages per second per client
+		let msgCount = 0;
+		let msgWindowStart = Date.now();
+		const MSG_RATE_LIMIT = 30;
+		const MSG_WINDOW_MS = 1000;
 
 		ws.on("message", (data: Buffer) => {
+			const now = Date.now();
+			if (now - msgWindowStart > MSG_WINDOW_MS) {
+				msgCount = 0;
+				msgWindowStart = now;
+			}
+			msgCount++;
+			if (msgCount > MSG_RATE_LIMIT) {
+				log.warn("rate limited", { clientId: state._id, count: msgCount });
+				return; // Drop message silently
+			}
 			processing = processing
 				.then(() => handleMessage(state, data.toString()))
 				.catch((err) => {
@@ -453,14 +469,9 @@ export function createWsServer(
 				const name = msg.nickname.trim().slice(0, 20);
 				if (!name) break;
 				state.nickname = name;
-				// Use bird-name as userId, keep nickname as display override
-				// First SET_NICKNAME sets the base userId (bird-name)
-				if (state.userId?.startsWith("player-")) {
-					state.userId = name;
-				}
-				// Update lobbyClient to reflect new name
+				// Nickname is display-only. userId is server-assigned and immutable.
+				// This prevents impersonation via userId spoofing.
 				if (state.lobbyClient) {
-					state.lobbyClient.userId = state.userId!;
 					state.lobbyClient.nickname = state.nickname;
 				}
 				send(state.ws, { type: "NICKNAME_SET", nickname: state.nickname });
@@ -487,6 +498,10 @@ export function createWsServer(
 					msg.color,
 					msg.boardSize,
 				);
+				if (!challenge) {
+					send(state.ws, { type: "ERROR", message: "Too many active challenges" });
+					break;
+				}
 				send(state.ws, {
 					type: "CHALLENGE_CREATED",
 					challengeId: challenge.id,

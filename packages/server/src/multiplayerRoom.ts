@@ -69,8 +69,8 @@ export class MultiplayerRoom {
 	/** Add a player to the room. Returns the assigned color. */
 	addPlayer(client: MpClient, preferredColor?: "white" | "black"): "white" | "black" | null {
 		// If this player is reconnecting, restore them
-		// Only match real userIds, not auto-generated ones
-		if (client.userId && !client.userId.startsWith("player-")) {
+		// userId is server-assigned and immutable — safe for identity matching
+		if (client.userId) {
 			const existingSlot = this.findPlayerSlot(client.userId);
 			if (existingSlot) {
 				this.players[existingSlot] = client;

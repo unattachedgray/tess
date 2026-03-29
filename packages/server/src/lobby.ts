@@ -42,7 +42,15 @@ export class Lobby {
 		timeControl: TimeControl,
 		color?: "white" | "black",
 		boardSize?: number,
-	): Challenge {
+	): Challenge | null {
+		// Limit challenges per client (prevent spam)
+		const MAX_CHALLENGES_PER_CLIENT = 3;
+		let clientCount = 0;
+		for (const entry of this.challenges.values()) {
+			if (entry.creator.userId === client.userId) clientCount++;
+		}
+		if (clientCount >= MAX_CHALLENGES_PER_CLIENT) return null;
+
 		const id = generateId();
 		const code = generateCode();
 		const challenge: Challenge = {

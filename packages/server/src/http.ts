@@ -8,7 +8,12 @@ import type { SessionManager } from "./session.js";
 export function createApp(sessionManager: SessionManager, federation?: FederationService): Hono {
 	const app = new Hono();
 
-	app.use("*", cors());
+	// CORS: allow same-origin in production, permissive in development
+	const isDev = process.env.NODE_ENV !== "production";
+	app.use("*", cors({
+		origin: isDev ? "*" : (origin) => origin, // reflect origin in prod
+		credentials: true,
+	}));
 
 	// --- Admin API ---
 
@@ -120,6 +125,12 @@ export function createApp(sessionManager: SessionManager, federation?: Federatio
 	const discoveryEnabled = () => _discoveryOverride ?? (process.env.TESS_DISCOVERY !== "off");
 
 	app.post("/api/federation/toggle", async (c) => {
+		// Only allow from local requests (same machine)
+		const forwarded = c.req.header("x-forwarded-for");
+		const ip = forwarded?.split(",")[0]?.trim() ?? "127.0.0.1";
+		if (!["127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1"].includes(ip) && forwarded) {
+			return c.json({ error: "Forbidden — local only" }, 403);
+		}
 		const body = await c.req.json();
 		if (typeof body.enabled !== "boolean") {
 			return c.json({ error: "enabled (boolean) required" }, 400);

@@ -22,6 +22,11 @@
 		[...messages].sort((a, b) => b.moveNumber - a.moveNumber),
 	);
 
+	/** Escape HTML entities to prevent XSS from AI-generated content */
+	function escapeHtml(s: string): string {
+		return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+	}
+
 	function renderMarkdown(text: string): string {
 		// First pass: extract **Terms** / **Tooltips** section and build a lookup
 		const termDefs = new Map<string, string>();
@@ -30,15 +35,14 @@
 			const lines = termsMatch[1].split("\n");
 			for (const line of lines) {
 				const m = line.match(/^[-*]\s*\*\*(.+?)\*\*\s*[—–-]\s*(.+)/);
-				if (m) termDefs.set(m[1].toLowerCase(), m[2].trim());
+				if (m) termDefs.set(m[1].toLowerCase(), escapeHtml(m[2].trim()));
 			}
 		}
 
-		// Second pass: render markdown and add tooltips to bolded terms
-		let html = text
-			// Remove the Terms section from display
-			.replace(/\*\*(?:Terms|Tooltips|Key Terms)\*\*\s*\n[\s\S]*$/i, "")
-			.trim()
+		// Escape HTML FIRST, then apply markdown transforms (prevents XSS)
+		let html = escapeHtml(
+			text.replace(/\*\*(?:Terms|Tooltips|Key Terms)\*\*\s*\n[\s\S]*$/i, "").trim()
+		)
 			.replace(/\*\*(.+?)\*\*/g, (_match, term) => {
 				const def = termDefs.get(term.toLowerCase());
 				if (def) {
@@ -114,7 +118,7 @@
 				{/if}
 				{#if gameSummary}
 					<div class="text-sm text-[var(--text-primary)] leading-relaxed pt-2 border-t border-[var(--accent)]/20">
-						{@html gameSummary
+						{@html escapeHtml(gameSummary)
 							.replace(/\*\*(.+?)\*\*/g, '<strong class="text-[var(--accent)]">$1</strong>')
 							.replace(/\n/g, '<br>')}
 					</div>

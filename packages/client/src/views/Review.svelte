@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { ChessGame } from "@tess/shared";
+
+	function escapeHtml(s: string): string {
+		return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+	}
 	import { Chessground } from "chessground";
 	import type { Api } from "chessground/api";
 	import type { Key } from "chessground/types";
@@ -116,7 +120,7 @@
 				</div>
 				{#if gameSummary}
 					<div class="text-xs text-[var(--text-secondary)] leading-relaxed">
-						{@html gameSummary.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')}
+						{@html escapeHtml(gameSummary).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')}
 					</div>
 				{/if}
 			</div>

@@ -28,6 +28,7 @@ const TOPIC = createHash("sha256").update("tess-board-game-discovery-v1").digest
 const HEARTBEAT_INTERVAL = 5 * 60 * 1000;  // verify peers every 5 min
 const PEER_TTL = 10 * 60 * 1000;           // remove dead peers after 10 min
 const UPNP_REFRESH = 20 * 60 * 1000;       // refresh UPnP mapping every 20 min
+const MAX_PEERS = 50;                       // prevent memory exhaustion from fake peers
 
 export interface FederationPeer {
 	host: string;
@@ -139,6 +140,7 @@ export class FederationService {
 			const host = info.publicKey ? `swarm-${key}` : "unknown";
 
 			// Register as verified peer (we're already on an encrypted stream)
+			if (this.peers.size >= MAX_PEERS) return; // cap peer count
 			const peerKey = `swarm:${key}`;
 			this.peers.set(peerKey, {
 				host,
@@ -216,6 +218,7 @@ export class FederationService {
 				const host = service.addresses?.[0] ?? service.host;
 				if (!host) return;
 
+				if (this.peers.size >= MAX_PEERS) return; // cap peer count
 				const peerKey = `mdns:${host}:${service.port}`;
 				log.info("mDNS peer found", { name: service.name, host, port: service.port });
 
