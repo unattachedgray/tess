@@ -13,6 +13,11 @@
 	import Analysis from "../components/Analysis.svelte";
 	import ChatBox from "../components/ChatBox.svelte";
 	import PlayerStats from "../components/PlayerStats.svelte";
+	import Clock from "../components/Clock.svelte";
+
+	// Clock display: opponent's clock is the opposite color
+	const opponentColor = $derived(appState.playerColor === 'white' ? 'black' : 'white');
+	const showClocks = $derived(appState.isMultiplayer && (appState.clockWhite > 0 || appState.clockBlack > 0));
 
 	let { ws, onRematch, onAutoplayRematch }: {
 		ws: WsClient;
@@ -158,15 +163,20 @@
 					</span>
 				{/if}
 			</div>
-			<CapturedPieces
-				pieces={appState.playerColor === 'white' ? appState.capturedPieces.white : appState.capturedPieces.black}
-				color={appState.playerColor}
-			/>
+			<div class="player-bar-right">
+				<CapturedPieces
+					pieces={appState.playerColor === 'white' ? appState.capturedPieces.white : appState.capturedPieces.black}
+					color={appState.playerColor}
+				/>
+				{#if showClocks}
+					<Clock
+						time={opponentColor === 'white' ? appState.clockWhite : appState.clockBlack}
+						running={appState.clockRunning === opponentColor}
+						side={opponentColor}
+					/>
+				{/if}
+			</div>
 		</div>
-		<CapturedPieces
-			pieces={appState.playerColor === 'white' ? appState.capturedPieces.white : appState.capturedPieces.black}
-			color={appState.playerColor}
-		/>
 
 		<div class="board-with-eval" style="position: relative;">
 			<!-- Floating emoji/message overlay -->
@@ -239,10 +249,19 @@
 					</span>
 				{/if}
 			</div>
-			<CapturedPieces
-				pieces={appState.playerColor === 'white' ? appState.capturedPieces.black : appState.capturedPieces.white}
-				color={appState.playerColor === 'white' ? 'black' : 'white'}
-			/>
+			<div class="player-bar-right">
+				<CapturedPieces
+					pieces={appState.playerColor === 'white' ? appState.capturedPieces.black : appState.capturedPieces.white}
+					color={appState.playerColor === 'white' ? 'black' : 'white'}
+				/>
+				{#if showClocks}
+					<Clock
+						time={appState.playerColor === 'white' ? appState.clockWhite : appState.clockBlack}
+						running={appState.clockRunning === appState.playerColor}
+						side={appState.playerColor}
+					/>
+				{/if}
+			</div>
 		</div>
 		<!-- Player stats -->
 		<PlayerStats />
@@ -498,6 +517,12 @@
 	.player-icon {
 		font-size: 16px;
 		opacity: 0.7;
+	}
+
+	.player-bar-right {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 	}
 
 	.player-name {

@@ -109,7 +109,7 @@ export class MultiplayerRoom {
 		// Send current game state if game is in progress
 		if (this.status === "playing" || this.status === "finished") {
 			client.send(this.buildGameState("white")); // Spectators see white's perspective
-			if (this.clock && !this.clock.isUntimed()) {
+			if (this.clock) {
 				client.send({ type: "CLOCK_UPDATE", ...this.clock.getState() });
 			}
 		}
@@ -174,7 +174,7 @@ export class MultiplayerRoom {
 
 		// Send full game state to reconnecting player
 		client.send(this.buildGameState(slot));
-		if (this.clock && !this.clock.isUntimed()) {
+		if (this.clock) {
 			client.send({ type: "CLOCK_UPDATE", ...this.clock.getState() });
 		}
 
@@ -413,7 +413,9 @@ export class MultiplayerRoom {
 
 		log.info(`Game ${this.id} started: ${white.userId} vs ${black.userId} (${this.gameType})`);
 
-		// Start clock if timed
+		// Start clock — timed games use real time controls,
+		// untimed games get a per-move idle timer (120s + 120s increment)
+		// so AFK players don't stall the game indefinitely.
 		if (this.timeControl.initial > 0) {
 			this.clock = new FischerClock(
 				this.timeControl.initial,
@@ -421,8 +423,17 @@ export class MultiplayerRoom {
 				(side) => this.endGame(side === "white" ? "black" : "white", "timeout"),
 				(state) => this.broadcast({ type: "CLOCK_UPDATE", ...state }),
 			);
-			this.clock.start("white"); // White moves first
+		} else {
+			// Untimed: 120s per move with full reset on each move
+			const IDLE_SECONDS = 120;
+			this.clock = new FischerClock(
+				IDLE_SECONDS,
+				IDLE_SECONDS,
+				(side) => this.endGame(side === "white" ? "black" : "white", "idle timeout"),
+				(state) => this.broadcast({ type: "CLOCK_UPDATE", ...state }),
+			);
 		}
+		this.clock.start("white");
 
 		// Send MP_GAME_START to both players
 		console.log(`[mp] startGame: white=${white.userId}, black=${black.userId}`);
