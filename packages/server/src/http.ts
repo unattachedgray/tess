@@ -116,7 +116,29 @@ export function createApp(sessionManager: SessionManager, federation?: Federatio
 	// ── Federation API ──
 	// Guarded by TESS_DISCOVERY env var — set to "off" to disable completely
 
-	const discoveryEnabled = () => process.env.TESS_DISCOVERY !== "off";
+	let _discoveryOverride: boolean | null = null;
+	const discoveryEnabled = () => _discoveryOverride ?? (process.env.TESS_DISCOVERY !== "off");
+
+	app.post("/api/federation/toggle", async (c) => {
+		const body = await c.req.json();
+		if (typeof body.enabled !== "boolean") {
+			return c.json({ error: "enabled (boolean) required" }, 400);
+		}
+		_discoveryOverride = body.enabled;
+		if (!body.enabled && federation) {
+			federation.destroy();
+		} else if (body.enabled && federation) {
+			federation.start().catch(() => {});
+		}
+		return c.json({ discovery: body.enabled });
+	});
+
+	app.get("/api/federation/status", (c) => {
+		return c.json({
+			enabled: discoveryEnabled(),
+			stats: federation?.getStats() ?? null,
+		});
+	});
 
 	app.post("/api/federation/peers", async (c) => {
 		if (!discoveryEnabled()) {

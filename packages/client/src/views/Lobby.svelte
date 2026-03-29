@@ -23,12 +23,39 @@
 		(localStorage.getItem("mp-color") as "white" | "black" | undefined) ?? undefined
 	);
 
+	let federationEnabled = $state(true);
+	let federationStats = $state<{ dhtNodes: number; peersDiscovered: number; peersVerified: number; remotePlayers: number } | null>(null);
+
+	async function fetchFederationStatus() {
+		try {
+			const res = await fetch("/api/federation/status");
+			if (res.ok) {
+				const data = await res.json();
+				federationEnabled = data.enabled;
+				federationStats = data.stats;
+			}
+		} catch {}
+	}
+
+	async function toggleFederation() {
+		const newState = !federationEnabled;
+		try {
+			const res = await fetch("/api/federation/toggle", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ enabled: newState }),
+			});
+			if (res.ok) federationEnabled = newState;
+		} catch {}
+	}
+
 	// Subscribe to lobby on mount
 	$effect(() => {
 		ws.send({ type: "REQUEST_LOBBY" });
 		ws.on("CHALLENGE_CREATED", (msg: any) => {
 			myChallenge = msg.challengeId;
 		});
+		fetchFederationStatus();
 		return () => {
 			ws.send({ type: "LEAVE_LOBBY" });
 			ws.off("CHALLENGE_CREATED");
@@ -215,6 +242,30 @@
 			{/each}
 		{/if}
 	</div>
+
+	<!-- Federation -->
+	<div class="federation-section">
+		<div class="federation-header">
+			<span class="federation-label">Network Play</span>
+			<button
+				class="toggle-btn {federationEnabled ? 'on' : 'off'}"
+				onclick={toggleFederation}
+				title={federationEnabled ? "Disable network discovery" : "Enable network discovery"}
+			>
+				<div class="toggle-knob"></div>
+			</button>
+		</div>
+		{#if federationEnabled && appState.playerCounts.remotePlayers > 0}
+			<div class="federation-stats">
+				<span class="count-dot remote"></span>
+				<span>{appState.playerCounts.remotePlayers} players on {appState.playerCounts.federatedServers} servers</span>
+			</div>
+		{:else if federationEnabled}
+			<div class="federation-stats muted">
+				<span>Searching for other Tess servers...</span>
+			</div>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -284,6 +335,67 @@
 
 	.count-dot.remote {
 		background: var(--accent);
+	}
+
+	.federation-section {
+		padding: 12px 14px;
+		border-radius: 12px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+	}
+
+	.federation-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.federation-label {
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		color: var(--text-muted);
+		letter-spacing: 0.05em;
+	}
+
+	.toggle-btn {
+		width: 36px;
+		height: 20px;
+		border-radius: 10px;
+		border: none;
+		cursor: pointer;
+		position: relative;
+		transition: background 0.2s;
+	}
+
+	.toggle-btn.on { background: var(--accent); }
+	.toggle-btn.off { background: var(--bg-hover); }
+
+	.toggle-knob {
+		position: absolute;
+		top: 2px;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: white;
+		box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+		transition: transform 0.2s;
+	}
+
+	.toggle-btn.on .toggle-knob { transform: translateX(18px); }
+	.toggle-btn.off .toggle-knob { transform: translateX(2px); }
+
+	.federation-stats {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 8px;
+		font-size: 11px;
+		color: var(--accent);
+	}
+
+	.federation-stats.muted {
+		color: var(--text-muted);
 	}
 
 	.join-code-section {
