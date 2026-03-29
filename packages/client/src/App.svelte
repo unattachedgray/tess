@@ -9,6 +9,9 @@
 	import Settings from "./components/Settings.svelte";
 
 	const ws = new WsClient();
+	ws.onConnectionChange = (connected) => {
+		appState.wsConnected = connected;
+	};
 
 	$effect(() => {
 		ws.connect();
@@ -399,11 +402,17 @@
 						class="text-[11px] font-bold px-3 py-0.5 rounded-md bg-[var(--danger)] text-white animate-pulse cursor-pointer"
 						onclick={leaveMultiplayer}
 					>{tt('header.leaveGame')}</button>
+				{:else if !appState.wsConnected || appState.opponentDisconnected}
+					<button
+						class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--warning)] text-[var(--bg-primary)] cursor-pointer"
+						onclick={leaveMultiplayer}
+						title={appState.opponentDisconnected ? "Opponent disconnected" : "Connection lost — reconnecting..."}
+					>MP</button>
 				{:else if appState.isGameOver}
 					<button
 						class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--accent)] hover:text-[var(--bg-primary)] transition-all"
 						onclick={leaveMultiplayer}
-						title="End live session (board stays for review)"
+						title="End live session"
 					>{tt('header.live')}</button>
 				{:else}
 					<button

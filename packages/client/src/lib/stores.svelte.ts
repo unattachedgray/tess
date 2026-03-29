@@ -119,6 +119,9 @@ class AppState {
 	theme = $state<Theme>(loadPref("theme", "midnight"));
 	nickname = $state<string>(loadPref("nickname", ""));
 
+	// Connection state
+	wsConnected = $state(false);
+
 	// Multiplayer state
 	isMultiplayer = $state(false);
 	opponentName = $state("");

@@ -9,6 +9,8 @@ export class WsClient {
 	private pendingMessages: string[] = [];
 	private url: string;
 	private connected = false;
+	/** Called when connection state changes — wire to appState */
+	onConnectionChange?: (connected: boolean) => void;
 
 	constructor(url?: string) {
 		const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -24,6 +26,7 @@ export class WsClient {
 		this.ws.onopen = () => {
 			console.log("[ws] connected");
 			this.connected = true;
+			this.onConnectionChange?.(true);
 			// Flush any messages queued while disconnected
 			for (const msg of this.pendingMessages) {
 				this.ws!.send(msg);
@@ -57,6 +60,7 @@ export class WsClient {
 
 		this.ws.onclose = () => {
 			this.connected = false;
+			this.onConnectionChange?.(false);
 			this.reconnectTimer = setTimeout(() => this.connect(), 2000);
 		};
 
