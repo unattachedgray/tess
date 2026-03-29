@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { appState } from "../lib/stores.svelte.ts";
+	import { t } from "../lib/i18n.ts";
 	import type { DifficultyId } from "@tess/shared";
 
 	let { difficulties }: {
@@ -8,7 +9,7 @@
 </script>
 
 <div class="space-y-3">
-	<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">Difficulty</h2>
+	<h2 class="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">{t("menu.difficulty", appState.language)}</h2>
 	<div class="space-y-1.5">
 		{#each difficulties as d}
 			<button

@@ -86,9 +86,10 @@
 	const statusText = $derived.by(() => {
 		const _lang = appState.language; // reactive dependency
 		if (appState.isGameOver && appState.result) {
-			if (appState.result.winner === "draw") return `${t("game.draw", _lang)} - ${appState.result.reason}`;
+			const reason = t(`reason.${appState.result.reason}`, _lang) || appState.result.reason;
+			if (appState.result.winner === "draw") return `${t("game.draw", _lang)} - ${reason}`;
 			const winner = appState.result.winner === appState.playerColor ? t("game.youWin", _lang) : t("game.youLose", _lang);
-			return `${winner} - ${appState.result.reason}`;
+			return `${winner} - ${reason}`;
 		}
 		if (appState.isCheck) return isMyTurn ? t("game.inCheck", _lang) : t("game.check", _lang);
 		return isMyTurn ? t("game.yourTurn", _lang) : t("game.aiThinking", _lang);
