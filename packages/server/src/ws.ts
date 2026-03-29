@@ -37,6 +37,19 @@ export function createWsServer(
 	const lobby = new Lobby();
 	const mpRooms = new Map<string, MultiplayerRoom>();
 
+	// Periodic cleanup of finished MP rooms (every 60s)
+	const roomCleanup = setInterval(() => {
+		let cleaned = 0;
+		for (const [id, room] of mpRooms) {
+			if (room.status === "finished") {
+				room.destroy();
+				mpRooms.delete(id);
+				cleaned++;
+			}
+		}
+		if (cleaned > 0) log.info("cleaned up finished rooms", { cleaned, remaining: mpRooms.size });
+	}, 60_000);
+
 	// Heartbeat
 	const heartbeat = setInterval(() => {
 		for (const ws of wss.clients) {
@@ -49,7 +62,7 @@ export function createWsServer(
 		}
 	}, 30000);
 
-	wss.on("close", () => clearInterval(heartbeat));
+	wss.on("close", () => { clearInterval(heartbeat); clearInterval(roomCleanup); });
 
 	wss.on("connection", (ws: WebSocket) => {
 		(ws as unknown as { isAlive: boolean }).isAlive = true;

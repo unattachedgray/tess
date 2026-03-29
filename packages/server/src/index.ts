@@ -43,7 +43,8 @@ async function main() {
 	const chessOpts: Record<string, string> = {};
 	if (nnuePath) chessOpts.EvalFile = nnuePath;
 
-	const chessPool = new UciPool(stockfishPath, 2, chessOpts);
+	const poolSize = Number.parseInt(process.env.ENGINE_POOL_SIZE ?? "2", 10);
+	const chessPool = new UciPool(stockfishPath, poolSize, chessOpts);
 	log.info("initializing Chess engine pool...");
 	await chessPool.init();
 	log.info("Chess engine pool ready");
@@ -59,7 +60,7 @@ async function main() {
 		const janggiNnue = resolveJanggiNnuePath();
 		if (janggiNnue) janggiOpts.EvalFile = janggiNnue;
 
-		janggiPool = new UciPool(janggiPath, 2, janggiOpts);
+		janggiPool = new UciPool(janggiPath, poolSize, janggiOpts);
 		log.info("initializing Janggi engine pool...");
 		try {
 			await janggiPool.init();
