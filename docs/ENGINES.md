@@ -203,31 +203,33 @@ The `tess.sh` installer will automatically create symlinks from the boardgames d
 
 ## Difficulty Calibration
 
-Tess maps 5 difficulty tiers to engine parameters:
+Tess maps 5 difficulty tiers to engine parameters. All tier definitions, ACPL thresholds, and AI targets are derived from a single source of truth: `SKILL_SCALE` in `packages/shared/src/evaluation.ts`.
+
+See `docs/engine-calibration.md` for full calibration methodology and simulation results.
 
 ### Chess / Janggi (Fairy-Stockfish)
 
-Uses `UCI_LimitStrength` and `UCI_Elo` for realistic play at each level.
+Uses `UCI_LimitStrength` and `UCI_Elo` for realistic play at each level. Weak moves generated via two-pass MultiPV analysis (50ms shallow search, pick by Elo rank).
 
-| Tier | Elo | Description |
-|------|-----|-------------|
-| Beginner | ~800 | Frequent blunders, misses basic tactics |
-| Casual | ~1200 | Knows basics, misses complex tactics |
-| Club | ~1600 | Solid club player |
-| Pro | ~2200 | Master level |
-| Superhuman | ~2800+ | Full engine strength (no limiting) |
+| Tier | Chess Elo | Janggi Elo | Description |
+|------|-----------|------------|-------------|
+| Beginner | ~800 | ~800 | Frequent blunders, misses basic tactics |
+| Casual | ~1200 | ~1200 | Knows basics, misses complex tactics |
+| Club | ~1600 | ~1600 | Solid club player |
+| Pro | ~2200 | ~2200 | Master level |
+| Superhuman | ~2800+ | ~2800+ | Full engine strength (no limiting) |
 
 ### Go (KataGo)
 
-Uses visit count budgets. Fewer visits produce weaker play.
+Uses visit count budgets for AI difficulty. Weak moves generated via low-ranked multi-PV suggestions (all guaranteed legal by KataGo).
 
 | Tier | Visits | Approximate Level |
 |------|--------|-------------------|
-| Beginner | 10 | ~18 kyu |
-| Casual | 50 | ~10 kyu |
-| Club | 200 | ~4 kyu |
-| Pro | 1000 | ~2 dan |
-| Superhuman | 5000 | Pro+ |
+| Beginner | 10 | ~16+ kyu |
+| Casual | 50 | ~13-15 kyu |
+| Club | 200 | ~4-8 kyu |
+| Pro | 1000 | ~1-3 dan |
+| Superhuman | 5000 | 9 dan+ |
 
 Suggestion search always runs at full engine strength regardless of the difficulty tier.
 

@@ -1,167 +1,193 @@
-# Engine Calibration Experiments
+# Engine Calibration & Skill Evaluation
 
-How we found the right approach for simulating different Elo levels in autoplay for each game engine (Fairy-Stockfish for Chess/Janggi, KataGo for Go), and how we score game quality accurately.
+How we calibrate AI difficulty, evaluate player skill, and maintain a unified scale across all three games (Chess, Janggi, Go).
 
-## The Problem
+## Architecture: Single Source of Truth
 
-When two autoplay bots play at different Elo settings (e.g., 800 vs 2200), the post-game evaluation should clearly differentiate them — the 800-Elo player should be rated as a beginner while the 2200 should be rated as an expert. This requires two things:
-1. **The weak player must actually play weak moves** (not just slightly suboptimal ones)
-2. **The scoring system must detect the quality difference**
+All skill tiers, ACPL thresholds, and AI difficulty targets are defined in one place:
 
-Both proved surprisingly hard.
+**`packages/shared/src/evaluation.ts` → `SKILL_SCALE`**
+
+This array drives everything:
+- Post-game skill labels (SKILL_EVAL message)
+- Difficulty picker descriptions in the UI
+- AI engine target Elo/visits per tier
+- Client-side display (Home.svelte, Analysis.svelte)
+
+Changing a threshold in SKILL_SCALE automatically updates evaluation, difficulty labels, and UI.
 
 ---
 
-## Part 1: Making the Engine Play Weak Moves
+## Unified Skill Tiers
 
-### Attempt 1: Reduced Movetime (Chess/Janggi)
-**Approach**: Give Fairy-Stockfish less thinking time for lower Elo. 800 Elo → 10ms, 2200 Elo → 1000ms.
+### Chess (Fairy-Stockfish UCI_LimitStrength)
 
-**Result**: Failed. Fairy-Stockfish reaches depth 12 even at 10ms. At that depth, it still finds near-perfect moves for Janggi. Both players got 96-98% accuracy.
+| Tier | ACPL Threshold | Rating | AI Elo |
+|------|---------------|--------|--------|
+| Superhuman | ≤25 | 2800+ | Full strength |
+| Pro+ | ≤45 | 2500-2800 | — |
+| Pro | ≤75 | 2200-2500 | 2200 |
+| Club+ | ≤120 | 1800-2200 | — |
+| Club | ≤180 | 1600-1800 | 1600 |
+| Casual+ | ≤260 | 1400-1600 | — |
+| Casual | ≤350 | 1200-1400 | 1200 |
+| Beginner | >350 | Under 1200 | 800 |
 
-**Why**: Modern chess engines use hash tables and fast evaluation. Even minimal time produces strong play for positions where good moves are "obvious" to the engine.
+### Janggi (Fairy-Stockfish variant, separate calibration)
 
-### Attempt 2: UCI_LimitStrength + UCI_Elo (Chess/Janggi)
-**Approach**: Use Fairy-Stockfish's built-in `UCI_LimitStrength` and `UCI_Elo` options, which make the engine deliberately introduce errors calibrated to a target Elo.
+Janggi positions are more volatile (cannons, palace, jumping rules), producing higher ACPL for the same skill level.
 
-**Result**: Partially worked but created a scoring problem. The same UCI_Elo was used for both playing moves AND evaluating positions. When the 800-Elo engine evaluates its own bad moves, it doesn't see them as bad — so ACPL was near 0 for both players.
+| Tier | ACPL Threshold | Rating | AI Elo |
+|------|---------------|--------|--------|
+| Superhuman | ≤30 | 2800+ | Full strength |
+| Pro+ | ≤55 | 2500-2800 | — |
+| Pro | ≤90 | 2200-2500 | 2200 |
+| Club+ | ≤140 | 1800-2200 | — |
+| Club | ≤210 | 1600-1800 | 1600 |
+| Casual+ | ≤300 | 1400-1600 | — |
+| Casual | ≤400 | 1200-1400 | 1200 |
+| Beginner | >400 | Under 1200 | 800 |
 
-**Key insight**: The engine that plays the move must be different from the engine that scores the move. Weak play + strong scoring.
+### Go (KataGo, recalibrated 2026-03-29)
 
-### Attempt 3: Pick from Top-3 Engine Suggestions (Chess/Janggi)
-**Approach**: Run the engine at full strength with 3 MultiPV suggestions. Lower Elo picks the 2nd or 3rd best move instead of the 1st.
+Go ACPL thresholds are tighter than chess because KataGo multi-PV ranking produces narrower ACPL ranges than UCI engines. Thresholds calibrated from autoplay simulations using low-ranked multi-PV suggestions.
 
-**Result**: Failed. The top 3 moves at full strength are all very good (within 30cp of each other). Even the "worst" of three great moves doesn't create meaningful weakness. 800 Elo (93%) was barely distinguishable from 2200 Elo (88%).
+| Tier | ACPL Threshold | Rating | AI Visits |
+|------|---------------|--------|-----------|
+| Superhuman | ≤15 | 9 dan+ | 5000 |
+| Pro+ | ≤30 | 4-6 dan | — |
+| Pro | ≤60 | 1-3 dan | 1000 |
+| Club+ | ≤100 | 1-3 kyu | — |
+| Club | ≤150 | 4-8 kyu | 200 |
+| Casual+ | ≤220 | 9-12 kyu | — |
+| Casual | ≤300 | 13-15 kyu | 50 |
+| Beginner | >300 | 16+ kyu | 10 |
 
-**Why**: Full-strength engine suggestions are pre-filtered for quality. The 3rd-best move at 1000ms is still an excellent move.
+---
 
-### Attempt 4: Two-Pass Analysis with Shallow MultiPV ✅ (Final — Chess/Janggi)
-**Approach**:
-- **Pass 1 (weak, 50ms)**: Run engine with 10 MultiPV at shallow depth. This produces 10 moves ranked by quality, where the bottom-ranked moves are genuinely bad.
-- **Pass 2 (control, 300ms)**: Run engine at full strength with 1 suggestion for accurate position evaluation.
+## Weak Move Generation (How AI Plays at Lower Levels)
+
+### Chess/Janggi: Two-Pass MultiPV Analysis
+
+1. **Pass 1 (weak, 50ms)**: Search with 10 MultiPV at shallow depth. Produces 10 moves ranked by quality. Bottom-ranked moves are genuinely bad.
+2. **Pass 2 (control, 300ms)**: Full-strength search for accurate position scoring and suggestion display.
 
 Elo determines which rank to pick from the 10 moves:
-- 800 → rank 9 (worst), 1200 → rank 6, 1600 → rank 4, 2200 → rank 0 (best)
-- ±1 random variance added for realism
+- 800 → rank 6 (capped to avoid suicidal moves), 1200 → rank 4, 1600 → rank 2, 2200 → rank 0 (best)
+- ±1 random variance for realism
 
-**Result**: Works well. The 50ms depth produces meaningful rank differentiation — the 10th best move at depth 8-10 is often a genuine mistake. The 300ms control search accurately identifies these as blunders/mistakes.
+### Go: KataGo Low-Ranked Multi-PV Suggestions
 
-**Key numbers (Janggi)**:
-| Elo | ACPL | Skill Label |
-|-----|------|-------------|
-| 800 | 175 | Intermediate |
-| 1200 | 125 | Advanced |
-| 1600 | 113 | Advanced |
-| 2200 | 54 | Master |
-
-### Go: All Movetime Approaches Failed
-KataGo uses a neural network that produces strong move priors even with zero search. At 1ms/5ms/10ms/50ms with 10 MultiPV, all 10 candidate moves were still good because the policy network already knows which moves are playable.
-
-### Attempt 5: Random Moves for Go ✅ (Final — Go)
-**Approach**: For lower Elo, mix in random board intersections instead of engine moves.
-- 800 Elo → 80% random intersections, 20% engine
-- 1200 Elo → 50% random
-- 1600 Elo → 20% random
-- 2200 Elo → 0% random (pure engine)
-
-The engine portion uses KataGo at 10ms with rank selection for additional weakness when not playing randomly.
-
-**Result**: Dramatic quality difference. Random moves in Go are genuinely terrible (playing in your opponent's territory, ignoring critical fights, etc.)
+Previous approach (random intersections) was removed because it generated illegal moves on occupied intersections. Current approach:
+- Request 8 candidate moves from KataGo with low visits (10)
+- Pick from lower-ranked suggestions based on Elo: 800 → rank 7, 1200 → rank 4, 1600 → rank 2, 2200 → rank 0
+- All suggested moves are guaranteed legal by KataGo
+- Produces natural weakness (suboptimal shapes, missed fights) without suicidal play
 
 ---
 
-## Part 2: Scoring Game Quality Accurately
+## Scoring: ACPL as Primary Metric
 
-### Attempt 1: Win-Percentage Accuracy (Lichess formula)
-**Approach**: Use the standard Lichess accuracy formula: convert centipawn evaluations to win%, compute per-move accuracy from win% change, take harmonic/arithmetic mean.
+### Why ACPL, Not Accuracy
 
-**Result (Chess/Janggi)**: Accuracy was too forgiving. 800 Elo got 88% accuracy and 2200 Elo got 92% — only 4pp difference. The formula saturates at extreme evaluations: once you're losing by 2000cp, a further 500cp blunder changes win% from 0.1% to 0.05%, which the formula sees as "100% accurate."
+Win-percentage accuracy (Lichess formula) saturates at extreme evaluations. Once a position is lost by 2000cp, a further 500cp blunder changes win% from 0.1% to 0.05% — the formula sees this as "100% accurate." This made 800 Elo (88%) nearly indistinguishable from 2200 Elo (92%).
 
-**Result (Go)**: Completely broken. All players got 98-100% accuracy regardless of Elo. KataGo's winrate saturates even faster than chess (game decided after 4 bad moves).
+ACPL (Average Centipawn Loss) measures raw move quality without saturation. A 500cp blunder is a 500cp blunder regardless of position.
 
-### Attempt 2: ACPL with Aggressive Penalty ✅ (Final — Chess/Janggi)
-**Approach**: Use Average Centipawn Loss (ACPL) as the primary metric for skill labels instead of accuracy. ACPL measures the raw quality of moves without the win% saturation problem.
+### Chess/Janggi Scoring
 
-Early iterations had the ACPL penalty too aggressive (2200 Elo with 95% accuracy and 134 ACPL mapped to "Beginner" because of a runaway penalty formula). The final formula uses ACPL directly for tier assignment:
+Uses the standard `gameAccuracy()` function from `evaluation.ts`:
+1. Replay game position by position with full-strength engine eval
+2. Compute centipawn loss per move (eval before − eval after, from player's perspective)
+3. Average over all moves after skipping opening (6 moves in SP, 3 in MP)
 
-| ACPL | Label |
-|------|-------|
-| ≤15 | Engine (2800+) |
-| ≤35 | Grandmaster |
-| ≤60 | Master |
-| ≤100 | Expert |
-| ≤150 | Advanced |
-| ≤220 | Intermediate |
-| ≤320 | Casual |
-| >320 | Beginner |
+### Go Scoring
 
-### Attempt 3: Winrate-Based Scoring for Go (Failed)
-**Approach**: Use KataGo's `(winrate - 0.5) * 2000` as centipawn-equivalent score.
-
-**Result**: ACPL = 0 for everyone. Once the position is decided (winrate 99%+), all subsequent moves produce the same win%, so there's no measurable loss.
-
-Tried 5x amplification multiplier — still ACPL = 0 because 5 × 0 = 0.
-
-### Attempt 4: ScoreLead-Based Scoring for Go (Partially worked)
-**Approach**: Use KataGo's `scoreLead` (estimated point difference on the board) instead of `winrate`. `scoreLead * 100` gives centipawn equivalents that don't saturate — a 50-point lead vs 100-point lead is a real difference.
-
-**Result**: ACPL was still 0 when using the standard `gameAccuracy()` function, because that function internally uses `winPercent()` which saturates the converted values anyway.
-
-### Attempt 5: Direct ACPL from ScoreLead ✅ (Final — Go)
-**Approach**: Bypass the `gameAccuracy()` function entirely for Go. Compute ACPL directly from raw scoreLead-based evals:
-
+Bypasses `gameAccuracy()` due to winrate saturation. Computes ACPL directly from KataGo scoreLead-based evals:
 ```
 cpLoss = max(0, evalBefore_playerPOV - evalAfter_playerPOV)
-ACPL = average(cpLoss for all player's moves after opening)
+ACPL = average(cpLoss for all moves after opening)
 ```
 
-**Critical bug found**: Go has black moving first, so odd-indexed evals are black's moves and even-indexed are white's. This is opposite to chess (white first). The initial implementation had the wrong parity, attributing black's moves to white and vice versa — producing ACPL=0 for the wrong player.
+Note: Go has black moving first, so odd-indexed evals are black's moves and even-indexed are white's (opposite to chess).
 
-**Result after fixing parity**:
-| Elo | ACPL | Skill Label |
-|-----|------|-------------|
-| 800 | 409 | Beginner (16+ kyu) |
-| 1200 | 262 | Low Kyu (9-15 kyu) |
-| 1600 | 397 | Low Kyu (9-15 kyu) |
-| 2200 | 64 | Dan (1-3 dan) |
+### SP vs MP Evaluation
+
+- **Singleplayer**: Post-game replay evaluates every position with full engine strength. Most accurate ACPL.
+- **Multiplayer**: Uses incrementally accumulated evals from during gameplay. Instant SKILL_EVAL (no replay needed). Slightly noisier ACPL, especially in lopsided games where weak opponent creates chaotic positions.
 
 ---
 
-## Part 3: Autoplay Termination
+## Autoplay Simulation Results (2026-03-29)
 
-### Problem: Games That Never End
-Autoplay games would enter infinite loops — especially in Janggi where the engine found perpetual check patterns or repeated positions without the game detecting a draw.
+### Validation: 5 Simultaneous Games
 
-### Solution: Multi-Layer Termination
-1. **Move repeat**: Same move suggested 2+ times in last 4 moves → stop + resign in MP
-2. **Position repeat**: Same FEN seen twice in last 10 positions (skip for Go — FEN is always empty)
+Ran 3 Go + 1 Chess + 1 Janggi games concurrently on i9-14900KF to validate:
+- Multi-game engine isolation (separate UCI pools + KataGo)
+- Skill scale accuracy across all three games
+- No illegal moves or crashes
+
+### Go Results (with KataGo multi-PV weak moves)
+
+| Matchup | Blue ACPL | Blue Label | Red ACPL | Red Label | Gap |
+|---------|-----------|------------|----------|-----------|-----|
+| 800 vs 2200 | 344 | Beginner | 134 | Club | 42pp |
+| 800 vs 2200 (run 2) | 192 | Casual+ | 74 | Club+ | 23pp |
+| 1200 vs 1600 | 246/261 | Casual+/Casual+ | — | — | 3pp |
+| 1600 vs 2800 | 194 | Casual+ | 51 | Pro | 29pp |
+
+**Observations**:
+- Wide Elo gaps (800v2200, 1600v2800) show clear differentiation
+- Close Elo gaps (1200v1600) produce similar ACPL — KataGo multi-PV ranking doesn't differentiate well at narrow ranges (only 1 rank difference in the suggestion list)
+- 2800 Elo gets ACPL 51 (Pro tier) — full-strength KataGo should be Superhuman, but MP accumulated evals are noisy in lopsided games
+
+### Chess Results
+
+| Matchup | Blue ACPL | Blue Label | Red ACPL | Red Label |
+|---------|-----------|------------|----------|-----------|
+| 800 vs 2200 | 230/291 | Casual+ | 78/117 | Club+ |
+| 1200 vs 2200 | 182 | Casual+ | 65 | Pro |
+
+### Janggi Results
+
+| Matchup | Blue ACPL | Blue Label | Red ACPL | Red Label |
+|---------|-----------|------------|----------|-----------|
+| 800 vs 2200 | 293 | Casual+ | 34/105 | Pro+/Club+ |
+| 1200 vs 2200 | 212 | Casual+ | 108 | Club+ |
+
+---
+
+## Autoplay Termination Logic
+
+Games must terminate gracefully. Multi-layer detection:
+
+1. **Move repeat**: Same move 2+ times in last 4 moves → resign (Chess/Janggi only; disabled for Go since same coordinate is valid at different board states)
+2. **Position repeat**: Same FEN twice in last 10 positions (skip for Go)
 3. **Drawn position**: Score=0 at depth 25+ after 40 moves
 4. **Hopeless loss**: Score below threshold for N consecutive moves
    - Chess/Janggi: < -500 for 3 moves after move 20
-   - Go: < -400 for 5 moves after move 60 (Go games are longer, positions swing more)
-5. **Pass while losing** (Go only): If engine suggests PASS but score < -200 after move 100 → resign
-6. **No legal moves**: Engine returns empty suggestions → server auto-resigns
-
-### Problems Found:
-- At 1ms search time, engine returned invalid moves like `e2e2` (same-square) → added filter
-- Go FEN is always `""`, causing every position to match as "repeat" → use move-count+move-name as key instead
-- Loss streak counter reset too aggressively — changed to slow decay (subtract 1 instead of reset to 0) so occasional good evals don't fully reset the counter
+   - Go: < -400 for 5 moves after move 60
+5. **Pass while losing** (Go): PASS + score < -200 after move 100 → resign
+6. **No legal moves**: Engine returns "(none)" → force game over
 
 ---
 
-## Summary of Final Methods
+## File Reference
 
-| Game | Weak Play Method | Scoring Method | Control Search |
-|------|-----------------|----------------|----------------|
-| Chess | 50ms 10-MultiPV, pick by Elo rank | ACPL from standard gameAccuracy() | 300ms |
-| Janggi | 50ms 10-MultiPV, pick by Elo rank | ACPL from standard gameAccuracy() | 300ms |
-| Go | Random moves (80%@800, 0%@2200) | Direct ACPL from scoreLead evals | 800ms |
+### Single Source of Truth
+- `packages/shared/src/evaluation.ts` — `SKILL_SCALE`, `BEGINNER_TIER`, `getSkillLevel()`, `getDifficultyRating()`
 
-### Files Modified
-- `packages/server/src/ws.ts` — Two-pass analysis, weak move generation, eval accumulation
-- `packages/server/src/session.ts` — analyzeFen with movetime/eloLimit params, Go scoreLead scoring
-- `packages/server/src/postGameEval.ts` — Instant SKILL_EVAL from accumulated evals, Go-specific ACPL
-- `packages/server/src/multiplayerRoom.ts` — positionEvals accumulation, broadcastMessage
-- `packages/shared/src/evaluation.ts` — ACPL-primary skill labels for all games
-- `packages/client/src/App.svelte` — Autoplay move selection, repetition detection, resignation logic
-- `test-mp-autoplay.cjs` — Automated test harness for running Elo matchups
+### Engine Layer
+- `packages/server/src/engine/gameEngine.ts` — `GameEngine` interface, `UciGameEngine`, `KataGoGameEngine`
+- `packages/server/src/engine/difficulty.ts` — Derived from SKILL_SCALE (movetime, Elo limits, visit budgets)
+
+### Game Rooms
+- `packages/server/src/gameRoom.ts` — SP game via `IGame` + `GameEngine` polymorphism
+- `packages/server/src/multiplayerRoom.ts` — MP game, incremental eval accumulation
+- `packages/server/src/postGameEval.ts` — MP post-game SKILL_EVAL from accumulated evals
+
+### Weak Move Generation
+- `packages/server/src/ws.ts` — Two-pass analysis (weak 50ms + control 300ms), Elo rank selection
+
+### Testing
+- `test-mp-autoplay.cjs` — Automated test harness: `node test-mp-autoplay.cjs <game> <blueElo> <redElo>`
