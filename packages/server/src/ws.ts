@@ -6,8 +6,7 @@ import { createLogger } from "./logger.js";
 import type { SessionManager } from "./session.js";
 import { Lobby, type LobbyClient } from "./lobby.js";
 import { MultiplayerRoom, type MpClient } from "./multiplayerRoom.js";
-import { ChessGame, JanggiGame, gameAccuracy, getSkillLevel } from "@tess/shared";
-import { generateGameSummary } from "./ai.js";
+import { evaluateMultiplayerGame } from "./postGameEval.js";
 
 const log = createLogger("ws");
 
@@ -59,8 +58,8 @@ export function createWsServer(
 
 		const state: ClientState = { _id: ++nextClientId, ws, room: null, mpRoom: null, inLobby: false, lobbyClient: null, suggestionCount: 3, language: undefined, userId: `player-${++nextClientId}` };
 		log.info(`client #${state._id} connected`);
-		// Auto-subscribe to lobby for challenge notifications
-		setTimeout(() => lobby.subscribe(getLobbyClient(state)), 100);
+		// Subscribe to lobby for challenge notifications
+		lobby.subscribe(getLobbyClient(state));
 		clients.set(ws, state);
 		log.info("client connected", { clients: clients.size });
 		broadcastPlayerCounts();
@@ -362,152 +361,17 @@ export function createWsServer(
 				lobby.removeChallenge(ch.id);
 				// Keep singleplayer rooms alive for engine analysis in MP
 				// Set up post-game evaluation
+				// Post-game evaluation (extracted to postGameEval.ts)
 				room.onGameEnd(async (r) => {
 					try {
-						const history = r.getMoveHistory();
-						const moveCount = r.gameType === "go" ? r.getGoMoves().length : history.length;
-						if (moveCount < 4) return;
-
-						// Branch by game type for evaluation
-						if (r.gameType === "go") {
-							// Chess/Janggi eval loop didn't run — do simple Go scoring
-							// For Go, accuracy is harder to compute without KataGo replay
-							// Use a simplified approach based on final result
-							const goResult = r.getResult();
-							// Estimate accuracy from margin of victory
-							const margin = parseFloat(goResult.reason.replace(/[^0-9.]/g, "")) || 0;
-							const winnerAcc = Math.min(95, 70 + margin * 0.5);
-							const loserAcc = Math.max(20, 70 - margin * 0.5);
-							const wAcc = goResult.winner === "white" ? winnerAcc : loserAcc;
-							const bAcc = goResult.winner === "black" ? winnerAcc : loserAcc;
-							const wSkill = getSkillLevel(Math.round(wAcc), r.gameType);
-							const bSkill = getSkillLevel(Math.round(bAcc), r.gameType);
-							const creatorColor = ch.creatorColor ?? "white";
-							const acceptorColorActual = creatorColor === "white" ? "black" : "white";
-							const cAcc = creatorColor === "white" ? wAcc : bAcc;
-							const cSkill = creatorColor === "white" ? wSkill : bSkill;
-							const aAcc = acceptorColorActual === "white" ? wAcc : bAcc;
-							const aSkill = acceptorColorActual === "white" ? wSkill : bSkill;
-							if (creatorState.mpRoom === r) send(creatorState.ws, { type: "SKILL_EVAL", accuracy: Math.round(cAcc), acpl: 0, skill: cSkill });
-							if (state.mpRoom === r) send(state.ws, { type: "SKILL_EVAL", accuracy: Math.round(aAcc), acpl: 0, skill: aSkill });
-							log.info("Go MP eval (simplified)", { whiteAcc: Math.round(wAcc), blackAcc: Math.round(bAcc) });
-							// Generate AI summaries for Go
-							const goGameResult = r.getResult();
-							try {
-								const [goCs, goAs] = await Promise.allSettled([
-									generateGameSummary({
-										gameType: "go",
-										playerColor: creatorColor,
-										accuracy: Math.round(cAcc),
-										acpl: 0,
-										skillLabel: cSkill.label,
-										skillRating: cSkill.rating,
-										totalMoves: moveCount,
-										result: goGameResult.reason,
-										language: creatorState.language,
-									}),
-									generateGameSummary({
-										gameType: "go",
-										playerColor: acceptorColorActual,
-										accuracy: Math.round(aAcc),
-										acpl: 0,
-										skillLabel: aSkill.label,
-										skillRating: aSkill.rating,
-										totalMoves: moveCount,
-										result: goGameResult.reason,
-										language: state.language,
-									}),
-								]);
-								if (goCs.status === "fulfilled" && goCs.value && creatorState.mpRoom === r) {
-									send(creatorState.ws, { type: "GAME_SUMMARY", text: goCs.value });
-								}
-								if (goAs.status === "fulfilled" && goAs.value && state.mpRoom === r) {
-									send(state.ws, { type: "GAME_SUMMARY", text: goAs.value });
-								}
-							} catch (err) {
-								log.error("Go summary failed", { error: (err as Error).message });
-							}
-						} else {
-							// Chess/Janggi: replay and evaluate each position
-							const evals: number[] = [0];
-							const replay = r.gameType === "janggi" ? new JanggiGame() : new ChessGame();
-							const pool = r.gameType === "janggi" && sessionManager.hasJanggiPool
-								? sessionManager.getJanggiPool()! : sessionManager.getChessPool();
-							const variant = r.gameType === "janggi" ? "janggi" : undefined;
-							for (const move of history) {
-								replay.moveUci(move.uci);
-								try {
-									const res = await pool.search(replay.fen, 300, 1, variant);
-									const score = res.info[0]?.score ?? 0;
-									evals.push(replay.turn === "white" ? score : -score);
-								} catch {
-									evals.push(evals[evals.length - 1] ?? 0);
-								}
-							}
-							log.info("MP evals", { moves: history.length, evalsLength: evals.length, evals: evals.slice(0, 20) });
-							// Calculate accuracy for both colors
-							const whiteResult = gameAccuracy(evals, "white", 3);
-							const whiteSkill = getSkillLevel(Math.round(whiteResult.accuracy), r.gameType, whiteResult.acpl);
-							const blackResult = gameAccuracy(evals, "black", 3);
-							const blackSkill = getSkillLevel(Math.round(blackResult.accuracy), r.gameType, blackResult.acpl);
-							log.info("MP accuracy", { whiteAcc: Math.round(whiteResult.accuracy), whiteAcpl: whiteResult.acpl, blackAcc: Math.round(blackResult.accuracy), blackAcpl: blackResult.acpl });
-							// Send to each player based on their ACTUAL color
-							const creatorColor = ch.creatorColor ?? "white";
-							const acceptorColorActual = creatorColor === "white" ? "black" : "white";
-							const creatorResult = creatorColor === "white" ? whiteResult : blackResult;
-							const creatorSkill = creatorColor === "white" ? whiteSkill : blackSkill;
-							const acceptorResult = acceptorColorActual === "white" ? whiteResult : blackResult;
-							const acceptorSkill = acceptorColorActual === "white" ? whiteSkill : blackSkill;
-							if (creatorState.mpRoom === r) {
-								send(creatorState.ws, { type: "SKILL_EVAL", accuracy: Math.round(creatorResult.accuracy), acpl: creatorResult.acpl, skill: creatorSkill });
-							}
-							if (state.mpRoom === r) {
-								send(state.ws, { type: "SKILL_EVAL", accuracy: Math.round(acceptorResult.accuracy), acpl: acceptorResult.acpl, skill: acceptorSkill });
-							}
-							log.info("MP skill eval done", { white: Math.round(whiteResult.accuracy), black: Math.round(blackResult.accuracy) });
-							// Generate SEPARATE AI summaries for each player (parallel)
-							const pgn = history.map((m, i) => (i % 2 === 0 ? `${Math.floor(i/2)+1}. ${m.san}` : m.san)).join(" ");
-							const gameResult = r.status === "finished" ? "Checkmate" : "Game over";
-							try {
-								const [cs, as_] = await Promise.allSettled([
-									generateGameSummary({
-										gameType: r.gameType,
-										playerColor: creatorColor,
-										accuracy: Math.round(creatorResult.accuracy),
-										acpl: creatorResult.acpl,
-										skillLabel: creatorSkill.label,
-										skillRating: creatorSkill.rating,
-										totalMoves: history.length,
-										result: gameResult,
-										pgn,
-										moveAccuracies: creatorResult.moveAccuracies,
-										language: creatorState.language,
-									}),
-									generateGameSummary({
-										gameType: r.gameType,
-										playerColor: acceptorColorActual,
-										accuracy: Math.round(acceptorResult.accuracy),
-										acpl: acceptorResult.acpl,
-										skillLabel: acceptorSkill.label,
-										skillRating: acceptorSkill.rating,
-										totalMoves: history.length,
-										result: gameResult,
-										pgn,
-										moveAccuracies: acceptorResult.moveAccuracies,
-										language: state.language,
-									}),
-								]);
-								if (cs.status === "fulfilled" && cs.value && creatorState.mpRoom === r) {
-									send(creatorState.ws, { type: "GAME_SUMMARY", text: cs.value });
-								}
-								if (as_.status === "fulfilled" && as_.value && state.mpRoom === r) {
-									send(state.ws, { type: "GAME_SUMMARY", text: as_.value });
-								}
-								log.info("MP summaries sent", { creator: cs.status, acceptor: as_.status });
-							} catch (err) {
-								log.error("MP game summary failed", { error: (err as Error).message });
-							}
-							} // end else (chess/janggi)
+						await evaluateMultiplayerGame(
+							r,
+							{ ws: creatorState.ws, mpRoom: creatorState.mpRoom, language: creatorState.language },
+							{ ws: state.ws, mpRoom: state.mpRoom, language: state.language },
+							ch.creatorColor ?? "white",
+							sessionManager,
+							send,
+						);
 					} catch (err) {
 						log.error("MP eval failed", { error: (err as Error).message });
 					}
@@ -541,6 +405,21 @@ export function createWsServer(
 					}
 					state.mpRoom = room2;
 					mpRooms.set(room2.id, room2);
+					// Post-game evaluation for code-joined games
+					room2.onGameEnd(async (r) => {
+						try {
+							await evaluateMultiplayerGame(
+								r,
+								{ ws: (creator2 ?? state).ws, mpRoom: (creator2 ?? state).mpRoom, language: (creator2 ?? state).language },
+								{ ws: state.ws, mpRoom: state.mpRoom, language: state.language },
+								ch2.creatorColor ?? "white",
+								sessionManager,
+								send,
+							);
+						} catch (err) {
+							log.error("MP eval failed (code join)", { error: (err as Error).message });
+						}
+					});
 					lobby.removeChallenge(ch2.id);
 					break;
 				}
@@ -596,12 +475,6 @@ export function createWsServer(
 		return undefined;
 	}
 
-	function findClientByUserId(userId: string): ClientState | undefined {
-		for (const [, s] of clients) {
-			if (s.userId === userId) return s;
-		}
-		return undefined;
-	}
 
 	function getLobbyClient(state: ClientState): LobbyClient {
 		if (!state.lobbyClient) {

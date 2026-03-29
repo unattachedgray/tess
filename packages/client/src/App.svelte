@@ -70,15 +70,12 @@
 			if (appState.isMultiplayer && appState.autoplayActive && !appState.isGameOver
 				&& appState.turn === appState.playerColor && msg.suggestions?.length > 0) {
 				const topMove = msg.suggestions[0].move;
-				setTimeout(() => {
-					if (appState.autoplayActive && !appState.isGameOver) {
-						if (topMove.toUpperCase() === "PASS") {
-							ws.send({ type: "PASS" });
-						} else {
-							ws.send({ type: "PLAY_MOVE", move: topMove });
-						}
-					}
-				}, 500); // Small delay so the user can see the suggestion
+				// Play immediately — suggestion is already displayed
+				if (topMove.toUpperCase() === "PASS") {
+					ws.send({ type: "PASS" });
+				} else {
+					ws.send({ type: "PLAY_MOVE", move: topMove });
+				} // Small delay so the user can see the suggestion
 			}
 		});
 		ws.on("ANALYSIS", (msg) => {

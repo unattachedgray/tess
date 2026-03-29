@@ -265,8 +265,9 @@ export class MultiplayerRoom {
 		if (accept) {
 			this.endGame("draw", "agreement");
 		} else {
+			const offererColor = this.pendingDraw;
 			this.pendingDraw = null;
-			const offerer = this.pendingDraw === "white" ? this.players.white : this.players.black;
+			const offerer = offererColor === "white" ? this.players.white : this.players.black;
 			if (offerer) {
 				offerer.send({ type: "DRAW_RESPONSE", accepted: false });
 			}
@@ -394,16 +395,10 @@ export class MultiplayerRoom {
 	}
 
 	private getCurrentTurn(): "white" | "black" {
-		if (this.game instanceof GoGame) {
-			return this.game.turn;
-		}
 		return this.game.turn;
 	}
 
 	private isGameOver(): boolean {
-		if (this.game instanceof GoGame) {
-			return this.game.isGameOver;
-		}
 		return this.game.isGameOver;
 	}
 
