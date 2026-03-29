@@ -66,7 +66,7 @@ export class ChessAdapter implements IGame {
 				isDraw: this.game.isDraw,
 				isStalemate: this.game.isStalemate,
 				pgn: this.game.pgn,
-				
+				uciToSan: (uci: string) => this.game.uciToSan(uci),
 			},
 		};
 	}
@@ -145,6 +145,8 @@ export class GoAdapter implements IGame {
 			extra: {
 				prisoners: this.game.prisoners,
 				lastMove: this.game.lastMove,
+				kataGoMoves: this.game.getKataGoMoves(),
+				size: this.game.size,
 			},
 		};
 	}

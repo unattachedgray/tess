@@ -81,19 +81,24 @@ describe("gameAccuracy", () => {
 });
 
 describe("getSkillLevel", () => {
-	it("labels engine-level accuracy correctly", () => {
+	it("labels superhuman accuracy correctly", () => {
 		const level = getSkillLevel(96, "chess");
-		expect(level.label).toBe("Engine");
+		expect(level.label).toBe("Superhuman");
 	});
 
-	it("labels grandmaster accuracy correctly", () => {
+	it("labels pro+ accuracy correctly", () => {
 		const level = getSkillLevel(91, "chess");
-		expect(level.label).toBe("Grandmaster");
+		expect(level.label).toBe("Pro+");
 	});
 
-	it("labels intermediate correctly", () => {
+	it("labels club accuracy correctly", () => {
 		const level = getSkillLevel(55, "chess");
-		expect(level.label).toBe("Intermediate");
+		expect(level.label).toBe("Club");
+	});
+
+	it("labels casual+ accuracy correctly", () => {
+		const level = getSkillLevel(45, "chess");
+		expect(level.label).toBe("Casual+");
 	});
 
 	it("labels beginner correctly", () => {
@@ -101,15 +106,39 @@ describe("getSkillLevel", () => {
 		expect(level.label).toBe("Beginner");
 	});
 
+	it("uses ACPL-based tiers when provided", () => {
+		expect(getSkillLevel(50, "chess", 20).label).toBe("Superhuman");
+		expect(getSkillLevel(50, "chess", 100).label).toBe("Club+");
+		expect(getSkillLevel(50, "chess", 170).label).toBe("Club");
+		expect(getSkillLevel(50, "chess", 200).label).toBe("Casual+");
+		expect(getSkillLevel(50, "chess", 400).label).toBe("Beginner");
+	});
+
 	it("uses Go ranks for Go games", () => {
 		const level = getSkillLevel(80, "go");
-		expect(level.label).toBe("Dan");
+		expect(level.label).toBe("Pro");
 		expect(level.rating).toContain("dan");
+	});
+
+	it("Go ACPL-based tiers", () => {
+		expect(getSkillLevel(50, "go", 15).label).toBe("Superhuman");
+		expect(getSkillLevel(50, "go", 60).label).toBe("Pro");
+		expect(getSkillLevel(50, "go", 120).label).toBe("Club+");
+		expect(getSkillLevel(50, "go", 180).label).toBe("Club");
+		expect(getSkillLevel(50, "go", 500).label).toBe("Beginner");
+	});
+
+	it("Janggi uses separate ACPL thresholds", () => {
+		// Janggi has higher ACPL thresholds than chess
+		expect(getSkillLevel(50, "janggi", 28).label).toBe("Superhuman");
+		expect(getSkillLevel(50, "janggi", 80).label).toBe("Pro");
+		expect(getSkillLevel(50, "janggi", 200).label).toBe("Club");
+		// Same ACPL=200 in chess would be Casual+, but in janggi it's still Club
+		expect(getSkillLevel(50, "chess", 200).label).toBe("Casual+");
 	});
 
 	// Simulate a real chess game: GM Carlsen-like accuracy
 	it("real game simulation: strong player", () => {
-		// Evals from a well-played game (small fluctuations)
 		const evals = [
 			0, 15, 20, 10, 25, 18, 30, 22, 35, 28, 40, 32, 45, 38, 50, 42, 55, 48, 60, 52, 65, 58, 70, 62,
 			75, 68, 80, 72, 85, 78,
@@ -117,12 +146,11 @@ describe("getSkillLevel", () => {
 		const result = gameAccuracy(evals, "white", 4);
 		const level = getSkillLevel(result.accuracy, "chess");
 		expect(result.accuracy).toBeGreaterThan(80);
-		expect(["Grandmaster", "Master", "Engine"]).toContain(level.label);
+		expect(["Superhuman", "Pro+", "Pro"]).toContain(level.label);
 	});
 
 	// Simulate a weak player who blunders repeatedly
 	it("real game simulation: weak player", () => {
-		// White loses ~200cp every move
 		const evals = [
 			0, -200, -100, -400, -50, -500, 0, -600, 50, -700, 100, -800, 50, -900, 0, -1000, 50, -1200,
 			0, -1400, 50, -1600, 0, -1800,
@@ -130,6 +158,6 @@ describe("getSkillLevel", () => {
 		const result = gameAccuracy(evals, "white", 0);
 		const level = getSkillLevel(result.accuracy, "chess");
 		expect(result.accuracy).toBeLessThan(50);
-		expect(["Beginner", "Casual"]).toContain(level.label);
+		expect(["Beginner", "Casual", "Casual+"]).toContain(level.label);
 	});
 });

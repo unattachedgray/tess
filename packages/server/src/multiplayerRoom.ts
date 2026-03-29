@@ -28,7 +28,10 @@ export class MultiplayerRoom {
 
 	private game: ChessGame | GoGame | JanggiGame;
 	private clock: FischerClock | null = null;
-	private players: { white: MpClient | null; black: MpClient | null } = { white: null, black: null };
+	private players: { white: MpClient | null; black: MpClient | null } = {
+		white: null,
+		black: null,
+	};
 	private spectators = new Set<MpClient>();
 	private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private pendingDraw: "white" | "black" | null = null;
@@ -232,7 +235,12 @@ export class MultiplayerRoom {
 		if (this.isGameOver()) {
 			const result = this.getResult();
 			const fen = this.game instanceof GoGame ? "(go)" : this.game.fen;
-			log.info("game over detected", { reason: result.reason, winner: result.winner, fen, lastMove: move });
+			log.info("game over detected", {
+				reason: result.reason,
+				winner: result.winner,
+				fen,
+				lastMove: move,
+			});
 			setTimeout(() => this.endGame(result.winner, result.reason), 500);
 		}
 
@@ -249,6 +257,18 @@ export class MultiplayerRoom {
 		const opponent = fromColor === "white" ? this.players.black : this.players.white;
 		if (opponent) {
 			opponent.send({ type: "EMOJI_RECEIVED", emoji, from: fromName });
+		}
+	}
+
+	/** Handle preset message. */
+	sendPresetMessage(from: MpClient, message: string): void {
+		const fromColor = this.getPlayerColor(from);
+		if (!fromColor) return;
+		const fromName = from.nickname || from.userId;
+
+		const opponent = fromColor === "white" ? this.players.black : this.players.white;
+		if (opponent) {
+			opponent.send({ type: "PRESET_MESSAGE_RECEIVED", message, from: fromName });
 		}
 	}
 
@@ -359,10 +379,7 @@ export class MultiplayerRoom {
 
 	/** Is a specific user in this room? */
 	hasUser(userId: string): boolean {
-		return (
-			this.players.white?.userId === userId ||
-			this.players.black?.userId === userId
-		);
+		return this.players.white?.userId === userId || this.players.black?.userId === userId;
 	}
 
 	/** Get room settings for rematch. */
@@ -445,7 +462,9 @@ export class MultiplayerRoom {
 
 		// Trigger post-game evaluation
 		if (this.onGameEndCallback) {
-			try { this.onGameEndCallback(this); } catch {}
+			try {
+				this.onGameEndCallback(this);
+			} catch {}
 		}
 	}
 
@@ -466,8 +485,10 @@ export class MultiplayerRoom {
 			const score = this.game.getScore();
 			const blackScore = score.black;
 			const whiteScore = score.white + 7.5; // komi
-			if (blackScore > whiteScore) return { winner: "black", reason: `B+${(blackScore - whiteScore).toFixed(1)}` };
-			if (whiteScore > blackScore) return { winner: "white", reason: `W+${(whiteScore - blackScore).toFixed(1)}` };
+			if (blackScore > whiteScore)
+				return { winner: "black", reason: `B+${(blackScore - whiteScore).toFixed(1)}` };
+			if (whiteScore > blackScore)
+				return { winner: "white", reason: `W+${(whiteScore - blackScore).toFixed(1)}` };
 			return { winner: "draw", reason: "Jigo" };
 		}
 		if (this.game instanceof ChessGame || this.game instanceof JanggiGame) {
@@ -516,7 +537,8 @@ export class MultiplayerRoom {
 			base.legalMoves = {};
 		} else {
 			base.fen = this.game.fen;
-			base.legalMoves = this.getCurrentTurn() === perspective ? this.game.getLegalMovesObject() : {};
+			base.legalMoves =
+				this.getCurrentTurn() === perspective ? this.game.getLegalMovesObject() : {};
 			if (this.game instanceof ChessGame) {
 				base.isCheck = this.game.isCheck;
 				base.capturedPieces = this.game.getCapturedPieces();
@@ -569,10 +591,19 @@ export class MultiplayerRoom {
 	/** Send message to all players and spectators. */
 	private broadcast(msg: unknown): void {
 		for (const p of [this.players.white, this.players.black]) {
-			if (p) try { p.send(msg); } catch { /* disconnected */ }
+			if (p)
+				try {
+					p.send(msg);
+				} catch {
+					/* disconnected */
+				}
 		}
 		for (const s of this.spectators) {
-			try { s.send(msg); } catch { /* disconnected */ }
+			try {
+				s.send(msg);
+			} catch {
+				/* disconnected */
+			}
 		}
 	}
 

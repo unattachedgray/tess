@@ -1,93 +1,76 @@
-import type { DifficultyTier } from "@tess/shared";
-
 /**
- * Difficulty calibration based on real-world ratings.
+ * Difficulty configuration — derived from the shared SKILL_SCALE.
  *
- * Chess/Janggi: Uses UCI_LimitStrength + UCI_Elo for realistic play.
- * Fairy-Stockfish supports Elo range 500-2850. Movetime is kept moderate
- * (500ms) so the engine has time to "think" at its limited level.
- *
- * Go: Uses KataGo visit budgets. Fewer visits = weaker play.
- * Calibrated from KaTrain data (sanderland/katrain).
- *
- * Suggestion search always uses full strength regardless of difficulty.
+ * Engine settings (Elo limits, movetimes, KataGo visits) are the
+ * single source of truth in SKILL_SCALE / BEGINNER_TIER. This file
+ * provides convenient accessors for the server engine layer.
  */
-
-export const DIFFICULTY_TIERS: DifficultyTier[] = [
-	{
-		id: "beginner",
-		label: "Beginner",
-		// Chess: ~800 Elo (makes frequent blunders, misses tactics)
-		chessMovetime: 500,
-		chessLabel: "~800 Elo",
-		// Go: 10 visits ≈ 15-20 kyu (random-looking play)
-		goVisits: 10,
-		goLabel: "~18 kyu",
-		// Janggi: similar to chess beginner
-		janggiMovetime: 500,
-		janggiLabel: "~9급",
-	},
-	{
-		id: "casual",
-		label: "Casual",
-		// Chess: ~1200 Elo (knows basics, misses complex tactics)
-		chessMovetime: 500,
-		chessLabel: "~1200 Elo",
-		// Go: 50 visits ≈ 8-12 kyu
-		goVisits: 50,
-		goLabel: "~10 kyu",
-		janggiMovetime: 500,
-		janggiLabel: "~5급",
-	},
-	{
-		id: "club",
-		label: "Club",
-		// Chess: ~1600 Elo (solid club player)
-		chessMovetime: 500,
-		chessLabel: "~1600 Elo",
-		// Go: 200 visits ≈ 3-5 kyu
-		goVisits: 200,
-		goLabel: "~4 kyu",
-		janggiMovetime: 500,
-		janggiLabel: "~2단",
-	},
-	{
-		id: "pro",
-		label: "Pro",
-		// Chess: ~2200 Elo (master-level)
-		chessMovetime: 500,
-		chessLabel: "~2200 Elo",
-		// Go: 1000 visits ≈ 1-3 dan
-		goVisits: 1000,
-		goLabel: "~2 dan",
-		janggiMovetime: 500,
-		janggiLabel: "~5단",
-	},
-	{
-		id: "superhuman",
-		label: "Superhuman",
-		// Chess: ~2800 Elo (engine strength, no limiting)
-		chessMovetime: 1000,
-		chessLabel: "~2800+ Elo",
-		// Go: 5000 visits ≈ 7+ dan / pro level
-		goVisits: 5000,
-		goLabel: "Pro+",
-		janggiMovetime: 1000,
-		janggiLabel: "~7단+",
-	},
-];
-
-/** Elo targets for UCI_LimitStrength (chess/janggi) */
-export const DIFFICULTY_ELO: Record<string, number | null> = {
-	beginner: 800,
-	casual: 1200,
-	club: 1600,
-	pro: 2200,
-	superhuman: null, // no limit — full engine strength
-};
+import type { DifficultyTier } from "@tess/shared";
+import { SKILL_SCALE, BEGINNER_TIER } from "@tess/shared";
 
 /** Movetime for suggestion searches (always full strength) */
 export const FULL_STRENGTH_MOVETIME = 1000;
+
+/**
+ * Build DIFFICULTY_TIERS from shared SKILL_SCALE.
+ * Maps difficulty IDs (beginner/casual/club/pro/superhuman) to engine settings.
+ */
+function buildTiers(): DifficultyTier[] {
+	const tiers: DifficultyTier[] = [];
+
+	// Beginner
+	const bt = BEGINNER_TIER.aiTarget;
+	tiers.push({
+		id: "beginner",
+		label: "Beginner",
+		chessMovetime: 500,
+		chessLabel: `~${BEGINNER_TIER.rating.chess}`,
+		goVisits: bt.goVisits,
+		goLabel: `~${BEGINNER_TIER.rating.go}`,
+		janggiMovetime: 500,
+		janggiLabel: `~${BEGINNER_TIER.rating.janggi}`,
+	});
+
+	// Scale tiers with aiTarget (Casual, Club, Pro, Superhuman)
+	const tierMap: Record<string, string> = {
+		casual: "Casual",
+		club: "Club",
+		pro: "Pro",
+		superhuman: "Superhuman",
+	};
+
+	for (const [id, label] of Object.entries(tierMap)) {
+		const scaleTier = SKILL_SCALE.find(
+			(t) => t.label.toLowerCase() === id && t.aiTarget,
+		);
+		if (!scaleTier || !scaleTier.aiTarget) continue;
+		const at = scaleTier.aiTarget;
+		const isSuperhuman = id === "superhuman";
+		tiers.push({
+			id: id as DifficultyTier["id"],
+			label,
+			chessMovetime: isSuperhuman ? 1000 : 500,
+			chessLabel: `~${scaleTier.rating.chess}`,
+			goVisits: at.goVisits,
+			goLabel: `~${scaleTier.rating.go}`,
+			janggiMovetime: isSuperhuman ? 1000 : 500,
+			janggiLabel: `~${scaleTier.rating.janggi}`,
+		});
+	}
+
+	return tiers;
+}
+
+export const DIFFICULTY_TIERS: DifficultyTier[] = buildTiers();
+
+/** Elo targets for UCI_LimitStrength (chess/janggi) — derived from SKILL_SCALE */
+export const DIFFICULTY_ELO: Record<string, number | null> = {
+	beginner: BEGINNER_TIER.aiTarget.chessElo,
+	...Object.fromEntries(
+		SKILL_SCALE.filter((t) => t.aiTarget)
+			.map((t) => [t.label.toLowerCase(), t.aiTarget!.chessElo]),
+	),
+};
 
 export function getTier(id: string): DifficultyTier | undefined {
 	return DIFFICULTY_TIERS.find((t) => t.id === id);

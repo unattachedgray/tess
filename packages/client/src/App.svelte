@@ -214,7 +214,14 @@
 		ws.on("EMOJI_RECEIVED", (msg) => {
 			const data = msg as any;
 			appState.lastEmojiReceived = data.emoji;
+			appState.chatHistory = [...appState.chatHistory, { text: data.emoji, from: data.from, isEmoji: true, ts: Date.now() }];
 			setTimeout(() => appState.lastEmojiReceived = null, 3000);
+		});
+		ws.on("PRESET_MESSAGE_RECEIVED", (msg) => {
+			const data = msg as any;
+			appState.lastMessageReceived = { message: data.message, from: data.from };
+			appState.chatHistory = [...appState.chatHistory, { text: data.message, from: data.from, isEmoji: false, ts: Date.now() }];
+			setTimeout(() => appState.lastMessageReceived = null, 4000);
 		});
 		ws.on("OPPONENT_DISCONNECTED", () => {
 			appState.opponentDisconnected = true;
@@ -346,6 +353,15 @@
 		pro: "Pro",
 		superhuman: "Superhuman",
 	};
+
+	const DIFFICULTY_IDS = ["beginner", "casual", "club", "pro", "superhuman"] as const;
+	let showDifficultyPicker = $state(false);
+
+	function changeDifficulty(id: string) {
+		appState.setDifficulty(id as any);
+		showDifficultyPicker = false;
+		startNewGame();
+	}
 </script>
 
 <div class="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
@@ -419,7 +435,35 @@
 			<span class="text-[11px] text-[var(--text-muted)]" title={appState.userId}>
 				{appState.nickname ? appState.nickname : appState.userId}
 			</span>
-			<span class="text-[11px] font-medium text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-[var(--bg-hover)]">{DIFFICULTY_LABELS[appState.difficulty] ?? appState.difficulty}</span>
+			{#if !appState.isMultiplayer}
+				<div class="relative">
+					<button
+						class="text-[11px] font-medium px-2 py-0.5 rounded-md transition-all cursor-pointer {showDifficultyPicker
+							? 'bg-[var(--accent)] text-[var(--bg-primary)]'
+							: 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}"
+						onclick={() => showDifficultyPicker = !showDifficultyPicker}
+						title="Change AI opponent difficulty (starts new game)"
+					>
+						{DIFFICULTY_LABELS[appState.difficulty] ?? appState.difficulty}
+					</button>
+					{#if showDifficultyPicker}
+						<div class="fixed inset-0 z-40" onclick={() => showDifficultyPicker = false} role="presentation"></div>
+						<div class="absolute right-0 top-7 z-50 w-36 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-xl p-1.5 space-y-0.5">
+							<div class="text-[9px] font-medium text-[var(--text-muted)] uppercase tracking-wider px-2 py-1">AI Opponent</div>
+							{#each DIFFICULTY_IDS as id}
+								<button
+									class="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium transition-all {appState.difficulty === id
+										? 'bg-[var(--accent)] text-[var(--bg-primary)]'
+										: 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'}"
+									onclick={() => changeDifficulty(id)}
+								>
+									{DIFFICULTY_LABELS[id]}
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 			<Settings {ws} />
 		</div>
 	</header>

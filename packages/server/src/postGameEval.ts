@@ -50,7 +50,8 @@ export async function evaluateMultiplayerGame(
 		// Can't use gameAccuracy() because its winPercent() function saturates.
 		if (evals.length > moveCount * 0.5) {
 			const computeGoAcpl = (color: "white" | "black") => {
-				let totalLoss = 0, movesSeen = 0;
+				let totalLoss = 0,
+					movesSeen = 0;
 				for (let i = 1; i < evals.length; i++) {
 					// In Go, BLACK moves first: odd indices = black's moves, even = white's
 					const isPlayerMove = color === "black" ? i % 2 === 1 : i % 2 === 0;
@@ -71,7 +72,13 @@ export async function evaluateMultiplayerGame(
 			};
 			whiteResult = computeGoAcpl("white");
 			blackResult = computeGoAcpl("black");
-			log.info("Go eval (scoreLead)", { wAcpl: whiteResult.acpl, bAcpl: blackResult.acpl, wAcc: Math.round(whiteResult.accuracy), bAcc: Math.round(blackResult.accuracy), firstEvals: evals.slice(0, 15) });
+			log.info("Go eval (scoreLead)", {
+				wAcpl: whiteResult.acpl,
+				bAcpl: blackResult.acpl,
+				wAcc: Math.round(whiteResult.accuracy),
+				bAcc: Math.round(blackResult.accuracy),
+				firstEvals: evals.slice(0, 15),
+			});
 		} else {
 			// Fallback: estimate from game result margin
 			const goResult = room.getResult();
@@ -101,8 +108,10 @@ export async function evaluateMultiplayerGame(
 	}
 
 	log.info("accuracy", {
-		whiteAcc: Math.round(whiteResult.accuracy), whiteAcpl: whiteResult.acpl,
-		blackAcc: Math.round(blackResult.accuracy), blackAcpl: blackResult.acpl,
+		whiteAcc: Math.round(whiteResult.accuracy),
+		whiteAcpl: whiteResult.acpl,
+		blackAcc: Math.round(blackResult.accuracy),
+		blackAcpl: blackResult.acpl,
 	});
 
 	// Map to creator/acceptor
@@ -136,16 +145,33 @@ export async function evaluateMultiplayerGame(
 	}
 
 	// Generate Claude narrative in background (non-blocking)
-	const pgn = history.length > 0
-		? history.map((m, i) => (i % 2 === 0 ? `${Math.floor(i / 2) + 1}. ${m.san}` : m.san)).join(" ")
-		: undefined;
+	const pgn =
+		history.length > 0
+			? history
+					.map((m, i) => (i % 2 === 0 ? `${Math.floor(i / 2) + 1}. ${m.san}` : m.san))
+					.join(" ")
+			: undefined;
 	const gameResult = room.getResult().reason;
 
 	generateSummaries(
-		room, creatorClient, acceptorClient, creatorColor, acceptorColor,
-		creatorResult.accuracy, acceptorResult.accuracy, creatorSkill, acceptorSkill,
-		moveCount, gameResult, send, pgn, creatorResult.moveAccuracies, acceptorResult.moveAccuracies,
-	).catch(err => log.error("summary generation failed", { error: (err as Error).message }));
+		room,
+		creatorClient,
+		acceptorClient,
+		creatorColor,
+		acceptorColor,
+		creatorResult.accuracy,
+		acceptorResult.accuracy,
+		creatorSkill,
+		acceptorSkill,
+		creatorResult.acpl,
+		acceptorResult.acpl,
+		moveCount,
+		gameResult,
+		send,
+		pgn,
+		creatorResult.moveAccuracies,
+		acceptorResult.moveAccuracies,
+	).catch((err) => log.error("summary generation failed", { error: (err as Error).message }));
 }
 
 async function generateSummaries(
@@ -158,6 +184,8 @@ async function generateSummaries(
 	acceptorAcc: number,
 	creatorSkill: { label: string; rating: string; description: string },
 	acceptorSkill: { label: string; rating: string; description: string },
+	creatorAcpl: number,
+	acceptorAcpl: number,
 	totalMoves: number,
 	result: string,
 	send: (ws: unknown, data: unknown) => void,
@@ -170,7 +198,7 @@ async function generateSummaries(
 			gameType: room.gameType,
 			playerColor: creatorColor as "white" | "black",
 			accuracy: Math.round(creatorAcc),
-			acpl: 0,
+			acpl: creatorAcpl,
 			skillLabel: creatorSkill.label,
 			skillRating: creatorSkill.rating,
 			totalMoves,
@@ -183,7 +211,7 @@ async function generateSummaries(
 			gameType: room.gameType,
 			playerColor: acceptorColor as "white" | "black",
 			accuracy: Math.round(acceptorAcc),
-			acpl: 0,
+			acpl: acceptorAcpl,
 			skillLabel: acceptorSkill.label,
 			skillRating: acceptorSkill.rating,
 			totalMoves,

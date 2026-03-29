@@ -129,6 +129,8 @@ class AppState {
 	challenges = $state<any[]>([]);
 	lobbyPlayerCount = $state(0);
 	lastEmojiReceived = $state<string | null>(null);
+	lastMessageReceived = $state<{ message: string; from: string } | null>(null);
+	chatHistory = $state<{ text: string; from: string; isEmoji: boolean; ts: number }[]>([]);
 	opponentDisconnected = $state(false);
 
 	// User identity (persistent)
@@ -357,6 +359,8 @@ class AppState {
 		this.boardState = [];
 		this.prisoners = { black: 0, white: 0 };
 		this.goLastMove = null;
+		this.chatHistory = [];
+		this.lastMessageReceived = null;
 	}
 }
 

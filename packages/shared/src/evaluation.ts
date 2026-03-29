@@ -79,78 +79,180 @@ export interface SkillLevel {
 	description: string;
 }
 
-/** Map game accuracy to a skill level */
-export function getSkillLevel(accuracy: number, gameType: "chess" | "go" | "janggi", acpl?: number): SkillLevel {
-	// Chess/Janggi: blend accuracy with ACPL for more realistic rating
-	// High accuracy in a losing position doesn't mean good play
-	if (gameType === "chess" || gameType === "janggi") {
-		// Use ACPL as primary metric — it honestly reflects move quality
-		// regardless of position balance. Accuracy is secondary.
-		if (acpl !== undefined && acpl > 0) {
-			if (acpl <= 15)
-				return { label: "Engine", rating: "2800+", description: "Near-perfect engine play" };
-			if (acpl <= 35)
-				return { label: "Grandmaster", rating: "2500-2700", description: "World-class accuracy" };
-			if (acpl <= 60)
-				return { label: "Master", rating: "2200-2500", description: "Master-level precision" };
-			if (acpl <= 100)
-				return { label: "Expert", rating: "2000-2200", description: "Expert-level play" };
-			if (acpl <= 150)
-				return { label: "Advanced", rating: "1800-2000", description: "Strong club player" };
-			if (acpl <= 220)
-				return { label: "Intermediate", rating: "1500-1800", description: "Average club player" };
-			if (acpl <= 320)
-				return { label: "Casual", rating: "1200-1500", description: "Developing player" };
-			return { label: "Beginner", rating: "Under 1200", description: "Learning the basics" };
+/**
+ * SKILL_SCALE — single source of truth for skill tiers.
+ *
+ * Labels match the AI difficulty tiers (Beginner/Casual/Club/Pro/Superhuman)
+ * with sub-tiers (+) for finer resolution. All evaluation, difficulty labels,
+ * and UI display derive from this array.
+ *
+ * Each tier defines:
+ *  - maxAcpl: upper ACPL bound (play at or below this → tier applies)
+ *  - maxAccuracy: fallback accuracy bound (when ACPL unavailable)
+ *  - chess/janggi rating + Go rating strings
+ *
+ * Thresholds calibrated from autoplay simulations:
+ *  - Chess/Janggi: Fairy-Stockfish UCI_LimitStrength at various Elo levels
+ *  - Go: KataGo visit-budget simulations (10 visits → 18 kyu, 5000 → Pro+)
+ *
+ * Order: strongest first (lowest ACPL). getSkillLevel() iterates and returns
+ * the first tier where the player's ACPL is within maxAcpl.
+ */
+/**
+ * Per-game rating keys. Each game has independent calibration
+ * from autoplay simulations with the respective engine.
+ */
+export type GameRatingKey = "chess" | "janggi" | "go";
+
+export interface SkillTier {
+	label: string;
+	/** Max ACPL to qualify for this tier — per game, independently calibrated */
+	maxAcpl: Record<GameRatingKey, number>;
+	/** Fallback: min accuracy to qualify (when ACPL unavailable) */
+	maxAccuracy: Record<GameRatingKey, number>;
+	/** Human-readable rating range for display */
+	rating: Record<GameRatingKey, string>;
+	description: string;
+	/**
+	 * AI difficulty target per game.
+	 * chessElo/janggiElo: UCI_LimitStrength Elo (null = full engine).
+	 * goVisits: KataGo visit budget.
+	 * Only set for tiers that map to selectable difficulty levels.
+	 */
+	aiTarget?: { chessElo: number | null; janggiElo: number | null; goVisits: number };
+}
+
+/**
+ * SKILL_SCALE — single source of truth for all skill tiers.
+ *
+ * All evaluation labels, difficulty descriptions, and UI displays
+ * derive from this array. To recalibrate, change these numbers.
+ *
+ * Calibrated from autoplay simulations per engine:
+ *  - Chess: Fairy-Stockfish UCI_LimitStrength sims
+ *  - Janggi: Fairy-Stockfish janggi variant sims (higher ACPL thresholds
+ *    due to volatile positions — cannons, palace, jumping rules)
+ *  - Go: KataGo visit-budget sims
+ */
+export const SKILL_SCALE: SkillTier[] = [
+	{
+		label: "Superhuman",
+		maxAcpl: { chess: 25, janggi: 30, go: 20 },
+		maxAccuracy: { chess: 95, janggi: 95, go: 95 },
+		rating: { chess: "2800+", janggi: "2800+", go: "9 dan+" },
+		description: "Engine-level precision",
+		aiTarget: { chessElo: null, janggiElo: null, goVisits: 5000 },
+	},
+	{
+		label: "Pro+",
+		maxAcpl: { chess: 45, janggi: 55, go: 40 },
+		maxAccuracy: { chess: 88, janggi: 88, go: 88 },
+		rating: { chess: "2500-2800", janggi: "2500-2800", go: "4-6 dan" },
+		description: "Near-professional accuracy",
+	},
+	{
+		label: "Pro",
+		maxAcpl: { chess: 75, janggi: 90, go: 80 },
+		maxAccuracy: { chess: 78, janggi: 78, go: 78 },
+		rating: { chess: "2200-2500", janggi: "2200-2500", go: "1-3 dan" },
+		description: "Professional-level play",
+		aiTarget: { chessElo: 2200, janggiElo: 2200, goVisits: 1000 },
+	},
+	{
+		label: "Club+",
+		maxAcpl: { chess: 120, janggi: 140, go: 130 },
+		maxAccuracy: { chess: 68, janggi: 68, go: 65 },
+		rating: { chess: "1800-2200", janggi: "1800-2200", go: "1-3 kyu" },
+		description: "Strong club player",
+	},
+	{
+		label: "Club",
+		maxAcpl: { chess: 180, janggi: 210, go: 200 },
+		maxAccuracy: { chess: 55, janggi: 55, go: 50 },
+		rating: { chess: "1600-1800", janggi: "1600-1800", go: "4-8 kyu" },
+		description: "Solid club player",
+		aiTarget: { chessElo: 1600, janggiElo: 1600, goVisits: 200 },
+	},
+	{
+		label: "Casual+",
+		maxAcpl: { chess: 260, janggi: 300, go: 300 },
+		maxAccuracy: { chess: 42, janggi: 42, go: 35 },
+		rating: { chess: "1400-1600", janggi: "1400-1600", go: "9-12 kyu" },
+		description: "Above-average casual",
+	},
+	{
+		label: "Casual",
+		maxAcpl: { chess: 350, janggi: 400, go: 400 },
+		maxAccuracy: { chess: 28, janggi: 28, go: 22 },
+		rating: { chess: "1200-1400", janggi: "1200-1400", go: "13-15 kyu" },
+		description: "Casual player",
+		aiTarget: { chessElo: 1200, janggiElo: 1200, goVisits: 50 },
+	},
+];
+
+export const BEGINNER_TIER = {
+	label: "Beginner",
+	rating: { chess: "Under 1200", janggi: "Under 1200", go: "16+ kyu" } as Record<
+		GameRatingKey,
+		string
+	>,
+	description: "Learning the basics",
+	aiTarget: { chessElo: 800, janggiElo: 800, goVisits: 10 },
+};
+
+/** Get the AI target for a difficulty ID */
+export function getDifficultyTarget(
+	id: string,
+): { chessElo: number | null; janggiElo: number | null; goVisits: number } | undefined {
+	if (id === "beginner") return BEGINNER_TIER.aiTarget;
+	const tier = SKILL_SCALE.find((t) => t.label.toLowerCase() === id && t.aiTarget);
+	return tier?.aiTarget;
+}
+
+/** Get the display rating for a difficulty+game combo */
+export function getDifficultyRating(id: string, gameType: GameRatingKey): string {
+	if (id === "beginner") return BEGINNER_TIER.rating[gameType];
+	const tier = SKILL_SCALE.find((t) => t.label.toLowerCase() === id);
+	return tier?.rating[gameType] ?? BEGINNER_TIER.rating[gameType];
+}
+
+/**
+ * Map ACPL/accuracy to a skill level.
+ * Derives all labels from SKILL_SCALE — change the scale and every
+ * evaluation, display, and difficulty label updates automatically.
+ */
+export function getSkillLevel(
+	accuracy: number,
+	gameType: "chess" | "go" | "janggi",
+	acpl?: number,
+): SkillLevel {
+	const ratingKey: GameRatingKey = gameType;
+
+	// ACPL-based (primary, more reliable)
+	if (acpl !== undefined && acpl > 0) {
+		for (const tier of SKILL_SCALE) {
+			if (acpl <= tier.maxAcpl[ratingKey]) {
+				return { label: tier.label, rating: tier.rating[ratingKey], description: tier.description };
+			}
 		}
-		// Fallback to accuracy if ACPL not available
-		if (accuracy >= 95)
-			return { label: "Engine", rating: "2800+", description: "Near-perfect engine play" };
-		if (accuracy >= 88)
-			return { label: "Grandmaster", rating: "2500-2700", description: "World-class accuracy" };
-		if (accuracy >= 78)
-			return { label: "Master", rating: "2200-2500", description: "Master-level precision" };
-		if (accuracy >= 68)
-			return { label: "Expert", rating: "2000-2200", description: "Expert-level play" };
-		if (accuracy >= 55)
-			return { label: "Advanced", rating: "1800-2000", description: "Strong club player" };
-		if (accuracy >= 42)
-			return { label: "Intermediate", rating: "1500-1800", description: "Average club player" };
-		if (accuracy >= 28)
-			return { label: "Casual", rating: "1200-1500", description: "Developing player" };
-		return { label: "Beginner", rating: "Under 1200", description: "Learning the basics" };
+		return {
+			label: BEGINNER_TIER.label,
+			rating: BEGINNER_TIER.rating[ratingKey],
+			description: BEGINNER_TIER.description,
+		};
 	}
 
-	// Go: use ACPL as primary (same reason as chess — accuracy is too forgiving)
-	// KataGo scores are in centipawn-equivalents: (winrate - 0.5) * 2000
-	if (acpl !== undefined && acpl > 0) {
-		if (acpl <= 20)
-			return { label: "Pro", rating: "9 dan+", description: "Professional-level play" };
-		if (acpl <= 50)
-			return { label: "High Dan", rating: "4-6 dan", description: "Very strong amateur" };
-		if (acpl <= 100)
-			return { label: "Dan", rating: "1-3 dan", description: "Dan-level player" };
-		if (acpl <= 160)
-			return { label: "High Kyu", rating: "1-3 kyu", description: "Strong kyu player" };
-		if (acpl <= 250)
-			return { label: "Mid Kyu", rating: "4-8 kyu", description: "Intermediate player" };
-		if (acpl <= 400)
-			return { label: "Low Kyu", rating: "9-15 kyu", description: "Developing player" };
-		return { label: "Beginner", rating: "16+ kyu", description: "Learning the basics" };
+	// Accuracy-based fallback (when ACPL unavailable)
+	for (const tier of SKILL_SCALE) {
+		if (accuracy >= tier.maxAccuracy[ratingKey]) {
+			return { label: tier.label, rating: tier.rating[ratingKey], description: tier.description };
+		}
 	}
-	// Fallback to accuracy
-	if (accuracy >= 95)
-		return { label: "Pro", rating: "9 dan+", description: "Professional-level play" };
-	if (accuracy >= 88)
-		return { label: "High Dan", rating: "4-6 dan", description: "Very strong amateur" };
-	if (accuracy >= 78) return { label: "Dan", rating: "1-3 dan", description: "Dan-level player" };
-	if (accuracy >= 65)
-		return { label: "High Kyu", rating: "1-3 kyu", description: "Strong kyu player" };
-	if (accuracy >= 50)
-		return { label: "Mid Kyu", rating: "4-8 kyu", description: "Intermediate player" };
-	if (accuracy >= 35)
-		return { label: "Low Kyu", rating: "9-15 kyu", description: "Developing player" };
-	return { label: "Beginner", rating: "16+ kyu", description: "Learning the basics" };
+	return {
+		label: BEGINNER_TIER.label,
+		rating: BEGINNER_TIER.rating[ratingKey],
+		description: BEGINNER_TIER.description,
+	};
 }
 
 /** Convert Go score (KataGo points) to centipawn equivalent */

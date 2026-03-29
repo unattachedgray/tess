@@ -3,6 +3,7 @@
 	import { t } from "../lib/i18n.ts";
 	import DifficultyPicker from "../components/DifficultyPicker.svelte";
 	import type { WsClient } from "../lib/ws.ts";
+	import { getDifficultyRating } from "@tess/shared";
 	import type { DifficultyId, GameType } from "@tess/shared";
 
 	let { ws, onStart, compact = false }: { ws: WsClient; onStart?: () => void; compact?: boolean } = $props();
@@ -11,28 +12,24 @@
 
 	const gameLabel = (g: GameType) => t(`game.${g}`, appState.language);
 
+	// Derive difficulty descriptions from shared SKILL_SCALE (single source of truth)
+	const DIFFICULTY_IDS: DifficultyId[] = ["beginner", "casual", "club", "pro", "superhuman"];
+	const DIFFICULTY_LABEL: Record<DifficultyId, string> = {
+		beginner: "Beginner", casual: "Casual", club: "Club", pro: "Pro", superhuman: "Superhuman",
+	};
+
+	function buildDifficulties(game: GameType): { id: DifficultyId; label: string; description: string }[] {
+		return DIFFICULTY_IDS.map(id => ({
+			id,
+			label: DIFFICULTY_LABEL[id],
+			description: `~${getDifficultyRating(id, game)}`,
+		}));
+	}
+
 	const DIFFICULTIES: Record<GameType, { id: DifficultyId; label: string; description: string }[]> = {
-		chess: [
-			{ id: "beginner", label: "Beginner", description: "~800 Elo" },
-			{ id: "casual", label: "Casual", description: "~1200 Elo" },
-			{ id: "club", label: "Club", description: "~1600 Elo" },
-			{ id: "pro", label: "Pro", description: "~2200 Elo" },
-			{ id: "superhuman", label: "Superhuman", description: "~2800+ Elo" },
-		],
-		go: [
-			{ id: "beginner", label: "Beginner", description: "~18 kyu" },
-			{ id: "casual", label: "Casual", description: "~10 kyu" },
-			{ id: "club", label: "Club", description: "~4 kyu" },
-			{ id: "pro", label: "Pro", description: "~2 dan" },
-			{ id: "superhuman", label: "Superhuman", description: "Pro+" },
-		],
-		janggi: [
-			{ id: "beginner", label: "Beginner", description: "~800 Elo" },
-			{ id: "casual", label: "Casual", description: "~1200 Elo" },
-			{ id: "club", label: "Club", description: "~1600 Elo" },
-			{ id: "pro", label: "Pro", description: "~2200 Elo" },
-			{ id: "superhuman", label: "Superhuman", description: "~2800+ Elo" },
-		],
+		chess: buildDifficulties("chess"),
+		go: buildDifficulties("go"),
+		janggi: buildDifficulties("janggi"),
 	};
 
 	const COLOR_LABELS = $derived.by(() => {

@@ -65,7 +65,6 @@ export const UpdateSettingsMessage = z.object({
 	suggestionStrength: z.enum(["fast", "balanced", "deep"]).optional(),
 });
 
-
 // ── Multiplayer: Client → Server ──
 
 export const SetNicknameMessage = z.object({
@@ -74,7 +73,7 @@ export const SetNicknameMessage = z.object({
 });
 
 export const TimeControlSchema = z.object({
-	initial: z.number().min(0),  // seconds
+	initial: z.number().min(0), // seconds
 	increment: z.number().min(0),
 });
 
@@ -134,7 +133,36 @@ export const RespondDrawMessage = z.object({
 	accept: z.boolean(),
 });
 
-export const PRESET_EMOJIS = ["\u{1F44D}", "\u{1F44F}", "\u{1F605}", "\u{1F914}", "\u{26A1}", "\u{1F91D}"] as const;
+export const PRESET_EMOJIS = [
+	"\u{1F44D}",
+	"\u{1F44F}",
+	"\u{1F605}",
+	"\u{1F914}",
+	"\u{26A1}",
+	"\u{1F91D}",
+] as const;
+
+export const PRESET_MESSAGES = [
+	"Good move!",
+	"Nice game",
+	"Thinking...",
+	"Good luck!",
+	"Well played",
+	"Oops",
+	"Rematch?",
+	"gg",
+] as const;
+
+export const PresetMessageMessage = z.object({
+	type: z.literal("PRESET_MESSAGE"),
+	message: z.string(),
+});
+
+export const PresetMessagePayload = z.object({
+	type: z.literal("PRESET_MESSAGE_RECEIVED"),
+	message: z.string(),
+	from: z.string(),
+});
 
 export const TIME_PRESETS = [
 	{ label: "Bullet 1+0", initial: 60, increment: 0 },
@@ -154,7 +182,6 @@ export type Challenge = {
 	boardSize?: number;
 	createdAt: number;
 };
-
 
 // ── Multiplayer: Client → Server ──
 
@@ -179,6 +206,7 @@ export const ClientMessage = z.discriminatedUnion("type", [
 	RequestLobbyMessage,
 	LeaveLobbyMessage,
 	EmojiReactionMessage,
+	PresetMessageMessage,
 	OfferDrawMessage,
 	RespondDrawMessage,
 	RematchMessage,
@@ -313,7 +341,6 @@ export const DifficultyTiersPayload = z.object({
 	),
 });
 
-
 // ── Multiplayer: Server → Client ──
 
 export const NicknameSetPayload = z.object({
@@ -323,16 +350,18 @@ export const NicknameSetPayload = z.object({
 
 export const LobbyStatePayload = z.object({
 	type: z.literal("LOBBY_STATE"),
-	challenges: z.array(z.object({
-		id: z.string(),
-		code: z.string(),
-		gameType: z.enum(["go", "chess", "janggi"]),
-		timeControl: TimeControlSchema,
-		creatorName: z.string(),
-		creatorColor: z.enum(["white", "black"]).optional(),
-		boardSize: z.number().optional(),
-		createdAt: z.number(),
-	})),
+	challenges: z.array(
+		z.object({
+			id: z.string(),
+			code: z.string(),
+			gameType: z.enum(["go", "chess", "janggi"]),
+			timeControl: TimeControlSchema,
+			creatorName: z.string(),
+			creatorColor: z.enum(["white", "black"]).optional(),
+			boardSize: z.number().optional(),
+			createdAt: z.number(),
+		}),
+	),
 	activePlayers: z.number(),
 });
 
@@ -404,7 +433,6 @@ export const MpSessionEndPayload = z.object({
 	type: z.literal("MP_SESSION_END"),
 });
 
-
 // ── Multiplayer: Server → Client ──
 
 export type ServerMessage =
@@ -425,6 +453,7 @@ export type ServerMessage =
 	| z.infer<typeof MpGameStartPayload>
 	| z.infer<typeof ClockUpdatePayload>
 	| z.infer<typeof EmojiReactionPayload>
+	| z.infer<typeof PresetMessagePayload>
 	| z.infer<typeof DrawOfferPayload>
 	| z.infer<typeof DrawResponsePayload>
 	| z.infer<typeof OpponentDisconnectedPayload>

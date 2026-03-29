@@ -11,6 +11,8 @@
 	import EvalBar from "../components/EvalBar.svelte";
 	import Suggestions from "../components/Suggestions.svelte";
 	import Analysis from "../components/Analysis.svelte";
+	import ChatBox from "../components/ChatBox.svelte";
+	import PlayerStats from "../components/PlayerStats.svelte";
 
 	let { ws, onRematch, onAutoplayRematch }: {
 		ws: WsClient;
@@ -166,7 +168,17 @@
 			color={appState.playerColor}
 		/>
 
-		<div class="board-with-eval">
+		<div class="board-with-eval" style="position: relative;">
+			<!-- Floating emoji/message overlay -->
+			{#if appState.lastEmojiReceived || appState.lastMessageReceived}
+				<div class="received-overlay">
+					{#if appState.lastEmojiReceived}
+						<span class="overlay-emoji">{appState.lastEmojiReceived}</span>
+					{:else if appState.lastMessageReceived}
+						<span class="overlay-msg">{appState.lastMessageReceived.from}: {appState.lastMessageReceived.message}</span>
+					{/if}
+				</div>
+			{/if}
 			<EvalBar score={appState.eval} orientation={appState.playerColor} />
 
 			{#if appState.gameType === 'go'}
@@ -232,6 +244,8 @@
 				color={appState.playerColor === 'white' ? 'black' : 'white'}
 			/>
 		</div>
+		<!-- Player stats -->
+		<PlayerStats />
 	</div>
 
 	<!-- Right panel: status + suggestions + analysis + moves + controls -->
@@ -281,6 +295,11 @@
 				skillEval={appState.skillEval}
 				gameSummary={appState.gameSummary}
 			/>
+		{/if}
+
+		<!-- Chat (multiplayer only) -->
+		{#if appState.isMultiplayer}
+			<ChatBox {ws} />
 		{/if}
 
 		<!-- Move History -->
@@ -526,6 +545,45 @@
 	.quality-icon {
 		font-family: "SF Mono", "Cascadia Mono", monospace;
 		font-size: 10px;
+	}
+
+	.received-overlay {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 20;
+		pointer-events: none;
+		animation: overlay-in 0.3s ease-out;
+	}
+
+	.overlay-emoji {
+		font-size: 56px;
+		filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.4));
+		animation: emoji-bounce 0.5s ease;
+	}
+
+	.overlay-msg {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--text-primary);
+		background: var(--bg-secondary);
+		border: 1px solid var(--accent);
+		padding: 8px 16px;
+		border-radius: 12px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		white-space: nowrap;
+	}
+
+	@keyframes overlay-in {
+		from { opacity: 0; transform: translate(-50%, -40%); }
+		to { opacity: 1; transform: translate(-50%, -50%); }
+	}
+
+	@keyframes emoji-bounce {
+		0% { transform: scale(0.5); }
+		50% { transform: scale(1.3); }
+		100% { transform: scale(1); }
 	}
 </style>
 

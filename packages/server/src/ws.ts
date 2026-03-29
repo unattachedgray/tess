@@ -57,7 +57,18 @@ export function createWsServer(
 			(ws as unknown as { isAlive: boolean }).isAlive = true;
 		});
 
-		const state: ClientState = { _id: ++nextClientId, ws, room: null, mpRoom: null, inLobby: false, lobbyClient: null, suggestionCount: 3, autoplayElo: 2800, language: undefined, userId: `player-${++nextClientId}` };
+		const state: ClientState = {
+			_id: ++nextClientId,
+			ws,
+			room: null,
+			mpRoom: null,
+			inLobby: false,
+			lobbyClient: null,
+			suggestionCount: 3,
+			autoplayElo: 2800,
+			language: undefined,
+			userId: `player-${++nextClientId}`,
+		};
 		log.info(`client #${state._id} connected`);
 		// Subscribe to lobby for challenge notifications
 		lobby.subscribe(getLobbyClient(state));
@@ -154,7 +165,10 @@ export function createWsServer(
 				if (msg.suggestionCount !== undefined)
 					room.suggestionCount = Math.min(3, Math.max(0, msg.suggestionCount));
 				if (msg.suggestionStrength) room.suggestionStrength = msg.suggestionStrength;
-				if (msg.language) { room.language = msg.language; state.language = msg.language; }
+				if (msg.language) {
+					room.language = msg.language;
+					state.language = msg.language;
+				}
 
 				room.onMove((data) => send(state.ws, data));
 				send(state.ws, room.getState());
@@ -174,7 +188,8 @@ export function createWsServer(
 			case "PLAY_MOVE": {
 				if (state.mpRoom) {
 					const mpResult = state.mpRoom.playMove(toMpClient(state), msg.move);
-					if (!mpResult.ok) send(state.ws, { type: "ERROR", message: mpResult.error ?? "Invalid move" });
+					if (!mpResult.ok)
+						send(state.ws, { type: "ERROR", message: mpResult.error ?? "Invalid move" });
 
 					break;
 				}
@@ -254,7 +269,7 @@ export function createWsServer(
 									state.mpRoom.getTurn(),
 									50,
 								);
-								const validMoves = weakResult.suggestions.filter(s => {
+								const validMoves = weakResult.suggestions.filter((s) => {
 									if (s.move.length >= 4) {
 										const from = s.move.slice(0, 2);
 										const to = s.move.slice(2, 4);
@@ -333,7 +348,11 @@ export function createWsServer(
 								else quality = "blunder";
 
 								const lastMove = history.length > 0 ? history[history.length - 1]?.uci : "";
-								state.mpRoom.broadcastMessage({ type: "MOVE_QUALITY", move: lastMove ?? "", quality });
+								state.mpRoom.broadcastMessage({
+									type: "MOVE_QUALITY",
+									move: lastMove ?? "",
+									quality,
+								});
 							}
 
 							// Store as pre-move score for the NEXT move
@@ -408,7 +427,8 @@ export function createWsServer(
 			case "PASS": {
 				if (state.mpRoom) {
 					const passResult = state.mpRoom.playMove(toMpClient(state), "PASS");
-					if (!passResult.ok) send(state.ws, { type: "ERROR", message: passResult.error ?? "Cannot pass" });
+					if (!passResult.ok)
+						send(state.ws, { type: "ERROR", message: passResult.error ?? "Cannot pass" });
 				} else if (state.room?.gameType === "go") {
 					await state.room.playMove("PASS");
 				}
@@ -459,7 +479,11 @@ export function createWsServer(
 					msg.color,
 					msg.boardSize,
 				);
-				send(state.ws, { type: "CHALLENGE_CREATED", challengeId: challenge.id, code: challenge.code });
+				send(state.ws, {
+					type: "CHALLENGE_CREATED",
+					challengeId: challenge.id,
+					code: challenge.code,
+				});
 				break;
 			}
 
@@ -477,7 +501,12 @@ export function createWsServer(
 				const ch = entry.challenge;
 				// Find creator by matching lobbyClient reference
 				const creatorState = findClientByLobbyClient(entry.creator);
-				log.info("ACCEPT_CHALLENGE", { creatorFound: !!creatorState, creatorUserId: entry.creator.userId, acceptorId: state._id, creatorId: creatorState?._id });
+				log.info("ACCEPT_CHALLENGE", {
+					creatorFound: !!creatorState,
+					creatorUserId: entry.creator.userId,
+					acceptorId: state._id,
+					creatorId: creatorState?._id,
+				});
 				if (!creatorState) {
 					send(state.ws, { type: "ERROR", message: "Challenge creator disconnected" });
 					lobby.removeChallenge(ch.id);
@@ -494,14 +523,21 @@ export function createWsServer(
 				room.addPlayer(toMpClient(creatorState), ch.creatorColor);
 				creatorState.mpRoom = room;
 				// Add acceptor as second player
-				const acceptorColor = ch.creatorColor === "white" ? "black" : ch.creatorColor === "black" ? "white" : undefined;
+				const acceptorColor =
+					ch.creatorColor === "white" ? "black" : ch.creatorColor === "black" ? "white" : undefined;
 				room.addPlayer(toMpClient(state), acceptorColor);
 				state.mpRoom = room;
 				mpRooms.set(room.id, room);
 				lobby.removeChallenge(ch.id);
 				// Stop singleplayer rooms from sending stale messages during MP
-				if (creatorState.room) { creatorState.room.destroy(); creatorState.room = null; }
-				if (state.room) { state.room.destroy(); state.room = null; }
+				if (creatorState.room) {
+					creatorState.room.destroy();
+					creatorState.room = null;
+				}
+				if (state.room) {
+					state.room.destroy();
+					state.room = null;
+				}
 				// Set up post-game evaluation
 				// Post-game evaluation (extracted to postGameEval.ts)
 				room.onGameEnd(async (r) => {
@@ -518,7 +554,11 @@ export function createWsServer(
 						log.error("MP eval failed", { error: (err as Error).message });
 					}
 				});
-				log.info("MP game started", { gameId: room.id, creator: creatorState.userId, acceptor: state.userId });
+				log.info("MP game started", {
+					gameId: room.id,
+					creator: creatorState.userId,
+					acceptor: state.userId,
+				});
 				break;
 			}
 
@@ -540,7 +580,10 @@ export function createWsServer(
 						room2.addPlayer(toMpClient(creator2), ch2.creatorColor);
 						creator2.mpRoom = room2;
 						// Stop singleplayer room from interfering
-						if (creator2.room) { creator2.room.destroy(); creator2.room = null; }
+						if (creator2.room) {
+							creator2.room.destroy();
+							creator2.room = null;
+						}
 					}
 					if (msg.spectate) {
 						room2.addSpectator(toMpClient(state));
@@ -549,14 +592,21 @@ export function createWsServer(
 					}
 					state.mpRoom = room2;
 					// Stop singleplayer room from interfering
-					if (state.room) { state.room.destroy(); state.room = null; }
+					if (state.room) {
+						state.room.destroy();
+						state.room = null;
+					}
 					mpRooms.set(room2.id, room2);
 					// Post-game evaluation for code-joined games
 					room2.onGameEnd(async (r) => {
 						try {
 							await evaluateMultiplayerGame(
 								r,
-								{ ws: (creator2 ?? state).ws, mpRoom: (creator2 ?? state).mpRoom, language: (creator2 ?? state).language },
+								{
+									ws: (creator2 ?? state).ws,
+									mpRoom: (creator2 ?? state).mpRoom,
+									language: (creator2 ?? state).language,
+								},
 								{ ws: state.ws, mpRoom: state.mpRoom, language: state.language },
 								ch2.creatorColor ?? "white",
 								sessionManager,
@@ -589,6 +639,11 @@ export function createWsServer(
 
 			case "EMOJI_REACTION": {
 				if (state.mpRoom) state.mpRoom.sendEmoji(toMpClient(state), msg.emoji);
+				break;
+			}
+
+			case "PRESET_MESSAGE": {
+				if (state.mpRoom) state.mpRoom.sendPresetMessage(toMpClient(state), msg.message);
 				break;
 			}
 
@@ -668,7 +723,11 @@ export function createWsServer(
 						await evaluateMultiplayerGame(
 							r,
 							{ ws: state.ws, mpRoom: state.mpRoom, language: state.language },
-							{ ws: opponentState.ws, mpRoom: opponentState.mpRoom, language: opponentState.language },
+							{
+								ws: opponentState.ws,
+								mpRoom: opponentState.mpRoom,
+								language: opponentState.language,
+							},
 							myNewColor,
 							sessionManager,
 							send,
@@ -678,7 +737,11 @@ export function createWsServer(
 					}
 				});
 
-				log.info("Rematch started", { gameId: newRoom.id, player1: state.userId, player2: opponentState.userId });
+				log.info("Rematch started", {
+					gameId: newRoom.id,
+					player1: state.userId,
+					player2: opponentState.userId,
+				});
 				break;
 			}
 
@@ -715,7 +778,6 @@ export function createWsServer(
 		}
 	}
 
-
 	function findClientByUserId(userId: string): ClientState | undefined {
 		for (const [, s] of clients) {
 			if (s.userId === userId) return s;
@@ -739,7 +801,6 @@ export function createWsServer(
 		return undefined;
 	}
 
-
 	function getLobbyClient(state: ClientState): LobbyClient {
 		if (!state.lobbyClient) {
 			state.lobbyClient = {
@@ -757,8 +818,12 @@ export function createWsServer(
 	function toMpClient(state: ClientState): MpClient {
 		// Closure captures `state` (not ws) so it follows reconnections
 		return {
-			get userId() { return state.userId ?? "anon"; },
-			get nickname() { return state.nickname; },
+			get userId() {
+				return state.userId ?? "anon";
+			},
+			get nickname() {
+				return state.nickname;
+			},
 			send: (msg) => send(state.ws, msg),
 		};
 	}
