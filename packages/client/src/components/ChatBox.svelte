@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { appState } from "../lib/stores.svelte.ts";
+	import { t } from "../lib/i18n.ts";
 	import { PRESET_EMOJIS, PRESET_MESSAGES } from "@tess/shared";
 	import type { WsClient } from "../lib/ws.ts";
 
@@ -15,10 +16,11 @@
 		setTimeout(() => lastSent = null, 1500);
 	}
 
-	function sendMessage(message: string) {
-		ws.send({ type: "PRESET_MESSAGE", message });
-		appState.chatHistory = [...appState.chatHistory, { text: message, from: "You", isEmoji: false, ts: Date.now() }];
-		lastSent = message;
+	/** Send i18n key over the wire — receiver translates in their language. */
+	function sendMessage(key: string) {
+		ws.send({ type: "PRESET_MESSAGE", message: key });
+		appState.chatHistory = [...appState.chatHistory, { text: t(key, appState.language), from: "You", isEmoji: false, ts: Date.now() }];
+		lastSent = key;
 		showPicker = false;
 		setTimeout(() => lastSent = null, 1500);
 	}
@@ -70,13 +72,13 @@
 
 	{#if showPicker}
 		<div class="message-picker">
-			{#each PRESET_MESSAGES as msg}
+			{#each PRESET_MESSAGES as key}
 				<button
 					class="msg-btn"
-					class:sent={lastSent === msg}
-					onclick={() => sendMessage(msg)}
+					class:sent={lastSent === key}
+					onclick={() => sendMessage(key)}
 				>
-					{msg}
+					{t(key, appState.language)}
 				</button>
 			{/each}
 		</div>

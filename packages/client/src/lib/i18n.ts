@@ -49,6 +49,9 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
 		"header.menu": "Menu",
 		"header.close": "Close",
 		"header.back": "Back",
+		"chat.gl": "Good luck!",
+		"chat.rematch": "Rematch?",
+		"chat.gg": "gg",
 	},
 	ko: {
 		"game.chess": "체스",
@@ -98,6 +101,9 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
 		"header.menu": "메뉴",
 		"header.close": "닫기",
 		"header.back": "뒤로",
+		"chat.gl": "행운을 빕니다!",
+		"chat.rematch": "재대국?",
+		"chat.gg": "gg",
 	},
 	es: {
 		"game.chess": "Ajedrez",
@@ -147,6 +153,9 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
 		"header.menu": "Menú",
 		"header.close": "Cerrar",
 		"header.back": "Atrás",
+		"chat.gl": "¡Buena suerte!",
+		"chat.rematch": "¿Revancha?",
+		"chat.gg": "gg",
 	},
 	vi: {
 		"game.chess": "Cờ vua",
@@ -191,6 +200,9 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
 		"header.menu": "Menu",
 		"header.close": "Đóng",
 		"header.back": "Quay lại",
+		"chat.gl": "Chúc may mắn!",
+		"chat.rematch": "Đấu lại?",
+		"chat.gg": "gg",
 	},
 	mn: {
 		"game.chess": "Шатар",
@@ -230,6 +242,9 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
 		"header.menu": "Цэс",
 		"header.close": "Хаах",
 		"header.back": "Буцах",
+		"chat.gl": "Амжилт хүсье!",
+		"chat.rematch": "Дахин тоглох?",
+		"chat.gg": "gg",
 	},
 };
 

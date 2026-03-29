@@ -219,8 +219,10 @@
 		});
 		ws.on("PRESET_MESSAGE_RECEIVED", (msg) => {
 			const data = msg as any;
-			appState.lastMessageReceived = { message: data.message, from: data.from };
-			appState.chatHistory = [...appState.chatHistory, { text: data.message, from: data.from, isEmoji: false, ts: Date.now() }];
+			// Translate the i18n key in the receiver's language
+			const translated = t(data.message, appState.language);
+			appState.lastMessageReceived = { message: translated, from: data.from };
+			appState.chatHistory = [...appState.chatHistory, { text: translated, from: data.from, isEmoji: false, ts: Date.now() }];
 			setTimeout(() => appState.lastMessageReceived = null, 4000);
 		});
 		ws.on("OPPONENT_DISCONNECTED", () => {

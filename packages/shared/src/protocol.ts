@@ -142,16 +142,8 @@ export const PRESET_EMOJIS = [
 	"\u{1F91D}",
 ] as const;
 
-export const PRESET_MESSAGES = [
-	"Good move!",
-	"Nice game",
-	"Thinking...",
-	"Good luck!",
-	"Well played",
-	"Oops",
-	"Rematch?",
-	"gg",
-] as const;
+/** Preset message keys — translated on the receiver's client via i18n. */
+export const PRESET_MESSAGES = ["chat.gl", "chat.rematch", "chat.gg"] as const;
 
 export const PresetMessageMessage = z.object({
 	type: z.literal("PRESET_MESSAGE"),
