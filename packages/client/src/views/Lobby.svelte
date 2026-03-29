@@ -87,8 +87,10 @@
 		appState.view = "game";
 	}
 
+	const lang = $derived(appState.language);
+
 	function formatTime(tc: { initial: number; increment: number }): string {
-		if (tc.initial === 0 && tc.increment === 0) return "No limit";
+		if (tc.initial === 0 && tc.increment === 0) return "∞";
 		const mins = Math.floor(tc.initial / 60);
 		return tc.increment > 0 ? `${mins}+${tc.increment}` : `${mins}+0`;
 	}
@@ -100,10 +102,10 @@
 	<div class="lobby-header">
 		<button class="back-btn" onclick={goBack}>
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8L10 13"/></svg>
-			Back
+			{t("header.back", lang)}
 		</button>
-		<h1 class="lobby-title">Multiplayer</h1>
-		<span class="player-count">{activePlayers} in lobby</span>
+		<h1 class="lobby-title">{t("lobby.title", lang)}</h1>
+		<span class="player-count">{activePlayers} {t("lobby.inLobby", lang)}</span>
 	</div>
 
 	<!-- Join by code -->
@@ -111,13 +113,13 @@
 		<input
 			type="text"
 			class="code-input"
-			placeholder="Enter game code"
+			placeholder={t("lobby.enterCode", lang)}
 			maxlength="6"
 			bind:value={joinCode}
 			oninput={(e) => joinCode = (e.target as HTMLInputElement).value.toUpperCase()}
 			onkeydown={(e) => { if (e.key === "Enter") joinByCode(); }}
 		/>
-		<button class="join-btn" onclick={joinByCode} disabled={joinCode.length !== 6}>Join</button>
+		<button class="join-btn" onclick={joinByCode} disabled={joinCode.length !== 6}>{t("lobby.join", lang)}</button>
 	</div>
 
 	<!-- Create challenge -->
@@ -125,26 +127,26 @@
 		<div class="my-challenge">
 			<span class="waiting-text">
 				<span class="waiting-dot"></span>
-				Waiting for opponent...
+				{t("lobby.waiting", lang)}
 			</span>
-			<button class="cancel-btn" onclick={cancelChallenge}>Cancel</button>
+			<button class="cancel-btn" onclick={cancelChallenge}>{t("lobby.cancel", lang)}</button>
 		</div>
 	{:else if showCreate}
 		<div class="create-form">
 			<div class="form-row">
-				<span class="form-label">Game</span>
+				<span class="form-label">{t("lobby.gameLabel", lang)}</span>
 				<div class="form-options">
 					{#each ["chess", "go", "janggi"] as g}
 						<button
 							class="option-btn"
 							class:active={createGameType === g}
 							onclick={() => createGameType = g as "chess" | "go" | "janggi"}
-						>{g}</button>
+						>{t(`game.${g}`, lang)}</button>
 					{/each}
 				</div>
 			</div>
 			<div class="form-row">
-				<span class="form-label">Time</span>
+				<span class="form-label">{t("lobby.timeLabel", lang)}</span>
 				<div class="form-options">
 					{#each TIME_PRESETS as preset, i}
 						<button
@@ -156,22 +158,22 @@
 				</div>
 			</div>
 			<div class="form-row">
-				<span class="form-label">Color</span>
+				<span class="form-label">{t("lobby.colorLabel", lang)}</span>
 				<div class="form-options">
-					<button class="option-btn" class:active={!createColor} onclick={() => createColor = undefined}>Random</button>
-					<button class="option-btn" class:active={createColor === "white"} onclick={() => createColor = "white"}>White</button>
-					<button class="option-btn" class:active={createColor === "black"} onclick={() => createColor = "black"}>Black</button>
+					<button class="option-btn" class:active={!createColor} onclick={() => createColor = undefined}>{t("lobby.random", lang)}</button>
+					<button class="option-btn" class:active={createColor === "white"} onclick={() => createColor = "white"}>{t("color.white", lang)}</button>
+					<button class="option-btn" class:active={createColor === "black"} onclick={() => createColor = "black"}>{t("color.black", lang)}</button>
 				</div>
 			</div>
 			<div class="form-actions">
-				<button class="create-btn" onclick={createChallenge}>Create Challenge</button>
-				<button class="cancel-btn" onclick={() => showCreate = false}>Cancel</button>
+				<button class="create-btn" onclick={createChallenge}>{t("lobby.create", lang)}</button>
+				<button class="cancel-btn" onclick={() => showCreate = false}>{t("lobby.cancel", lang)}</button>
 			</div>
 		</div>
 	{:else}
 		<button class="create-challenge-btn" onclick={() => showCreate = true}>
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>
-			Create Challenge
+			{t("lobby.create", lang)}
 		</button>
 	{/if}
 
@@ -179,8 +181,8 @@
 	<div class="challenge-list">
 		{#if otherChallenges.length === 0}
 			<div class="empty-state">
-				<p class="empty-text">No open challenges</p>
-				<p class="empty-hint">Create one or share a game code with a friend</p>
+				<p class="empty-text">{t("lobby.noChallenges", lang)}</p>
+				<p class="empty-hint">{t("lobby.noChallengesHint", lang)}</p>
 			</div>
 		{:else}
 			{#each otherChallenges as ch}
@@ -194,9 +196,9 @@
 					</div>
 					<span class="challenge-creator">{ch.creatorName}</span>
 					{#if ch.id === myChallenge}
-						<button class="cancel-btn" onclick={cancelChallenge}>Cancel</button>
+						<button class="cancel-btn" onclick={cancelChallenge}>{t("lobby.cancel", lang)}</button>
 					{:else}
-						<button class="accept-btn" onclick={() => acceptChallenge(ch.id)}>Play</button>
+						<button class="accept-btn" onclick={() => acceptChallenge(ch.id)}>{t("menu.play", lang)}</button>
 					{/if}
 				</div>
 			{/each}

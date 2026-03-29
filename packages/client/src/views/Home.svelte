@@ -55,7 +55,7 @@
 		{#if !compact}
 			<div class="text-center space-y-2">
 				<h1 class="text-4xl font-bold text-[var(--accent)]">Tess</h1>
-				<p class="text-[var(--text-secondary)]">Play board games against AI</p>
+				<p class="text-[var(--text-secondary)]">{t("home.tagline", appState.language)}</p>
 			</div>
 		{/if}
 

@@ -383,7 +383,7 @@
 				</svg>
 			</button>
 			{#if appState.view === 'lobby'}
-				<span class="text-[13px] font-semibold text-[var(--text-primary)] uppercase tracking-wide">Multiplayer</span>
+				<span class="text-[13px] font-semibold text-[var(--text-primary)] uppercase tracking-wide">{tt('lobby.title')}</span>
 			{:else if appState.view === 'review'}
 				<span class="text-[13px] font-semibold text-[var(--text-primary)] uppercase tracking-wide">{tt('header.back')}</span>
 			{:else}
@@ -398,19 +398,19 @@
 					<button
 						class="text-[11px] font-bold px-3 py-0.5 rounded-md bg-[var(--danger)] text-white animate-pulse cursor-pointer"
 						onclick={leaveMultiplayer}
-					>Leave game?</button>
+					>{tt('header.leaveGame')}</button>
 				{:else if appState.isGameOver}
 					<button
 						class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--accent)] hover:text-[var(--bg-primary)] transition-all"
 						onclick={leaveMultiplayer}
 						title="End live session (board stays for review)"
-					>LIVE</button>
+					>{tt('header.live')}</button>
 				{:else}
 					<button
 						class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--accent)] text-[var(--bg-primary)] cursor-pointer hover:bg-[var(--danger)] transition-all"
 						onclick={leaveMultiplayer}
 						title="Click to leave game"
-					>LIVE</button>
+					>{tt('header.live')}</button>
 				{/if}
 			{:else}
 				<button
@@ -452,7 +452,7 @@
 					{#if showDifficultyPicker}
 						<div class="fixed inset-0 z-40" onclick={() => showDifficultyPicker = false} role="presentation"></div>
 						<div class="absolute right-0 top-7 z-50 w-36 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-xl p-1.5 space-y-0.5">
-							<div class="text-[9px] font-medium text-[var(--text-muted)] uppercase tracking-wider px-2 py-1">AI Opponent</div>
+							<div class="text-[9px] font-medium text-[var(--text-muted)] uppercase tracking-wider px-2 py-1">{tt('header.aiOpponent')}</div>
 							{#each DIFFICULTY_IDS as id}
 								<button
 									class="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium transition-all {appState.difficulty === id

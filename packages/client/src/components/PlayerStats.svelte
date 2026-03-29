@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { appState } from "../lib/stores.svelte.ts";
+	import { t } from "../lib/i18n.ts";
 
 	interface Stats {
 		gamesPlayed: number;
@@ -50,32 +51,32 @@
 	<div class="stats-bar">
 		<div class="stat">
 			<span class="stat-value">{stats.gamesPlayed}</span>
-			<span class="stat-label">Games</span>
+			<span class="stat-label">{t("stats.games", appState.language)}</span>
 		</div>
 		<div class="stat-divider"></div>
 		<div class="stat">
 			<span class="stat-value win">{stats.wins}</span>
-			<span class="stat-label">W</span>
+			<span class="stat-label">{t("stats.w", appState.language)}</span>
 		</div>
 		<div class="stat">
 			<span class="stat-value loss">{stats.losses}</span>
-			<span class="stat-label">L</span>
+			<span class="stat-label">{t("stats.l", appState.language)}</span>
 		</div>
 		<div class="stat">
 			<span class="stat-value draw">{stats.draws}</span>
-			<span class="stat-label">D</span>
+			<span class="stat-label">{t("stats.d", appState.language)}</span>
 		</div>
 		<div class="stat-divider"></div>
 		{#if winRate !== null}
 			<div class="stat">
 				<span class="stat-value" class:good={winRate >= 50} class:bad={winRate < 40}>{winRate}%</span>
-				<span class="stat-label">Win</span>
+				<span class="stat-label">{t("stats.win", appState.language)}</span>
 			</div>
 		{/if}
 		{#if stats.avgAccuracy !== null}
 			<div class="stat">
 				<span class="stat-value accent">{stats.avgAccuracy}%</span>
-				<span class="stat-label">Acc</span>
+				<span class="stat-label">{t("stats.acc", appState.language)}</span>
 			</div>
 		{/if}
 	</div>

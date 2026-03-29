@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { appState, type Theme } from "../lib/stores.svelte.ts";
-	import { LANGUAGES, type Language } from "../lib/i18n.ts";
+	import { LANGUAGES, type Language, t } from "../lib/i18n.ts";
 	import type { WsClient } from "../lib/ws.ts";
 
 	let { ws }: { ws: WsClient } = $props();
@@ -86,7 +86,7 @@
 		<div class="absolute right-0 top-8 z-50 w-56 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-xl p-3 space-y-3">
 			<!-- Nickname -->
 			<div class="space-y-1.5">
-				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Nickname</span>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.nickname", appState.language)}</span>
 				<input
 					type="text"
 					class="w-full py-1.5 px-2 rounded-lg text-xs bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] placeholder-[var(--text-muted)]"
@@ -99,7 +99,7 @@
 
 			<!-- Suggestions count -->
 			<div class="space-y-1.5">
-				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Suggestions</span>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.suggestions", appState.language)}</span>
 				<div class="flex gap-1">
 					{#each [0, 1, 2, 3] as n}
 						<button
@@ -116,7 +116,7 @@
 
 			<!-- Suggestion strength -->
 			<div class="space-y-1.5">
-				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Analysis depth</span>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.depth", appState.language)}</span>
 				<div class="flex gap-1">
 					{#each [["fast", "Fast"], ["balanced", "Mid"], ["deep", "Deep"]] as [val, label]}
 						<button
@@ -133,7 +133,7 @@
 
 			<!-- Coaching toggle -->
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">AI Coach</span>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.coach", appState.language)}</span>
 				<button
 					class="w-10 h-5 rounded-full transition-colors relative {appState.coachingEnabled ? 'bg-[var(--accent)]' : 'bg-[var(--bg-hover)]'}"
 					onclick={toggleCoaching}
@@ -145,7 +145,7 @@
 
 			<!-- Theme -->
 			<div class="space-y-1.5">
-				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Theme</span>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.theme", appState.language)}</span>
 				<div class="flex gap-1">
 					{#each THEMES as theme}
 						<button
@@ -163,7 +163,7 @@
 
 			<!-- Language -->
 			<div class="space-y-1.5">
-				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Language</span>
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.language", appState.language)}</span>
 				<select
 					class="w-full py-1.5 px-2 rounded-lg text-xs bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)]"
 					onchange={(e) => changeLanguage((e.target as HTMLSelectElement).value as Language)}
@@ -178,7 +178,7 @@
 			<!-- Autoplay -->
 			<div class="space-y-1.5 pt-2 border-t border-[var(--border)]">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Autoplay</span>
+					<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.autoplay", appState.language)}</span>
 					<button
 						class="w-10 h-5 rounded-full transition-colors relative {appState.autoplayActive ? 'bg-[var(--success)]' : 'bg-[var(--bg-hover)]'}"
 						onclick={toggleAutoplay}
@@ -189,7 +189,7 @@
 				</div>
 				{#if appState.autoplayActive || true}
 					<div class="space-y-1">
-						<span class="text-[10px] text-[var(--text-muted)]">Human player Elo</span>
+						<span class="text-[10px] text-[var(--text-muted)]">{t("settings.humanElo", appState.language)}</span>
 						<div class="flex gap-1">
 							{#each ELO_PRESETS as { elo, label }}
 								<button

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Suggestion } from "@tess/shared";
 	import { appState } from "../lib/stores.svelte.ts";
+	import { t } from "../lib/i18n.ts";
 	import type { MoveQuality } from "../lib/stores.svelte.ts";
 
 	let {
@@ -28,18 +29,9 @@
 		blunder: "text-[var(--danger)]",
 	};
 
-	const QUALITY_LABELS: Record<string, string> = {
-		best: "Best move",
-		good: "Good move",
-		ok: "OK",
-		inaccuracy: "Inaccuracy",
-		mistake: "Mistake",
-		blunder: "Blunder",
-	};
-
 	function formatScore(s: Suggestion): string {
 		if (Math.abs(s.score) > 90000) {
-			return s.score > 0 ? "Mate" : "-Mate";
+			return s.score > 0 ? t("game.mate", appState.language) : `-${t("game.mate", appState.language)}`;
 		}
 		const pawns = (s.score / 100).toFixed(1);
 		return s.score > 0 ? `+${pawns}` : pawns;
@@ -49,7 +41,7 @@
 <div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden {stale ? 'opacity-50' : ''} flex-shrink-0">
 	<div class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">
 		<h3 class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-			Engine
+			{t("engine.title", appState.language)}
 			{#if stale && suggestions.length > 0}
 				<span class="inline-flex gap-0.5 ml-1 align-middle">
 					<span class="w-1 h-1 rounded-full bg-[var(--accent)] animate-bounce inline-block" style="animation-delay: 0ms"></span>
@@ -60,7 +52,7 @@
 		</h3>
 		{#if moveQuality}
 			<span class="text-[11px] font-bold px-2 py-0.5 rounded-md {QUALITY_COLORS[moveQuality]}" style="background: color-mix(in srgb, currentColor 12%, transparent)">
-				{QUALITY_LABELS[moveQuality]}
+				{t(`quality.${moveQuality}`, appState.language)}
 			</span>
 		{/if}
 	</div>
@@ -69,7 +61,7 @@
 		{#if suggestions.length === 0}
 			<div class="flex items-center justify-center py-3">
 				{#if appState.isGameOver}
-					<span class="text-xs text-[var(--text-muted)]">Game over</span>
+					<span class="text-xs text-[var(--text-muted)]">{t("game.gameOver", appState.language)}</span>
 				{:else}
 					<div class="flex gap-1">
 						<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 0ms"></div>
@@ -85,8 +77,8 @@
 					onmouseenter={() => onHoverMove?.(sug.move)}
 					onmouseleave={() => onClearHover?.()}
 					onclick={() => onPlayMove?.(sug.move)}
-					title="Click to play {sug.san ?? sug.move}"
-					aria-label="Play {sug.san ?? sug.move}"
+					title="{sug.san ?? sug.move}"
+					aria-label="{sug.san ?? sug.move}"
 				>
 					<span class="w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0 {i === 0
 						? 'bg-[var(--accent)] text-[var(--bg-primary)]'

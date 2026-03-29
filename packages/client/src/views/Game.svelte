@@ -105,24 +105,17 @@
 		return null;
 	}
 
-	// AI opponent display name
-	const DIFFICULTY_NAMES: Record<string, string> = {
-		beginner: "Tess (Beginner)",
-		casual: "Tess (Casual)",
-		club: "Tess (Club)",
-		pro: "Tess (Pro)",
-		superhuman: "Tess (Superhuman)",
-	};
-	const aiName = $derived(DIFFICULTY_NAMES[appState.difficulty] ?? "Tess");
+	// AI opponent display name (reactive for language changes)
+	const aiName = $derived(`Tess (${t(`menu.difficulty`, appState.language)} ${appState.difficulty})`);
 
-	// Move quality flash — visible briefly after each move assessment
-	const QUALITY_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-		best: { label: "Best", color: "var(--success)", icon: "!!" },
-		good: { label: "Good", color: "#60a5fa", icon: "!" },
-		ok: { label: "OK", color: "var(--text-secondary)", icon: "~" },
-		inaccuracy: { label: "Inaccuracy", color: "#facc15", icon: "?!" },
-		mistake: { label: "Mistake", color: "#fb923c", icon: "?" },
-		blunder: { label: "Blunder", color: "var(--danger)", icon: "??" },
+	// Move quality flash — colors/icons are static, labels are i18n
+	const QUALITY_STYLE: Record<string, { color: string; icon: string }> = {
+		best: { color: "var(--success)", icon: "!!" },
+		good: { color: "#60a5fa", icon: "!" },
+		ok: { color: "var(--text-secondary)", icon: "~" },
+		inaccuracy: { color: "#facc15", icon: "?!" },
+		mistake: { color: "#fb923c", icon: "?" },
+		blunder: { color: "var(--danger)", icon: "??" },
 	};
 
 	let qualityFlash = $state<string | null>(null);
@@ -238,14 +231,14 @@
 			<div class="player-info">
 				<span class="player-icon">&#x2654;</span>
 				<span class="player-name">{appState.nickname ? appState.nickname : appState.userId}</span>
-				{#if qualityFlash && QUALITY_CONFIG[qualityFlash]}
+				{#if qualityFlash && QUALITY_STYLE[qualityFlash]}
 					<span
 						class="quality-badge"
 						class:fading={qualityFading}
-						style="--quality-color: {QUALITY_CONFIG[qualityFlash].color}"
+						style="--quality-color: {QUALITY_STYLE[qualityFlash].color}"
 					>
-						<span class="quality-icon">{QUALITY_CONFIG[qualityFlash].icon}</span>
-						{QUALITY_CONFIG[qualityFlash].label}
+						<span class="quality-icon">{QUALITY_STYLE[qualityFlash].icon}</span>
+						{t(`quality.${qualityFlash}`, appState.language)}
 					</span>
 				{/if}
 			</div>
@@ -332,7 +325,7 @@
 						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-colors"
 						onclick={() => onRematch?.()}
 					>
-						Rematch
+						{t("game.rematch", appState.language)}
 					</button>
 					{#if onAutoplayRematch}
 						<button
@@ -382,7 +375,7 @@
 						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--danger)] text-white transition-colors animate-pulse"
 						onclick={resign}
 					>
-						Confirm resign?
+						{t("game.confirmResign", appState.language)}
 					</button>
 				{:else}
 					<button

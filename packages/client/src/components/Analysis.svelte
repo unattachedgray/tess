@@ -97,7 +97,7 @@
 				{#if skillEval.opponentAccuracy !== undefined && skillEval.opponentSkill}
 					<div class="pt-2 mt-2 border-t border-[var(--accent)]/20 space-y-1">
 						<div class="flex items-center justify-between">
-							<span class="text-xs font-medium text-[var(--text-muted)]">AI</span>
+							<span class="text-xs font-medium text-[var(--text-muted)]">{t("coach.ai", appState.language)}</span>
 							<span class="text-xs text-[var(--text-secondary)]">{skillEval.opponentSkill.label} ~{skillEval.opponentSkill.rating}</span>
 						</div>
 						<div class="flex justify-between text-xs text-[var(--text-muted)]">
