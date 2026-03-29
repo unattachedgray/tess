@@ -2,157 +2,225 @@
   <img src="assets/hero.svg" alt="Tess — Play Chess, Go, and Janggi against AI" width="100%"/>
 </p>
 
-Tess is a self-hosted board game platform where you play **Chess**, **Go**, and **Janggi** against AI opponents that adapt to your skill level — with real-time coaching that explains *why* moves are good or bad, not just which one to play.
+<p align="center">
+  <strong>Play Chess, Go, and Janggi against AI that teaches you as you play.</strong><br>
+  Real-time coaching in 5 languages. Multiplayer across the internet. Runs on your machine.
+</p>
 
-Every game is analyzed. Every move is scored. You get better by playing.
+<p align="center">
+  <a href="#quick-start">Quick Start</a> · <a href="#features">Features</a> · <a href="#multiplayer">Multiplayer</a> · <a href="#how-it-works">How It Works</a>
+</p>
+
+---
+
+## What Is Tess?
+
+Tess is a board game platform that does something most chess/go apps don't: it **explains why** a move is good or bad, not just which one to play. An AI coach watches your game and gives you feedback after every move — in plain language, in your language.
+
+You pick a difficulty, play your game, and Tess tells you things like:
+
+> **Your queen move** left the d-file undefended. The engine's top suggestion was **Nf3** because it develops a piece while keeping pressure on the center.
+
+After the game, you get a full review: your accuracy percentage, a skill rating, and a narrative summary of what you did well and where to improve.
+
+It works for three games:
+
+- **Chess** — drag-and-drop board, opening recognition, full PGN export
+- **Go** — click-to-place stones on 9x9, 13x13, or 19x19 boards
+- **Janggi** (Korean Chess) — traditional piece set with palace rules
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/your-repo/tess
 cd tess
-./tess.sh        # Installs everything, downloads engines, opens browser
+./tess.sh
 ```
 
-That's it. Engines are auto-downloaded. If something fails, the script tells you exactly what to do.
+That's it. The script installs dependencies, downloads game engines, and opens your browser. Takes about 2 minutes on first run.
 
-```bash
-./tess.sh dev      # Development mode (hot reload)
-./tess.sh prod     # Production mode
-./tess.sh status   # Check what's running
-./tess.sh stop     # Stop everything
+> **Requirements:** Node.js 20+ (checked automatically). Works on Linux and WSL2. Optional: [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) for AI coaching.
+
+## Features
+
+### AI Coaching That Actually Helps
+
+The AI coach (powered by Claude) doesn't just say "Nf3 was better." It explains the position, the threat, and what your move missed. Coaching works during the game and as a post-game review.
+
+Available in **English, Korean, Spanish, Vietnamese, and Mongolian**.
+
+### Five Difficulty Levels
+
+Each game has 5 AI levels calibrated from thousands of simulated games. The AI at "Beginner" makes realistic mistakes. The AI at "Superhuman" plays at engine strength. You can switch difficulty mid-game from the header.
+
+### Your Moves Get Rated
+
+After every game, Tess evaluates your play using the same metrics competitive players use (ACPL — average centipawn loss). You get a skill tier that maps to real-world ratings:
+
+| Tier | Chess | Go | Janggi |
+|------|-------|----|--------|
+| Superhuman | 2800+ Elo | 9 dan+ | 2800+ Elo |
+| Pro | 2200-2500 | 1-3 dan | 2200-2500 |
+| Club | 1600-1800 | 4-8 kyu | 1600-1800 |
+| Casual | 1200-1400 | 13-15 kyu | 1200-1400 |
+| Beginner | Under 1200 | 16+ kyu | Under 1200 |
+
+The scale is the same across all three games, so your "Club" rating means the same thing in chess as in Go.
+
+### Engine Suggestions
+
+See the top engine moves with eval scores while you play. Adjustable depth (Fast / Balanced / Deep). Hover a suggestion to see the arrow on the board. Click to play it.
+
+### Game Review
+
+After the game ends, you get:
+- **Accuracy percentage** and **skill rating**
+- **Move-by-move quality** (Best, Good, Inaccuracy, Mistake, Blunder)
+- **AI narrative summary** — a paragraph about your strengths and mistakes
+- **Board replay** for chess with arrow-key navigation
+
+### Themes
+
+Three visual themes: **Midnight** (dark blue), **Forest** (green), **Sandstorm** (warm).
+
+## Multiplayer
+
+Play against friends — on the same machine, over WiFi, or across the internet.
+
+### Local Play
+
+Open two browser tabs. One creates a challenge in the Multiplayer lobby, the other accepts with the 6-character game code. Fischer clocks included. Untimed games have a 2-minute idle timer so nobody stalls.
+
+### Play Over the Internet
+
+Tess instances **find each other automatically** using a peer-to-peer discovery network. No port forwarding needed — it punches through most home routers.
+
+When another Tess server is running somewhere in the world, their challenges show up in your lobby tagged with their server name. Click "Play" and the game starts — moves, emojis, and chat messages relay over an encrypted connection between the two servers.
+
+You can also play manually: share your IP or use a tunnel (Tailscale, Cloudflare Tunnel), and your friend opens it in their browser.
+
+### In-Game Chat
+
+Send emoji reactions (👍 👏 😅 🤔 ⚡ 🤝) and preset messages during multiplayer games. Messages are translated into each player's language automatically.
+
+### Privacy
+
+- Toggle "Network Play" off in the lobby to stop all federation
+- Your games and stats never leave your machine
+- No accounts — you're identified by a random bird name (Falcon4821)
+- Set `TESS_DISCOVERY_TOPIC=secret-phrase` for a friends-only discovery group
+
+## How It Works
+
+Tess runs on your machine as a local web server. You open it in your browser like any website.
+
+```
+Your Browser ←→ Tess Server (localhost:8082) ←→ Game Engines (Fairy-Stockfish, KataGo)
+                     │
+                     ├── AI Coaching (Claude CLI)
+                     ├── Game Database (SQLite)
+                     └── Federation (Hyperswarm P2P)
 ```
 
-## What You Need
+Game engines run as background processes. The server manages games, validates moves, and coordinates multiplayer. Everything stays local — nothing is sent to the cloud.
 
-| Requirement | Status | Notes |
-|-------------|--------|-------|
-| **Node.js 20+** | Required | Checked automatically |
-| **pnpm** | Auto-installed | Via npm if missing |
-| **Claude Code CLI** | Optional | Enables AI coaching + game summaries |
-| **Engine binaries** | Auto-downloaded | Chess, Go, Janggi engines from GitHub |
+For multiplayer across the internet, Tess uses three discovery layers:
 
-Engines download automatically on first install. If auto-download fails (ARM, macOS, etc.), the script prints manual download instructions with direct links.
+1. **Hyperswarm** — finds other Tess servers via the BitTorrent DHT network, then establishes encrypted connections through NAT
+2. **UPnP** — automatically opens your server port on the router (~85% of home routers)
+3. **mDNS** — instant discovery on the same WiFi/LAN
+
+All game traffic between servers is encrypted with the Noise protocol (same as WireGuard).
+
+---
+
+## Installation Details
+
+### What Gets Installed
+
+| Component | Size | Source |
+|-----------|------|--------|
+| Node.js packages | ~100MB | npm registry |
+| Fairy-Stockfish (chess/janggi) | ~1MB | GitHub releases |
+| KataGo + neural network (go) | ~130MB | GitHub releases |
+| Sound effects | ~5KB | Generated locally |
+
+Engines are downloaded automatically by `./tess.sh`. If auto-download fails (wrong architecture, network issues), the script prints manual download instructions with direct links.
 
 ```bash
 ./scripts/download-engines.sh          # Re-download all engines
 ./scripts/download-engines.sh --help   # See options
 ```
 
-## What Makes Tess Different
+### Configuration
 
-### Coaching, Not Just Playing
+```bash
+# .env (optional — defaults work for most users)
+PORT=8082                    # Server port
+TESS_DISCOVERY=off           # Disable federation
+TESS_SERVER_NAME=MyTess      # Name shown to other servers
+TESS_DISCOVERY_TOPIC=secret  # Private discovery group
+ENGINE_POOL_SIZE=4           # More engine workers for more concurrent games
+```
 
-Most board game apps tell you the best move. Tess tells you *why* — in your language. The AI coach (powered by Claude) explains tactics, patterns, and strategy in context. After the game, you get a narrative review of your strengths and mistakes.
+### Commands
 
-### One Skill Scale Across Everything
-
-Play chess at "Club" level, switch to Go, and your evaluation uses the same calibrated scale. The **SKILL_SCALE** system maps your actual move quality (ACPL) to consistent tiers — Beginner through Superhuman — independently calibrated per game from engine simulations.
-
-| Tier | Chess | Go | Janggi |
-|------|-------|----|--------|
-| Superhuman | 2800+ | 9 dan+ | 2800+ |
-| Pro | 2200-2500 | 1-3 dan | 2200-2500 |
-| Club | 1600-1800 | 4-8 kyu | 1600-1800 |
-| Casual | 1200-1400 | 13-15 kyu | 1200-1400 |
-| Beginner | Under 1200 | 16+ kyu | Under 1200 |
-
-### 5 Languages, Real Translation
-
-UI, coaching, game summaries, chat messages — everything works in English, Korean, Spanish, Vietnamese, and Mongolian. Preset multiplayer messages are sent as i18n keys and translated on the receiver's client in *their* language.
-
-### Self-Hosted and Private
-
-Your games, your data. Tess runs on your machine. The SQLite database stays local. No accounts, no cloud, no tracking. You're assigned a random bird name (Falcon4821) and that's your identity.
-
-## Multiplayer
-
-### Same Machine
-
-Two browser tabs on the same machine. One creates a challenge, the other accepts via the 6-character game code. Works immediately.
-
-### Local Network
-
-Share your machine's local IP (e.g., `http://192.168.1.50:8082`) with someone on the same WiFi. They open it in their browser, enter the game code, and play. No port forwarding needed for LAN.
-
-### Cross-Internet
-
-If you expose your Tess instance (via port forwarding, Tailscale, Cloudflare Tunnel, etc.), anyone with the URL + game code can join your game.
-
-### Federation (Planned)
-
-Tess instances will discover each other automatically on LAN via mDNS, and across the internet via manual peer registration. Remote challenges appear in your lobby with a server tag. Each server validates its own player's moves — no trust required between peers. See `docs/engine-calibration.md` for the full federation protocol design.
+```bash
+./tess.sh              # Install + launch (first time)
+./tess.sh dev          # Development mode with hot reload
+./tess.sh prod         # Production mode
+./tess.sh status       # Server health, engine status, federation stats
+./tess.sh stop         # Stop everything
+```
 
 ## Security
 
-- **Server-authoritative**: All moves validated server-side. Clients cannot cheat.
-- **No peer-to-peer**: Players never connect directly. All traffic goes through your Tess server.
-- **No code execution**: Federation only exchanges JSON metadata (challenge info, moves). No eval, no binary data.
-- **Local data**: SQLite database, engine binaries, and game history stay on your machine.
-- **Opt-out**: Set `TESS_DISCOVERY=off` in `.env` to completely disable federation and network discovery. Local multiplayer still works.
+- **Server-authoritative** — all moves validated server-side, clients cannot cheat
+- **Encrypted federation** — Noise protocol on all cross-server traffic
+- **No direct connections** — players connect to their own server, never to each other
+- **Input validation** — all WebSocket messages validated via Zod schemas, all federation data size-limited and type-checked
+- **Rate limiting** — 30 WS messages/sec per client, 10 federation requests/min per IP
+- **Whitelist communication** — only preset emojis and message keys can be sent between players
 
-```bash
-# .env
-TESS_DISCOVERY=off    # Disable federation (default: on)
-TESS_SERVER_NAME=MyTess  # Custom server name for federation
-```
+See [docs/FEDERATION.md](docs/FEDERATION.md) for the full security model.
 
-## Games
+## For Developers
 
-| Game | Engine | AI Difficulty | Board |
-|------|--------|---------------|-------|
-| **Chess** | Fairy-Stockfish | 800-2800+ Elo (UCI_LimitStrength) | Chessground (drag-drop) |
-| **Go** | KataGo | 16+ kyu to 9 dan+ (visit budgets) | SVG grid (click-to-place) |
-| **Janggi** | Fairy-Stockfish LB | 800-2800+ Elo | SVG board (click-select-move) |
-
-## Features
-
-- **5 difficulty levels** per game, calibrated from autoplay simulations
-- **Real-time AI coaching** via Claude CLI (5 languages)
-- **Engine suggestions** with adjustable depth (Fast / Mid / Deep)
-- **Post-game evaluation** — accuracy, ACPL, skill label
-- **LLM game review** — narrative summary of your play
-- **Chess opening explorer** (172 ECO openings)
-- **Multiplayer** with Fischer clocks + idle timeout for untimed games
-- **In-game chat** — emoji reactions + preset messages (i18n translated)
-- **Player stats** — win/loss/draw, accuracy tracking
-- **Autoplay mode** — watch AI vs AI at configurable Elo
-- **Game history** in SQLite with PGN/SGF export
-- **MCP server** — expose engines as tools for Claude agents
-- **3 themes** — Midnight, Forest, Sandstorm
-
-## Architecture
+### Architecture
 
 ```
-packages/shared/   — Game logic (IGame interface), WS protocol, evaluation (SKILL_SCALE)
+packages/shared/   — Game logic (IGame interface), protocol, evaluation
 packages/client/   — Svelte 5 SPA, Tailwind v4, board components
-packages/server/   — Hono HTTP + ws WebSocket, GameEngine abstraction, AI coaching, SQLite
-assets/engines/    — Engine binaries (auto-downloaded, gitignored)
-scripts/           — Engine download, deployment helpers
-data/              — SQLite database (auto-created, gitignored)
+packages/server/   — Hono HTTP, WebSocket, GameEngine, AI, federation, SQLite
 ```
 
-Games are modular via the `IGame` interface + `GameEngine` abstraction. Adding a new game (xiangqi, shogi, etc.) requires implementing `IGame`, registering in `GameRegistry`, and creating a `GameEngine` — zero changes to the game room infrastructure.
+Games are modular via the `IGame` interface. Adding a new game (xiangqi, shogi, etc.) means implementing `IGame` + `GameEngine` — zero changes to game rooms, multiplayer, or evaluation.
 
-## API
+### API
 
 ```
-GET  /api/health                — Server status
-GET  /api/games                 — Game history
+GET  /api/health                — Server status + federation stats
+GET  /api/games                 — Game history (filterable)
 GET  /api/games/:id/export      — PGN/SGF download
 GET  /api/users/:id/stats       — Player stats (W/L/D, accuracy)
-POST /api/federation/peers      — Register a peer server
-POST /api/federation/heartbeat  — Health check for peers
+GET  /api/federation/status     — Discovery status + peer count
 ```
 
-## Development
+### Testing
 
 ```bash
-pnpm --filter shared test    # Run game logic + evaluation tests (56 tests)
-pnpm biome check .           # Lint + format
-pnpm run build               # Build client + shared
-node test-mp-autoplay.cjs chess 800 2200   # Run autoplay simulation
+pnpm --filter shared test                      # 56 game logic + evaluation tests
+pnpm biome check .                             # Lint + format
+node test-mp-autoplay.cjs chess 800 2200       # Autoplay simulation
+node test-mp-autoplay.cjs go 1200 2200         # Go simulation
+node test-mp-autoplay.cjs janggi 1200 2200     # Janggi simulation
 ```
+
+### Documentation
+
+- [Engine Calibration](docs/engine-calibration.md) — How AI difficulty and skill evaluation work
+- [Federation](docs/FEDERATION.md) — P2P discovery, protocol, security model
+- [Engines](docs/ENGINES.md) — Engine setup, difficulty mapping, troubleshooting
 
 ## License
 
