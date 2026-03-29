@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { appState } from "../lib/stores.svelte.ts";
+	import { appState, type Theme } from "../lib/stores.svelte.ts";
 	import { LANGUAGES, type Language } from "../lib/i18n.ts";
 	import type { WsClient } from "../lib/ws.ts";
 
@@ -22,11 +22,14 @@
 
 	function toggleAutoplay() {
 		appState.autoplayActive = !appState.autoplayActive;
-		ws.send({
-			type: "AUTOPLAY",
-			enabled: appState.autoplayActive,
-			humanElo: appState.autoplayHumanElo,
-		});
+		if (!appState.isMultiplayer) {
+			ws.send({
+				type: "AUTOPLAY",
+				enabled: appState.autoplayActive,
+				humanElo: appState.autoplayHumanElo,
+			});
+		}
+		// In MP: autoplay is client-side, triggered by SUGGESTIONS handler
 	}
 
 	function setHumanElo(elo: number) {
@@ -35,6 +38,21 @@
 
 	function changeLanguage(lang: Language) {
 		appState.setLanguage(lang);
+	}
+
+	function changeTheme(theme: Theme) {
+		appState.setTheme(theme);
+	}
+
+	const THEMES: { id: Theme; label: string; swatch: string }[] = [
+		{ id: "midnight", label: "Midnight", swatch: "#38bdf8" },
+		{ id: "forest", label: "Forest", swatch: "#8bbe6a" },
+		{ id: "sandstorm", label: "Sandstorm", swatch: "#e0985e" },
+	];
+
+	function setNickname(name: string) {
+		appState.setNickname(name);
+		ws.send({ type: "SET_NICKNAME", nickname: name });
 	}
 
 	const ELO_PRESETS = [
@@ -62,6 +80,19 @@
 
 		<!-- Dropdown -->
 		<div class="absolute right-0 top-8 z-50 w-56 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-xl p-3 space-y-3">
+			<!-- Nickname -->
+			<div class="space-y-1.5">
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Nickname</span>
+				<input
+					type="text"
+					class="w-full py-1.5 px-2 rounded-lg text-xs bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] placeholder-[var(--text-muted)]"
+					placeholder={appState.userId}
+					value={appState.nickname}
+					maxlength="20"
+					oninput={(e) => setNickname((e.target as HTMLInputElement).value)}
+				/>
+			</div>
+
 			<!-- Suggestions count -->
 			<div class="space-y-1.5">
 				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Suggestions</span>
@@ -106,6 +137,24 @@
 				>
 					<div class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform {appState.coachingEnabled ? 'translate-x-5' : 'translate-x-0.5'}"></div>
 				</button>
+			</div>
+
+			<!-- Theme -->
+			<div class="space-y-1.5">
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Theme</span>
+				<div class="flex gap-1">
+					{#each THEMES as theme}
+						<button
+							class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all {appState.theme === theme.id
+								? 'bg-[var(--accent)]/15 border border-[var(--accent)] text-[var(--accent)]'
+								: 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+							onclick={() => changeTheme(theme.id)}
+						>
+							<span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background: {theme.swatch}"></span>
+							{theme.label}
+						</button>
+					{/each}
+				</div>
 			</div>
 
 			<!-- Language -->

@@ -92,6 +92,67 @@ export function createApp(sessionManager: SessionManager): Hono {
 		return c.json({ ok: true });
 	});
 
+
+	// ── Tess Open Game API (v1) ──
+	// Compatible in spirit with Lichess Board API and OGS API.
+	// Designed to be the standard for Janggi online play.
+
+	app.get("/api/v1/challenges", (c) => {
+		// Public endpoint: list open challenges on this server
+		// Rate limit: 60 requests/minute per IP
+		return c.json({
+			challenges: [], // TODO: wire to lobby
+			server: {
+				name: process.env.TESS_SERVER_NAME ?? "Tess",
+				version: "1.0.0",
+				games: ["chess", "go", "janggi"],
+			},
+		});
+	});
+
+	// ── Federation API ──
+
+	app.post("/api/federation/peers", async (c) => {
+		// Register a peer server
+		const body = await c.req.json();
+		if (!body.url || typeof body.url !== "string") {
+			return c.json({ error: "url required" }, 400);
+		}
+		// Validate URL format
+		try { new URL(body.url); } catch {
+			return c.json({ error: "Invalid URL" }, 400);
+		}
+		// TODO: Store in peers table + validate with heartbeat
+		return c.json({ ok: true, message: "Peer registered" });
+	});
+
+	app.get("/api/federation/peers", (c) => {
+		// List known peer servers
+		// TODO: Read from peers table
+		return c.json({ peers: [] });
+	});
+
+	app.post("/api/federation/heartbeat", (c) => {
+		// Respond to peer health check
+		return c.json({
+			name: process.env.TESS_SERVER_NAME ?? "Tess",
+			version: "1.0.0",
+			players: 0, // TODO: wire to session count
+			games: ["chess", "go", "janggi"],
+			discovery: process.env.TESS_DISCOVERY !== "off",
+		});
+	});
+
+	app.get("/api/federation/challenges", (c) => {
+		// Public: list challenges for federated consumption
+		// Same as /api/v1/challenges but explicitly for federation
+		return c.json({ challenges: [] });
+	});
+
+	// ── Join routes (serve SPA for game code URLs) ──
+	app.get("/join/:code", serveStatic({ root: "../../packages/client/dist", path: "index.html" }));
+	app.get("/watch/:code", serveStatic({ root: "../../packages/client/dist", path: "index.html" }));
+
 	// Serve static files in production
 	app.use("/*", serveStatic({ root: "../../packages/client/dist" }));
 	app.get("*", serveStatic({ root: "../../packages/client/dist", path: "index.html" }));

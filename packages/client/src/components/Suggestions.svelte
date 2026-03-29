@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Suggestion } from "@tess/shared";
+	import { appState } from "../lib/stores.svelte.ts";
 	import type { MoveQuality } from "../lib/stores.svelte.ts";
 
 	let {
@@ -58,7 +59,7 @@
 			{/if}
 		</h3>
 		{#if moveQuality}
-			<span class="text-xs font-semibold {QUALITY_COLORS[moveQuality]}">
+			<span class="text-[11px] font-bold px-2 py-0.5 rounded-md {QUALITY_COLORS[moveQuality]}" style="background: color-mix(in srgb, currentColor 12%, transparent)">
 				{QUALITY_LABELS[moveQuality]}
 			</span>
 		{/if}
@@ -67,20 +68,25 @@
 	<div class="p-2 space-y-0.5">
 		{#if suggestions.length === 0}
 			<div class="flex items-center justify-center py-3">
-				<div class="flex gap-1">
-					<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 0ms"></div>
-					<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 150ms"></div>
-					<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 300ms"></div>
-				</div>
+				{#if appState.isGameOver}
+					<span class="text-xs text-[var(--text-muted)]">Game over</span>
+				{:else}
+					<div class="flex gap-1">
+						<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 0ms"></div>
+						<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 150ms"></div>
+						<div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style="animation-delay: 300ms"></div>
+					</div>
+				{/if}
 			</div>
 		{:else}
 			{#each suggestions as sug, i}
 				<button
-					class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-[var(--bg-hover)] text-left cursor-pointer"
+					class="group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-[var(--bg-hover)] text-left cursor-pointer"
 					onmouseenter={() => onHoverMove?.(sug.move)}
 					onmouseleave={() => onClearHover?.()}
 					onclick={() => onPlayMove?.(sug.move)}
 					title="Click to play {sug.san ?? sug.move}"
+					aria-label="Play {sug.san ?? sug.move}"
 				>
 					<span class="w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0 {i === 0
 						? 'bg-[var(--accent)] text-[var(--bg-primary)]'

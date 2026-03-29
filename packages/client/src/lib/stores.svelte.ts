@@ -1,8 +1,9 @@
 import type { DifficultyId, GameType, Suggestion } from "@tess/shared";
 import { type Language, setLanguage as setI18nLang } from "./i18n.js";
 
-export type View = "home" | "game" | "review";
+export type View = "home" | "game" | "review" | "lobby";
 export type MoveQuality = "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" | null;
+export type Theme = "midnight" | "forest" | "sandstorm";
 
 export interface AnalysisMessage {
 	moveNumber: number;
@@ -115,6 +116,20 @@ class AppState {
 	);
 	autoplayHumanElo = $state<number>(loadPref("autoplayHumanElo", 1200));
 	boardSize = $state<number>(loadPref("boardSize", 19));
+	theme = $state<Theme>(loadPref("theme", "midnight"));
+	nickname = $state<string>(loadPref("nickname", ""));
+
+	// Multiplayer state
+	isMultiplayer = $state(false);
+	opponentName = $state("");
+	clockWhite = $state(0);
+	clockBlack = $state(0);
+	clockRunning = $state<"white" | "black" | null>(null);
+	spectatorCount = $state(0);
+	challenges = $state<any[]>([]);
+	lobbyPlayerCount = $state(0);
+	lastEmojiReceived = $state<string | null>(null);
+	opponentDisconnected = $state(false);
 
 	// User identity (persistent)
 	userId = $state<string>(
@@ -212,6 +227,21 @@ class AppState {
 	setAutoplayHumanElo(elo: number) {
 		this.autoplayHumanElo = elo;
 		savePref("autoplayHumanElo", elo);
+	}
+
+	setTheme(t: Theme) {
+		this.theme = t;
+		savePref("theme", t);
+		document.documentElement.setAttribute("data-theme", t);
+	}
+
+	setNickname(n: string) {
+		this.nickname = n;
+		savePref("nickname", n);
+	}
+
+	get displayName(): string {
+		return this.nickname || this.userId;
 	}
 
 	setBoardSize(s: number) {

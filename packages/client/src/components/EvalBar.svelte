@@ -1,10 +1,8 @@
 <script lang="ts">
 	let { score, orientation }: { score: number; orientation: "white" | "black" } = $props();
 
-	// Convert centipawn score to a percentage (50% = even)
 	const whitePercent = $derived.by(() => {
 		const cp = Math.max(-1000, Math.min(1000, score));
-		// Sigmoid-like curve: maps cp to 10%-90% range
 		const pct = 50 + 50 * (2 / (1 + Math.exp(-cp / 200)) - 1);
 		return Math.max(5, Math.min(95, pct));
 	});
@@ -19,25 +17,29 @@
 		const pawns = (score / 100).toFixed(1);
 		return score > 0 ? `+${pawns}` : pawns;
 	});
+
+	const isWinning = $derived(
+		(orientation === "white" && score > 0) || (orientation === "black" && score < 0)
+	);
 </script>
 
 <div class="eval-bar" title="Evaluation: {scoreText}">
-	<div
-		class="eval-fill"
-		style="height: {displayPercent}%"
-	></div>
-	<span class="eval-text">{scoreText}</span>
+	<div class="eval-fill" style="height: {displayPercent}%"></div>
+	<div class="eval-label" class:winning={isWinning}>
+		{scoreText}
+	</div>
 </div>
 
 <style>
 	.eval-bar {
-		width: 24px;
+		width: 32px;
 		height: 100%;
-		background: #333;
-		border-radius: 4px;
+		background: #1a1a2e;
+		border-radius: 6px;
 		position: relative;
 		overflow: hidden;
 		flex-shrink: 0;
+		border: 1px solid var(--border);
 	}
 
 	.eval-fill {
@@ -45,22 +47,33 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		background: #e8e8e8;
-		transition: height 0.5s ease;
+		background: linear-gradient(to top, #e8e8e8 0%, #d4d4d8 100%);
+		transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 	}
 
-	.eval-text {
+	.eval-label {
 		position: absolute;
-		top: 50%;
+		bottom: 6px;
 		left: 50%;
-		transform: translate(-50%, -50%);
-		font-size: 9px;
+		transform: translateX(-50%);
+		font-size: 10px;
 		font-weight: 700;
-		color: #999;
-		writing-mode: vertical-rl;
-		text-orientation: mixed;
+		font-family: "SF Mono", "Cascadia Mono", "Fira Code", monospace;
+		color: var(--text-muted);
 		white-space: nowrap;
 		z-index: 1;
-		mix-blend-mode: difference;
+		writing-mode: vertical-rl;
+		text-orientation: mixed;
+		letter-spacing: 0.02em;
+	}
+
+	.eval-label.winning {
+		color: var(--accent);
+	}
+
+	@media (max-width: 768px) {
+		.eval-bar {
+			display: none;
+		}
 	}
 </style>

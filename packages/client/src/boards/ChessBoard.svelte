@@ -104,6 +104,13 @@
 		position: relative;
 	}
 
+	@media (max-width: 768px) {
+		.board-wrap {
+			height: auto;
+			width: 100%;
+		}
+	}
+
 	.board {
 		position: absolute;
 		inset: 0;

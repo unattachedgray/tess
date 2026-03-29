@@ -80,22 +80,30 @@ export interface SkillLevel {
 }
 
 /** Map game accuracy to a skill level */
-export function getSkillLevel(accuracy: number, gameType: "chess" | "go" | "janggi"): SkillLevel {
-	// Chess/Janggi accuracy-to-rating mapping
+export function getSkillLevel(accuracy: number, gameType: "chess" | "go" | "janggi", acpl?: number): SkillLevel {
+	// Chess/Janggi: blend accuracy with ACPL for more realistic rating
+	// High accuracy in a losing position doesn't mean good play
 	if (gameType === "chess" || gameType === "janggi") {
-		if (accuracy >= 95)
+		// Penalize accuracy score based on ACPL
+		// ACPL 0-20: no penalty, 20-50: mild, 50-100: significant, 100+: heavy
+		let adjustedAcc = accuracy;
+		if (acpl !== undefined && acpl > 15) {
+			const penalty = Math.min(40, (acpl - 15) * 0.5);
+			adjustedAcc = Math.max(0, accuracy - penalty);
+		}
+		if (adjustedAcc >= 95)
 			return { label: "Engine", rating: "2800+", description: "Near-perfect engine play" };
-		if (accuracy >= 90)
+		if (adjustedAcc >= 90)
 			return { label: "Grandmaster", rating: "2500-2700", description: "World-class accuracy" };
-		if (accuracy >= 82)
+		if (adjustedAcc >= 82)
 			return { label: "Master", rating: "2200-2500", description: "Master-level precision" };
-		if (accuracy >= 72)
+		if (adjustedAcc >= 72)
 			return { label: "Expert", rating: "2000-2200", description: "Expert-level play" };
-		if (accuracy >= 62)
+		if (adjustedAcc >= 62)
 			return { label: "Advanced", rating: "1800-2000", description: "Strong club player" };
-		if (accuracy >= 50)
+		if (adjustedAcc >= 50)
 			return { label: "Intermediate", rating: "1500-1800", description: "Average club player" };
-		if (accuracy >= 35)
+		if (adjustedAcc >= 35)
 			return { label: "Casual", rating: "1200-1500", description: "Developing player" };
 		return { label: "Beginner", rating: "Under 1200", description: "Learning the basics" };
 	}

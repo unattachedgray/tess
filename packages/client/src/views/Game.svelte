@@ -54,8 +54,11 @@
 		ws.send({ type: "PLAY_MOVE", move });
 	}
 
+	let showResignConfirm = $state(false);
+
 	function resign() {
 		ws.send({ type: "RESIGN" });
+		showResignConfirm = false;
 	}
 
 	function newGame() {
@@ -91,6 +94,40 @@
 		return null;
 	}
 
+	// AI opponent display name
+	const DIFFICULTY_NAMES: Record<string, string> = {
+		beginner: "Tess (Beginner)",
+		casual: "Tess (Casual)",
+		club: "Tess (Club)",
+		pro: "Tess (Pro)",
+		superhuman: "Tess (Superhuman)",
+	};
+	const aiName = $derived(DIFFICULTY_NAMES[appState.difficulty] ?? "Tess");
+
+	// Move quality flash — visible briefly after each move assessment
+	const QUALITY_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
+		best: { label: "Best", color: "var(--success)", icon: "!!" },
+		good: { label: "Good", color: "#60a5fa", icon: "!" },
+		ok: { label: "OK", color: "var(--text-secondary)", icon: "~" },
+		inaccuracy: { label: "Inaccuracy", color: "#facc15", icon: "?!" },
+		mistake: { label: "Mistake", color: "#fb923c", icon: "?" },
+		blunder: { label: "Blunder", color: "var(--danger)", icon: "??" },
+	};
+
+	let qualityFlash = $state<string | null>(null);
+	let qualityFading = $state(false);
+
+	$effect(() => {
+		const q = appState.lastMoveQuality;
+		if (q) {
+			qualityFlash = q;
+			qualityFading = false;
+			const fadeTimer = setTimeout(() => qualityFading = true, 2000);
+			const clearTimer = setTimeout(() => qualityFlash = null, 3000);
+			return () => { clearTimeout(fadeTimer); clearTimeout(clearTimer); };
+		}
+	});
+
 	// Build arrow shapes — only on hover, not automatically
 	const boardArrows = $derived.by(() => {
 		if (!hoveredMove || appState.suggestionsStale) return [];
@@ -102,7 +139,24 @@
 <div class="game-container">
 	<!-- Board area: eval bar + board + captured pieces -->
 	<div class="board-area">
-		<!-- Opponent captured pieces (pieces they've taken from us) -->
+		<!-- Opponent player bar -->
+		<div class="player-bar opponent">
+			<div class="player-info">
+				<span class="player-icon">&#x265A;</span>
+				<span class="player-name">{appState.isMultiplayer ? appState.opponentName : aiName}</span>
+				{#if !isMyTurn && !appState.isGameOver}
+					<span class="thinking-indicator">
+						<span class="thinking-dot"></span>
+						<span class="thinking-dot" style="animation-delay: 150ms"></span>
+						<span class="thinking-dot" style="animation-delay: 300ms"></span>
+					</span>
+				{/if}
+			</div>
+			<CapturedPieces
+				pieces={appState.playerColor === 'white' ? appState.capturedPieces.white : appState.capturedPieces.black}
+				color={appState.playerColor}
+			/>
+		</div>
 		<CapturedPieces
 			pieces={appState.playerColor === 'white' ? appState.capturedPieces.white : appState.capturedPieces.black}
 			color={appState.playerColor}
@@ -153,31 +207,52 @@
 			{/if}
 		</div>
 
-		<!-- Our captured pieces (pieces we've taken from opponent) -->
-		<CapturedPieces
-			pieces={appState.playerColor === 'white' ? appState.capturedPieces.black : appState.capturedPieces.white}
-			color={appState.playerColor === 'white' ? 'black' : 'white'}
-		/>
+		<!-- Your player bar -->
+		<div class="player-bar you">
+			<div class="player-info">
+				<span class="player-icon">&#x2654;</span>
+				<span class="player-name">{appState.nickname ? appState.nickname : appState.userId}</span>
+				{#if qualityFlash && QUALITY_CONFIG[qualityFlash]}
+					<span
+						class="quality-badge"
+						class:fading={qualityFading}
+						style="--quality-color: {QUALITY_CONFIG[qualityFlash].color}"
+					>
+						<span class="quality-icon">{QUALITY_CONFIG[qualityFlash].icon}</span>
+						{QUALITY_CONFIG[qualityFlash].label}
+					</span>
+				{/if}
+			</div>
+			<CapturedPieces
+				pieces={appState.playerColor === 'white' ? appState.capturedPieces.black : appState.capturedPieces.white}
+				color={appState.playerColor === 'white' ? 'black' : 'white'}
+			/>
+		</div>
 	</div>
 
 	<!-- Right panel: status + suggestions + analysis + moves + controls -->
 	<div class="panel-area">
-		<!-- Status bar -->
-		<div class="p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] space-y-1">
+		<!-- Status bar with prominent turn indicator -->
+		<div class="status-bar" class:your-turn={isMyTurn && !appState.isGameOver} class:game-over={appState.isGameOver}>
 			<div class="flex items-center justify-between">
-				<span class="text-sm font-medium {appState.isGameOver
-					? (appState.result?.winner === appState.playerColor ? 'text-[var(--success)]' : appState.result?.winner === 'draw' ? 'text-[var(--text-secondary)]' : 'text-[var(--danger)]')
-					: isMyTurn ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}"
-				>
-					{statusText}
-				</span>
-				<span class="text-xs text-[var(--text-muted)]">
-					Move {Math.ceil(appState.moveHistory.length / 2)}
+				<div class="flex items-center gap-2">
+					{#if !appState.isGameOver && isMyTurn}
+						<span class="turn-dot"></span>
+					{/if}
+					<span class="text-sm font-semibold {appState.isGameOver
+						? (appState.result?.winner === appState.playerColor ? 'text-[var(--success)]' : appState.result?.winner === 'draw' ? 'text-[var(--text-secondary)]' : 'text-[var(--danger)]')
+						: isMyTurn ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}"
+					>
+						{statusText}
+					</span>
+				</div>
+				<span class="text-xs font-mono text-[var(--text-muted)]">
+					{Math.ceil(appState.moveHistory.length / 2)}
 				</span>
 			</div>
 			{#if appState.opening}
-				<div class="text-xs text-[var(--text-muted)]">
-					<span class="font-mono text-[var(--accent)]">{appState.opening.eco}</span>
+				<div class="text-xs text-[var(--text-muted)] mt-1">
+					<span class="font-mono font-semibold text-[var(--accent)]">{appState.opening.eco}</span>
 					{appState.opening.name}
 				</div>
 			{/if}
@@ -226,17 +301,29 @@
 				{/if}
 			{:else}
 				<button
-					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--accent)]/50 hover:text-[var(--accent)] transition-all flex items-center justify-center gap-1.5"
 					onclick={requestHint}
 				>
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="opacity-70">
+						<path d="M8 1a5 5 0 0 0-3 9v1a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1a5 5 0 0 0-3-9zm-1 13a1 1 0 1 0 2 0H7z"/>
+					</svg>
 					{t("game.hint", appState.language)}
 				</button>
-				<button
-					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--danger)]/10 border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)]/20 transition-colors"
-					onclick={resign}
-				>
-					{t("game.resign", appState.language)}
-				</button>
+				{#if showResignConfirm}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--danger)] text-white transition-colors animate-pulse"
+						onclick={resign}
+					>
+						Confirm resign?
+					</button>
+				{:else}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--danger)]/10 border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)]/20 transition-colors"
+						onclick={() => { showResignConfirm = true; setTimeout(() => showResignConfirm = false, 3000); }}
+					>
+						{t("game.resign", appState.language)}
+					</button>
+				{/if}
 			{/if}
 		</div>
 	</div>
@@ -277,21 +364,138 @@
 		overflow-y: auto;
 	}
 
-	/* Mobile: stack vertically */
+	.status-bar {
+		padding: 0.75rem;
+		border-radius: 12px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		transition: all 0.3s ease;
+	}
+
+	.status-bar.your-turn {
+		border-color: var(--accent);
+		box-shadow: 0 0 12px rgba(56, 189, 248, 0.15), inset 0 0 12px rgba(56, 189, 248, 0.05);
+	}
+
+	.status-bar.game-over {
+		border-color: var(--text-muted);
+	}
+
+	.turn-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--accent);
+		animation: pulse-dot 2s ease-in-out infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes pulse-dot {
+		0%, 100% { opacity: 1; transform: scale(1); }
+		50% { opacity: 0.5; transform: scale(0.8); }
+	}
+
+	/* Mobile: board-first vertical layout */
 	@media (max-width: 768px) {
 		.game-container {
 			flex-direction: column;
 			height: auto;
+			min-height: calc(100vh - 44px);
+			padding: 0.5rem;
+			gap: 0.5rem;
+		}
+
+		.board-area {
+			width: 100%;
+			flex-shrink: 0;
 		}
 
 		.board-with-eval {
 			height: auto;
 			width: 100%;
 			max-height: none;
+			aspect-ratio: auto;
 		}
 
 		.panel-area {
 			max-width: none;
+			overflow-y: visible;
+			gap: 0.5rem;
+		}
+
+		.player-bar {
+			padding: 1px 4px;
+			min-height: 26px;
+		}
+
+		.status-bar {
+			padding: 0.5rem 0.75rem;
 		}
 	}
+	.player-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 2px 8px;
+		min-height: 32px;
+	}
+
+	.player-info {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.player-icon {
+		font-size: 16px;
+		opacity: 0.7;
+	}
+
+	.player-name {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--text-secondary);
+	}
+
+	.thinking-indicator {
+		display: flex;
+		gap: 2px;
+		margin-left: 4px;
+	}
+
+	.thinking-dot {
+		width: 4px;
+		height: 4px;
+		border-radius: 50%;
+		background: var(--accent);
+		animation: bounce 1.4s ease-in-out infinite;
+	}
+
+	@keyframes bounce {
+		0%, 80%, 100% { transform: translateY(0); }
+		40% { transform: translateY(-4px); }
+	}
+
+	.quality-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		padding: 1px 8px;
+		border-radius: 6px;
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--quality-color);
+		background: color-mix(in srgb, var(--quality-color) 15%, transparent);
+		transition: opacity 0.5s ease;
+	}
+
+	.quality-badge.fading {
+		opacity: 0;
+	}
+
+	.quality-icon {
+		font-family: "SF Mono", "Cascadia Mono", monospace;
+		font-size: 10px;
+	}
 </style>
+

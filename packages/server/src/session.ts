@@ -51,7 +51,57 @@ export class SessionManager {
 		log.info("room removed", { id });
 	}
 
+	get hasJanggiPool(): boolean { return !!this.janggiPool; }
+	getChessPool(): UciPool { return this.chessPool; }
+	getJanggiPool(): UciPool | null { return this.janggiPool; }
+
 	get activeRoomCount(): number {
 		return this.rooms.size;
+	}
+
+	/** Analyze a FEN position directly using the engine pool. For multiplayer. */
+	async analyzeFen(
+		gameType: GameType,
+		fen: string,
+		topN = 3,
+		goMoves?: [string, string][],
+		boardSize?: number,
+	): Promise<{ type: "SUGGESTIONS"; suggestions: Array<{ move: string; san?: string; score: number; depth: number; pv: string[] }> }> {
+		if (gameType === "go") {
+			if (!this.kataGo) return { type: "SUGGESTIONS", suggestions: [] };
+			try {
+				const results = await this.kataGo.analyze(goMoves ?? [], "b", 200, topN, boardSize ?? 19);
+				const suggestions = results.slice(0, topN).map((info: any) => ({
+					move: info.move,
+					score: Math.round((info.winrate - 0.5) * 2000), // convert to centipawn-like
+					depth: info.visits ?? 0,
+					pv: [info.move],
+				}));
+				return { type: "SUGGESTIONS", suggestions };
+			} catch (err) {
+				log.error("KataGo analysis failed", { error: (err as Error).message });
+				return { type: "SUGGESTIONS", suggestions: [] };
+			}
+		}
+
+		const pool = gameType === "janggi" && this.janggiPool ? this.janggiPool : this.chessPool;
+		const variant = gameType === "janggi" ? "janggi" : undefined;
+
+		try {
+			const result = await pool.search(fen, 1000, topN, variant);
+			const suggestions = result.info
+				.filter((info: any) => info.pv && info.pv.length > 0)
+				.slice(0, topN)
+				.map((info: any) => ({
+					move: info.pv[0],
+					score: info.score ?? 0,
+					depth: info.depth ?? 0,
+					pv: info.pv ?? [],
+				}));
+			return { type: "SUGGESTIONS", suggestions };
+		} catch (err) {
+			log.error("analyzeFen failed", { error: (err as Error).message });
+			return { type: "SUGGESTIONS", suggestions: [] };
+		}
 	}
 }

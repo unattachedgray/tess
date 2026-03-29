@@ -115,7 +115,11 @@
 
 		{#if messages.length === 0 && !loading && !skillEval}
 			<p class="text-sm text-[var(--text-muted)] text-center py-4">
-				{t("coach.makeMove", appState.language)}
+				{#if appState.isGameOver}
+					{appState.isMultiplayer ? "Good game!" : t("coach.makeMove", appState.language)}
+				{:else}
+					{t("coach.makeMove", appState.language)}
+				{/if}
 			</p>
 		{/if}
 

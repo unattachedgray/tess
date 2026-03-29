@@ -51,23 +51,23 @@
 
 <div class="go-board-wrap">
 	<svg viewBox="0 0 100 100" class="go-board">
-		<rect width="100" height="100" fill="#DCB35C" rx="1" />
+		<rect width="100" height="100" fill="var(--board-light, #DCB35C)" rx="1" />
 
 		<!-- Grid lines -->
 		{#each Array(boardSize) as _, i}
-			<line x1={coordToSvg(i)} y1={coordToSvg(0)} x2={coordToSvg(i)} y2={coordToSvg(boardSize - 1)} stroke="#5C4A1E" stroke-width="0.15" />
-			<line x1={coordToSvg(0)} y1={coordToSvg(i)} x2={coordToSvg(boardSize - 1)} y2={coordToSvg(i)} stroke="#5C4A1E" stroke-width="0.15" />
+			<line x1={coordToSvg(i)} y1={coordToSvg(0)} x2={coordToSvg(i)} y2={coordToSvg(boardSize - 1)} stroke="color-mix(in srgb, var(--board-dark, #5C4A1E) 60%, black)" stroke-width="0.15" />
+			<line x1={coordToSvg(0)} y1={coordToSvg(i)} x2={coordToSvg(boardSize - 1)} y2={coordToSvg(i)} stroke="color-mix(in srgb, var(--board-dark, #5C4A1E) 60%, black)" stroke-width="0.15" />
 		{/each}
 
 		<!-- Coordinates -->
 		{#each Array(boardSize) as _, i}
-			<text x={coordToSvg(i)} y={cellSize * 0.45} text-anchor="middle" font-size={cellSize * 0.4} fill="#8B6914" style="pointer-events:none;user-select:none">{GO_COLS[i]}</text>
-			<text x={cellSize * 0.4} y={coordToSvg(i) + cellSize * 0.15} text-anchor="middle" font-size={cellSize * 0.4} fill="#8B6914" style="pointer-events:none;user-select:none">{boardSize - i}</text>
+			<text x={coordToSvg(i)} y={cellSize * 0.45} text-anchor="middle" font-size={cellSize * 0.4} fill="color-mix(in srgb, var(--board-dark, #8B6914) 80%, black)" style="pointer-events:none;user-select:none">{GO_COLS[i]}</text>
+			<text x={cellSize * 0.4} y={coordToSvg(i) + cellSize * 0.15} text-anchor="middle" font-size={cellSize * 0.4} fill="color-mix(in srgb, var(--board-dark, #8B6914) 80%, black)" style="pointer-events:none;user-select:none">{boardSize - i}</text>
 		{/each}
 
 		<!-- Star points -->
 		{#each starPoints as [sx, sy]}
-			<circle cx={coordToSvg(sx)} cy={coordToSvg(sy)} r={cellSize * 0.08} fill="#5C4A1E" style="pointer-events:none" />
+			<circle cx={coordToSvg(sx)} cy={coordToSvg(sy)} r={cellSize * 0.08} fill="color-mix(in srgb, var(--board-dark, #5C4A1E) 60%, black)" style="pointer-events:none" />
 		{/each}
 
 		<!-- Stones -->
@@ -122,5 +122,8 @@
 
 <style>
 	.go-board-wrap { aspect-ratio: 1 / 1; height: 100%; position: relative; }
+	@media (max-width: 768px) {
+		.go-board-wrap { height: auto; width: 100%; }
+	}
 	.go-board { width: 100%; height: 100%; }
 </style>

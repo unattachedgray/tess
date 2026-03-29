@@ -1,11 +1,24 @@
 import { execFile } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, accessSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GameType, Suggestion } from "@tess/shared";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("ai");
+
+import { homedir } from "node:os";
+
+// Resolve claude CLI path — may be in ~/.local/bin which isn't always in PATH
+const CLAUDE_BIN = (() => {
+	const localBin = join(homedir(), ".local", "bin", "claude");
+	try {
+		accessSync(localBin);
+		return localBin;
+	} catch {
+		return "claude"; // Fall back to PATH
+	}
+})();
 
 const SANDBOX_DIR = join(tmpdir(), "tess-claude-sandbox");
 try {
@@ -162,7 +175,7 @@ function callClaudeOpus(prompt: string): Promise<string> {
 		}, 45000);
 
 		execFile(
-			"claude",
+			CLAUDE_BIN,
 			[
 				"--print",
 				"--output-format",
@@ -202,7 +215,7 @@ function callClaude(prompt: string): Promise<string> {
 		}, TIMEOUT_MS);
 
 		execFile(
-			"claude",
+			CLAUDE_BIN,
 			[
 				"--print",
 				"--output-format",

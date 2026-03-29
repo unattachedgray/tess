@@ -34,9 +34,15 @@ export class WsClient {
 		this.ws.onmessage = (event) => {
 			try {
 				const msg = JSON.parse(event.data as string) as ServerMessage;
+				// Debug: log all non-routine messages
+				if (!["PLAYER_COUNT", "CLOCK_UPDATE"].includes(msg.type)) {
+					console.log("[ws] <<", msg.type, JSON.stringify(msg).slice(0, 150));
+				}
 				const handlers = this.handlers.get(msg.type);
 				if (handlers) {
 					for (const h of handlers) h(msg);
+				} else {
+					console.warn("[ws] no handler for", msg.type);
 				}
 			} catch (err) {
 				console.error("[ws] parse error:", err);
@@ -53,6 +59,7 @@ export class WsClient {
 
 	send(msg: ClientMessage): void {
 		const data = JSON.stringify(msg);
+		console.log("[ws] >>", msg.type, JSON.stringify(msg).slice(0, 100));
 		if (this.ws?.readyState === WebSocket.OPEN) {
 			this.ws.send(data);
 		} else {
@@ -68,6 +75,11 @@ export class WsClient {
 		const existing = this.handlers.get(type) ?? [];
 		existing.push(handler as TypeHandler);
 		this.handlers.set(type, existing);
+	}
+
+	/** Log all registered handler types (for debugging). */
+	debugHandlers(): void {
+		console.log("[ws] registered handlers:", Array.from(this.handlers.keys()));
 	}
 
 	off(type: string): void {

@@ -250,6 +250,48 @@ export class GoGame {
 			.map((m) => [m.color === "black" ? "B" : "W", m.coord]);
 	}
 
+	/** Count territory (empty points enclosed by a single color) + stones + prisoners */
+	getScore(): { black: number; white: number; blackTerritory: number; whiteTerritory: number } {
+		const stones = this.getStoneCounts();
+		const territory = { black: 0, white: 0 };
+		const visited = Array.from({ length: this.size }, () => Array(this.size).fill(false));
+
+		for (let y = 0; y < this.size; y++) {
+			for (let x = 0; x < this.size; x++) {
+				if (this.board[y][x] !== null || visited[y][x]) continue;
+				// Flood fill to find the empty region and its borders
+				const region: [number, number][] = [];
+				const borders = new Set<string>();
+				const stack: [number, number][] = [[x, y]];
+				while (stack.length > 0) {
+					const [cx, cy] = stack.pop()!;
+					if (cx < 0 || cx >= this.size || cy < 0 || cy >= this.size) continue;
+					if (visited[cy][cx]) continue;
+					if (this.board[cy][cx] !== null) {
+						borders.add(this.board[cy][cx]!);
+						continue;
+					}
+					visited[cy][cx] = true;
+					region.push([cx, cy]);
+					stack.push([cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]);
+				}
+				// If bordered by exactly one color, it's territory
+				if (borders.size === 1) {
+					const owner = borders.values().next().value as string;
+					if (owner === "black") territory.black += region.length;
+					else if (owner === "white") territory.white += region.length;
+				}
+			}
+		}
+
+		return {
+			black: stones.black + territory.black + this._prisoners.black,
+			white: stones.white + territory.white + this._prisoners.white,
+			blackTerritory: territory.black,
+			whiteTerritory: territory.white,
+		};
+	}
+
 	getStoneCounts(): { black: number; white: number } {
 		let black = 0;
 		let white = 0;

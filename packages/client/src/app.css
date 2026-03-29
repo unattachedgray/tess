@@ -3,8 +3,11 @@
 @import "chessground/assets/chessground.brown.css";
 @import "chessground/assets/chessground.cburnett.css";
 
-/* Midnight Theme (default) */
-:root {
+/* ===== THEMES ===== */
+
+/* Midnight — cool dark navy with cyan accent (default) */
+:root,
+[data-theme="midnight"] {
 	--bg-primary: #0f172a;
 	--bg-secondary: #1e293b;
 	--bg-panel: #1e293b;
@@ -20,6 +23,50 @@
 	--warning: #f59e0b;
 	--border: #334155;
 	--border-radius: 12px;
+	--board-light: #f0d9b5;
+	--board-dark: #b58863;
+}
+
+/* Forest — muted greens and warm stone tones */
+[data-theme="forest"] {
+	--bg-primary: #1a1f16;
+	--bg-secondary: #252b1f;
+	--bg-panel: #252b1f;
+	--bg-hover: #343d2c;
+	--text-primary: #e8e4dc;
+	--text-secondary: #a8a193;
+	--text-muted: #7a7265;
+	--accent: #8bbe6a;
+	--accent-hover: #72a854;
+	--accent-glow: rgba(139, 190, 106, 0.15);
+	--success: #8bbe6a;
+	--danger: #d9735b;
+	--warning: #d4a947;
+	--border: #3a4232;
+	--border-radius: 12px;
+	--board-light: #d9cdb8;
+	--board-dark: #8a7e62;
+}
+
+/* Sandstorm — warm amber tones with desert palette */
+[data-theme="sandstorm"] {
+	--bg-primary: #1c1714;
+	--bg-secondary: #2a221c;
+	--bg-panel: #2a221c;
+	--bg-hover: #3d3228;
+	--text-primary: #ede4d8;
+	--text-secondary: #b5a898;
+	--text-muted: #897b6b;
+	--accent: #e0985e;
+	--accent-hover: #c8834a;
+	--accent-glow: rgba(224, 152, 94, 0.15);
+	--success: #7abf72;
+	--danger: #d96b6b;
+	--warning: #e0985e;
+	--border: #40352a;
+	--border-radius: 12px;
+	--board-light: #e0ceae;
+	--board-dark: #a67c52;
 }
 
 * {
@@ -48,22 +95,58 @@ body {
 }
 
 cg-board {
-	background-color: #b58863;
+	background-color: var(--board-dark);
 }
 
 /* Move highlight */
 cg-board square.last-move {
-	background-color: rgba(56, 189, 248, 0.3) !important;
+	background-color: color-mix(in srgb, var(--accent) 30%, transparent) !important;
 }
 
 cg-board square.selected {
-	background-color: rgba(56, 189, 248, 0.4) !important;
+	background-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
 }
 
 cg-board square.move-dest {
-	background: radial-gradient(rgba(56, 189, 248, 0.4) 22%, transparent 22%);
+	background: radial-gradient(color-mix(in srgb, var(--accent) 40%, transparent) 22%, transparent 22%);
 }
 
 cg-board square.move-dest.oc {
-	background: radial-gradient(transparent 0%, transparent 80%, rgba(56, 189, 248, 0.4) 80%);
+	background: radial-gradient(transparent 0%, transparent 80%, color-mix(in srgb, var(--accent) 40%, transparent) 80%);
+}
+
+/* Custom scrollbar for panels */
+::-webkit-scrollbar {
+	width: 4px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--border);
+	border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: var(--text-muted);
+}
+
+/* Smooth transitions for game state changes */
+.game-container * {
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Mobile header and touch targets */
+@media (max-width: 768px) {
+	body {
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	button {
+		min-height: 44px;
+	}
+}
+
+/* Smooth theme transitions */
+body, .header, .status-bar, .panel-area > * {
+	transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
 }
