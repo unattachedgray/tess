@@ -47,52 +47,39 @@ check_pnpm() {
 check_engines() {
     local engine_dir="assets/engines"
     local boardgames_dir="../boardgames/assets/engines"
-    local missing=0
 
     mkdir -p "$engine_dir"
 
-    # Fairy-Stockfish (Chess)
+    # Try symlinking from sibling boardgames project first
+    if [ -d "$boardgames_dir" ]; then
+        [ ! -f "$engine_dir/fairy-stockfish" ] && [ -f "$boardgames_dir/fairy-stockfish" ] && \
+            ln -sf "$(realpath "$boardgames_dir/fairy-stockfish")" "$engine_dir/fairy-stockfish" && \
+            log "Linked Fairy-Stockfish from boardgames"
+        [ ! -f "$engine_dir/nn-46832cfbead3.nnue" ] && [ -f "$boardgames_dir/nn-46832cfbead3.nnue" ] && \
+            ln -sf "$(realpath "$boardgames_dir/nn-46832cfbead3.nnue")" "$engine_dir/nn-46832cfbead3.nnue"
+        for name in fairy-stockfish-largeboard fairy-stockfish-largeboard_x86-64-bmi2.exe; do
+            [ ! -f "$engine_dir/$name" ] && [ -f "$boardgames_dir/$name" ] && \
+                ln -sf "$(realpath "$boardgames_dir/$name")" "$engine_dir/$name"
+        done
+        [ ! -f "$engine_dir/janggi-9991472750de.nnue" ] && [ -f "$boardgames_dir/janggi-9991472750de.nnue" ] && \
+            ln -sf "$(realpath "$boardgames_dir/janggi-9991472750de.nnue")" "$engine_dir/janggi-9991472750de.nnue"
+        [ ! -d "$engine_dir/katago" ] && [ -d "$boardgames_dir/katago" ] && \
+            ln -sf "$(realpath "$boardgames_dir/katago")" "$engine_dir/katago" && \
+            log "Linked KataGo from boardgames"
+    fi
+
+    # If engines still missing, offer to download
     if [ ! -f "$engine_dir/fairy-stockfish" ]; then
-        if [ -f "$boardgames_dir/fairy-stockfish" ]; then
-            log "Linking Fairy-Stockfish from boardgames..."
-            ln -sf "$(realpath "$boardgames_dir/fairy-stockfish")" "$engine_dir/fairy-stockfish"
-        else
-            warn "Fairy-Stockfish not found at $engine_dir/fairy-stockfish"
-            warn "  Download from: https://github.com/fairy-stockfish/Fairy-Stockfish/releases"
-            missing=1
-        fi
-    fi
-
-    # NNUE file
-    if [ ! -f "$engine_dir/nn-46832cfbead3.nnue" ] && [ -f "$boardgames_dir/nn-46832cfbead3.nnue" ]; then
-        ln -sf "$(realpath "$boardgames_dir/nn-46832cfbead3.nnue")" "$engine_dir/nn-46832cfbead3.nnue"
-    fi
-
-    # Fairy-Stockfish Largeboard (Janggi)
-    for name in fairy-stockfish-largeboard fairy-stockfish-largeboard_x86-64-bmi2.exe; do
-        if [ ! -f "$engine_dir/$name" ] && [ -f "$boardgames_dir/$name" ]; then
-            ln -sf "$(realpath "$boardgames_dir/$name")" "$engine_dir/$name"
-        fi
-    done
-
-    # Janggi NNUE
-    if [ ! -f "$engine_dir/janggi-9991472750de.nnue" ] && [ -f "$boardgames_dir/janggi-9991472750de.nnue" ]; then
-        ln -sf "$(realpath "$boardgames_dir/janggi-9991472750de.nnue")" "$engine_dir/janggi-9991472750de.nnue"
-    fi
-
-    # KataGo (Go)
-    if [ -d "$boardgames_dir/katago" ] && [ ! -d "$engine_dir/katago" ]; then
-        log "Linking KataGo from boardgames..."
-        ln -sf "$(realpath "$boardgames_dir/katago")" "$engine_dir/katago"
-    fi
-
-    # Report
-    [ -f "$engine_dir/fairy-stockfish" ] && log "Chess engine: OK" || warn "Chess engine: MISSING"
-    [ -f "$engine_dir/fairy-stockfish-largeboard" ] || [ -f "$engine_dir/fairy-stockfish-largeboard_x86-64-bmi2.exe" ] && log "Janggi engine: OK" || warn "Janggi engine: MISSING (optional)"
-    [ -d "$engine_dir/katago" ] && log "Go engine: OK" || warn "Go engine: MISSING (optional)"
-
-    if [ "$missing" -eq 1 ]; then
-        warn "Some engines are missing. The app will work but those games won't have AI opponents."
+        warn "Chess engine not found."
+        log "Attempting to download engines..."
+        bash scripts/download-engines.sh --all
+    else
+        # Report what's available
+        log "Chess engine: OK"
+        ([ -f "$engine_dir/fairy-stockfish-largeboard" ] || [ -f "$engine_dir/fairy-stockfish-largeboard_x86-64-bmi2.exe" ]) \
+            && log "Janggi engine: OK" || warn "Janggi engine: MISSING (will use Chess engine as fallback)"
+        ([ -d "$engine_dir/katago" ] && ([ -f "$engine_dir/katago/katago" ] || [ -f "$engine_dir/katago/katago-cuda" ])) \
+            && log "Go engine: OK" || warn "Go engine: MISSING (Go games unavailable)"
     fi
 }
 
@@ -115,6 +102,10 @@ do_install() {
     pnpm rebuild better-sqlite3 2>/dev/null || true
     check_engines
     check_claude
+    # Generate sound files if missing
+    if [ ! -f "packages/client/public/sounds/move.mp3" ]; then
+        bash scripts/download-engines.sh --sounds-only
+    fi
     log "Building client..."
     pnpm run build
     log ""

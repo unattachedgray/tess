@@ -19,10 +19,16 @@ Or step by step:
 ## What You Need
 
 - **Node.js** 20+ and **pnpm** (auto-installed if missing)
-- **Claude Code CLI** (`claude`) — for AI coaching (optional)
-- **Engine binaries** — placed in `assets/engines/`:
-  - `fairy-stockfish` — Chess + Janggi (required)
-  - `katago/` directory with `katago` or `katago-cuda`, `default_gtp.cfg`, `default_model.bin.gz` — Go (optional)
+- **Claude Code CLI** (`claude`) — for AI coaching (optional, install from https://docs.anthropic.com/en/docs/claude-code)
+- **Engine binaries** — auto-downloaded on first install, or manually:
+
+```bash
+./scripts/download-engines.sh          # Download all engines
+./scripts/download-engines.sh --chess-only   # Chess + Janggi only
+./scripts/download-engines.sh --go-only      # KataGo only
+```
+
+Engines are placed in `assets/engines/` (gitignored). If auto-download fails for your platform, the script prints manual download instructions with links to the correct GitHub releases.
 
 ## Games
 
