@@ -37,6 +37,77 @@ export function createWsServer(
 	const clients = new Map<WebSocket, ClientState>();
 	const lobby = new Lobby();
 	const mpRooms = new Map<string, MultiplayerRoom>();
+	// Track federated games: gameId -> { room, localColor, remotePlayerWs }
+	const federatedGames = new Map<string, { room: MultiplayerRoom; localColor: "white" | "black" }>();
+
+	// Wire federation callbacks for game relay
+	if (federation) {
+		federation.setCallbacks({
+			onRemoteChallenge: (challenge) => {
+				// Convert to Challenge format and inject into lobby
+				lobby.remoteChallenges = federation.getRemoteChallenges().map((rc) => ({
+					id: rc.id,
+					code: `@${rc.serverName.slice(0, 5)}`, // remote indicator instead of code
+					gameType: rc.gameType,
+					timeControl: rc.timeControl,
+					creatorName: `${rc.creatorName} (${rc.serverName})`,
+					creatorColor: rc.creatorColor,
+					boardSize: rc.boardSize,
+					createdAt: Date.now(),
+				}));
+				lobby.broadcastState();
+			},
+			onRemoteChallengeCancel: (_challengeId) => {
+				lobby.remoteChallenges = federation.getRemoteChallenges().map((rc) => ({
+					id: rc.id,
+					code: `@${rc.serverName.slice(0, 5)}`,
+					gameType: rc.gameType,
+					timeControl: rc.timeControl,
+					creatorName: `${rc.creatorName} (${rc.serverName})`,
+					creatorColor: rc.creatorColor,
+					boardSize: rc.boardSize,
+					createdAt: Date.now(),
+				}));
+				lobby.broadcastState();
+			},
+			onRemoteAccept: (gameId, peerKey, acceptorName) => {
+				// A remote player accepted our local challenge
+				// The local game room should already exist — relay will handle moves
+				log.info("remote accept", { gameId, acceptor: acceptorName });
+			},
+			onRemoteMove: (gameId, move) => {
+				const fg = federatedGames.get(gameId);
+				if (!fg) return;
+				// Create a virtual MpClient for the remote player
+				const remoteColor = fg.localColor === "white" ? "black" : "white";
+				const remoteClient = fg.room.getPlayer(remoteColor);
+				if (remoteClient) {
+					fg.room.playMove(remoteClient, move);
+				}
+			},
+			onRemoteEmoji: (gameId, emoji) => {
+				const fg = federatedGames.get(gameId);
+				if (!fg) return;
+				const remoteColor = fg.localColor === "white" ? "black" : "white";
+				const remoteClient = fg.room.getPlayer(remoteColor);
+				if (remoteClient) fg.room.sendEmoji(remoteClient, emoji);
+			},
+			onRemoteMessage: (gameId, message) => {
+				const fg = federatedGames.get(gameId);
+				if (!fg) return;
+				const remoteColor = fg.localColor === "white" ? "black" : "white";
+				const remoteClient = fg.room.getPlayer(remoteColor);
+				if (remoteClient) fg.room.sendPresetMessage(remoteClient, message);
+			},
+			onRemoteResign: (gameId) => {
+				const fg = federatedGames.get(gameId);
+				if (!fg) return;
+				const remoteColor = fg.localColor === "white" ? "black" : "white";
+				const remoteClient = fg.room.getPlayer(remoteColor);
+				if (remoteClient) fg.room.resign(remoteClient);
+			},
+		});
+	}
 
 	// Periodic cleanup of finished MP rooms (every 60s)
 	const roomCleanup = setInterval(() => {
@@ -225,6 +296,10 @@ export function createWsServer(
 					const mpResult = state.mpRoom.playMove(toMpClient(state), msg.move);
 					if (!mpResult.ok)
 						send(state.ws, { type: "ERROR", message: mpResult.error ?? "Invalid move" });
+					// Relay move to federated peer
+					if (mpResult.ok && federatedGames.has(state.mpRoom.id)) {
+						federation?.relayMove(state.mpRoom.id, msg.move);
+					}
 
 					break;
 				}
@@ -242,6 +317,9 @@ export function createWsServer(
 			case "RESIGN": {
 				if (state.mpRoom) {
 					state.mpRoom.resign(toMpClient(state));
+					if (federatedGames.has(state.mpRoom.id)) {
+						federation?.relayResign(state.mpRoom.id);
+					}
 					break;
 				}
 				if (!state.room) {
@@ -507,11 +585,21 @@ export function createWsServer(
 					challengeId: challenge.id,
 					code: challenge.code,
 				});
+				// Broadcast to federated peers
+				federation?.broadcastChallenge({
+					id: challenge.id,
+					gameType: challenge.gameType,
+					timeControl: challenge.timeControl,
+					creatorName: challenge.creatorName,
+					creatorColor: challenge.creatorColor,
+					boardSize: challenge.boardSize,
+				});
 				break;
 			}
 
 			case "CANCEL_CHALLENGE": {
 				lobby.cancelChallenge(getLobbyClient(state), msg.challengeId);
+				federation?.cancelChallenge(msg.challengeId);
 				break;
 			}
 
@@ -661,12 +749,23 @@ export function createWsServer(
 			}
 
 			case "EMOJI_REACTION": {
-				if (state.mpRoom) state.mpRoom.sendEmoji(toMpClient(state), msg.emoji);
+				if (state.mpRoom) {
+					state.mpRoom.sendEmoji(toMpClient(state), msg.emoji);
+					// Relay to federated peer if this is a federated game
+					if (state.mpRoom && federatedGames.has(state.mpRoom.id)) {
+						federation?.relayEmoji(state.mpRoom.id, msg.emoji);
+					}
+				}
 				break;
 			}
 
 			case "PRESET_MESSAGE": {
-				if (state.mpRoom) state.mpRoom.sendPresetMessage(toMpClient(state), msg.message);
+				if (state.mpRoom) {
+					state.mpRoom.sendPresetMessage(toMpClient(state), msg.message);
+					if (state.mpRoom && federatedGames.has(state.mpRoom.id)) {
+						federation?.relayMessage(state.mpRoom.id, msg.message);
+					}
+				}
 				break;
 			}
 

@@ -33,6 +33,28 @@ const PEER_TTL = 10 * 60 * 1000;           // remove dead peers after 10 min
 const UPNP_REFRESH = 20 * 60 * 1000;       // refresh UPnP mapping every 20 min
 const MAX_PEERS = 50;                       // prevent memory exhaustion from fake peers
 
+/** Callback interface for federation events — wired by ws.ts */
+export interface FederationCallbacks {
+	onRemoteChallenge?: (challenge: RemoteChallenge) => void;
+	onRemoteChallengeCancel?: (challengeId: string, peerKey: string) => void;
+	onRemoteAccept?: (gameId: string, peerKey: string, acceptorName: string) => void;
+	onRemoteMove?: (gameId: string, move: string) => void;
+	onRemoteEmoji?: (gameId: string, emoji: string) => void;
+	onRemoteMessage?: (gameId: string, message: string) => void;
+	onRemoteResign?: (gameId: string) => void;
+}
+
+export interface RemoteChallenge {
+	id: string;
+	gameType: "chess" | "go" | "janggi";
+	timeControl: { initial: number; increment: number };
+	creatorName: string;
+	creatorColor?: "white" | "black";
+	boardSize?: number;
+	peerKey: string;
+	serverName: string;
+}
+
 export interface FederationPeer {
 	host: string;
 	port: number;
@@ -57,8 +79,17 @@ export class FederationService {
 	private upnpMapped = false;
 	private destroyed = false;
 	private _started = false;
+	private callbacks: FederationCallbacks = {};
+	private remoteChallenges = new Map<string, RemoteChallenge>();
+	// Track which gameId maps to which peerKey for relay
+	private gameRelays = new Map<string, string>(); // gameId -> peerKey
 
 	constructor(private readonly serverPort: number) {}
+
+	/** Set callbacks for federation events (called by ws.ts) */
+	setCallbacks(cb: FederationCallbacks): void {
+		this.callbacks = cb;
+	}
 
 	async start(): Promise<void> {
 		if (this.destroyed || this._started) return;
@@ -138,40 +169,99 @@ export class FederationService {
 
 	private handleSwarmMessage(raw: string, _socket: any, info: any): void {
 		try {
-			// Reject oversized messages (prevent memory abuse)
 			if (raw.length > 2048) return;
-
 			const msg = JSON.parse(raw);
-			if (msg.type !== "tess-hello") return;
+			if (!msg || typeof msg.type !== "string") return;
 
 			const key = info.publicKey?.toString("hex")?.slice(0, 16) ?? "unknown";
-			const host = info.publicKey ? `swarm-${key}` : "unknown";
-
-			// Validate and sanitize fields from untrusted peer
-			const port = typeof msg.port === "number" && msg.port > 0 && msg.port < 65536
-				? msg.port : 0;
-			const name = typeof msg.name === "string"
-				? msg.name.slice(0, 64).replace(/[^\w\s\-().]/g, "") : undefined;
-			const players = typeof msg.players === "number" && msg.players >= 0 && msg.players < 10000
-				? msg.players : undefined;
-			const games = Array.isArray(msg.games)
-				? msg.games.filter((g: unknown) => typeof g === "string").slice(0, 10) : undefined;
-
-			if (this.peers.size >= MAX_PEERS) return;
 			const peerKey = `swarm:${key}`;
-			this.peers.set(peerKey, {
-				host,
-				port,
-				url: `swarm://${key}`,
-				name,
-				players,
-				games,
-				lastSeen: Date.now(),
-				verified: true,
-				source: "hyperswarm",
-			});
 
-			log.info("swarm peer verified", { name, key });
+			switch (msg.type) {
+				case "tess-hello": {
+					const host = info.publicKey ? `swarm-${key}` : "unknown";
+					const port = typeof msg.port === "number" && msg.port > 0 && msg.port < 65536 ? msg.port : 0;
+					const name = typeof msg.name === "string" ? msg.name.slice(0, 64).replace(/[^\w\s\-().]/g, "") : undefined;
+					const players = typeof msg.players === "number" && msg.players >= 0 && msg.players < 10000 ? msg.players : undefined;
+					const games = Array.isArray(msg.games) ? msg.games.filter((g: unknown) => typeof g === "string").slice(0, 10) : undefined;
+
+					if (this.peers.size >= MAX_PEERS) return;
+					this.peers.set(peerKey, {
+						host, port, url: `swarm://${key}`, name, players, games,
+						lastSeen: Date.now(), verified: true, source: "hyperswarm",
+					});
+					log.info("swarm peer verified", { name, key });
+					break;
+				}
+
+				case "tess-challenge": {
+					// Remote server is broadcasting a challenge
+					const ch = msg.challenge;
+					if (!ch || !ch.id || !ch.gameType) return;
+					const validGames = ["chess", "go", "janggi"];
+					if (!validGames.includes(ch.gameType)) return;
+
+					const peer = this.peers.get(peerKey);
+					const remote: RemoteChallenge = {
+						id: ch.id,
+						gameType: ch.gameType,
+						timeControl: ch.timeControl ?? { initial: 0, increment: 0 },
+						creatorName: typeof ch.creatorName === "string" ? ch.creatorName.slice(0, 30) : "Remote",
+						creatorColor: ch.creatorColor,
+						boardSize: ch.boardSize,
+						peerKey,
+						serverName: peer?.name ?? "Remote",
+					};
+					this.remoteChallenges.set(ch.id, remote);
+					this.callbacks.onRemoteChallenge?.(remote);
+					log.info("remote challenge received", { id: ch.id, game: ch.gameType, from: remote.serverName });
+					break;
+				}
+
+				case "tess-challenge-cancel": {
+					if (typeof msg.challengeId === "string") {
+						this.remoteChallenges.delete(msg.challengeId);
+						this.callbacks.onRemoteChallengeCancel?.(msg.challengeId, peerKey);
+					}
+					break;
+				}
+
+				case "tess-accept": {
+					// Remote player accepted our challenge
+					if (typeof msg.gameId === "string" && typeof msg.acceptorName === "string") {
+						this.gameRelays.set(msg.gameId, peerKey);
+						this.callbacks.onRemoteAccept?.(msg.gameId, peerKey, msg.acceptorName.slice(0, 30));
+					}
+					break;
+				}
+
+				case "tess-move": {
+					if (typeof msg.gameId === "string" && typeof msg.move === "string") {
+						this.callbacks.onRemoteMove?.(msg.gameId, msg.move.slice(0, 10));
+					}
+					break;
+				}
+
+				case "tess-emoji": {
+					if (typeof msg.gameId === "string" && typeof msg.emoji === "string") {
+						this.callbacks.onRemoteEmoji?.(msg.gameId, msg.emoji.slice(0, 4));
+					}
+					break;
+				}
+
+				case "tess-message": {
+					if (typeof msg.gameId === "string" && typeof msg.message === "string") {
+						this.callbacks.onRemoteMessage?.(msg.gameId, msg.message.slice(0, 50));
+					}
+					break;
+				}
+
+				case "tess-resign": {
+					if (typeof msg.gameId === "string") {
+						this.callbacks.onRemoteResign?.(msg.gameId);
+					}
+					break;
+				}
+			}
 		} catch {
 			// Invalid message — ignore
 		}
@@ -338,6 +428,102 @@ export class FederationService {
 		for (const socket of this.swarmConnections.values()) {
 			try { socket.write(info + "\n"); } catch {}
 		}
+	}
+
+	// ── Game relay: send messages to a specific peer ──
+
+	/** Send a message to a specific peer over swarm */
+	private sendToPeer(peerKey: string, msg: Record<string, unknown>): boolean {
+		const shortKey = peerKey.replace("swarm:", "");
+		const socket = this.swarmConnections.get(shortKey);
+		if (!socket) return false;
+		try {
+			socket.write(JSON.stringify(msg) + "\n");
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/** Broadcast a message to ALL connected peers */
+	private broadcastToAll(msg: Record<string, unknown>): void {
+		const data = JSON.stringify(msg) + "\n";
+		for (const socket of this.swarmConnections.values()) {
+			try { socket.write(data); } catch {}
+		}
+	}
+
+	/** Broadcast a local challenge to all federated peers */
+	broadcastChallenge(challenge: {
+		id: string;
+		gameType: string;
+		timeControl: { initial: number; increment: number };
+		creatorName: string;
+		creatorColor?: string;
+		boardSize?: number;
+	}): void {
+		this.broadcastToAll({ type: "tess-challenge", challenge });
+	}
+
+	/** Cancel a previously broadcast challenge */
+	cancelChallenge(challengeId: string): void {
+		this.broadcastToAll({ type: "tess-challenge-cancel", challengeId });
+	}
+
+	/** Accept a remote challenge — notify the remote server */
+	acceptRemoteChallenge(challengeId: string, gameId: string, acceptorName: string): boolean {
+		const remote = this.remoteChallenges.get(challengeId);
+		if (!remote) return false;
+		this.gameRelays.set(gameId, remote.peerKey);
+		return this.sendToPeer(remote.peerKey, {
+			type: "tess-accept",
+			gameId,
+			challengeId,
+			acceptorName,
+		});
+	}
+
+	/** Relay a move to the remote server */
+	relayMove(gameId: string, move: string): boolean {
+		const peerKey = this.gameRelays.get(gameId);
+		if (!peerKey) return false;
+		return this.sendToPeer(peerKey, { type: "tess-move", gameId, move });
+	}
+
+	/** Relay an emoji to the remote server */
+	relayEmoji(gameId: string, emoji: string): boolean {
+		const peerKey = this.gameRelays.get(gameId);
+		if (!peerKey) return false;
+		return this.sendToPeer(peerKey, { type: "tess-emoji", gameId, emoji });
+	}
+
+	/** Relay a preset message to the remote server */
+	relayMessage(gameId: string, message: string): boolean {
+		const peerKey = this.gameRelays.get(gameId);
+		if (!peerKey) return false;
+		return this.sendToPeer(peerKey, { type: "tess-message", gameId, message });
+	}
+
+	/** Relay resignation to the remote server */
+	relayResign(gameId: string): boolean {
+		const peerKey = this.gameRelays.get(gameId);
+		if (!peerKey) return false;
+		return this.sendToPeer(peerKey, { type: "tess-resign", gameId });
+	}
+
+	/** Register a game relay mapping */
+	registerRelay(gameId: string, peerKey: string): void {
+		this.gameRelays.set(gameId, peerKey);
+	}
+
+	/** Get remote challenges for lobby display */
+	getRemoteChallenges(): RemoteChallenge[] {
+		return Array.from(this.remoteChallenges.values());
+	}
+
+	/** Clean up a game relay when game ends */
+	removeRelay(gameId: string): void {
+		this.gameRelays.delete(gameId);
 	}
 
 	// ── Public API ──

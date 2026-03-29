@@ -123,11 +123,14 @@ export class Lobby {
 		return Array.from(this.challenges.values()).map((e) => e.challenge);
 	}
 
+	/** Optional: extra challenges from federation to include in broadcast */
+	remoteChallenges: Challenge[] = [];
+
 	broadcastState(): void {
-		console.log(`[lobby] broadcasting to ${this.subscribers.size} subscribers, ${this.challenges.size} challenges`);
+		console.log(`[lobby] broadcasting to ${this.subscribers.size} subscribers, ${this.challenges.size} local + ${this.remoteChallenges.length} remote challenges`);
 		const msg = {
 			type: "LOBBY_STATE" as const,
-			challenges: this.getChallengeList(),
+			challenges: [...this.getChallengeList(), ...this.remoteChallenges],
 			activePlayers: this.subscribers.size,
 		};
 		for (const sub of this.subscribers) {
