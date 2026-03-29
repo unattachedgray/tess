@@ -180,7 +180,7 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
 		"lobby.timeLabel": "시간",
 		"lobby.colorLabel": "색상",
 		"lobby.random": "랜덤",
-		"lobby.create": "도전 만들기",
+		"lobby.create": "게임 대기 시작하기",
 		"lobby.noChallenges": "열린 도전이 없습니다",
 		"lobby.noChallengesHint": "도전을 만들거나 친구에게 코드를 공유하세요",
 		"lobby.recentPlayers": "최근 상대",
