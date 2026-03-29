@@ -8,6 +8,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/screenshot.png" alt="Tess gameplay — chess with AI coaching in Korean" width="720"/>
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> · <a href="#features">Features</a> · <a href="#multiplayer">Multiplayer</a> · <a href="#how-it-works">How It Works</a>
 </p>
 
