@@ -57,6 +57,14 @@ export const RequestHintMessage = z.object({
 	type: z.literal("REQUEST_HINT"),
 });
 
+export const UpdateSettingsMessage = z.object({
+	type: z.literal("UPDATE_SETTINGS"),
+	language: z.string().optional(),
+	coaching: z.boolean().optional(),
+	suggestionCount: z.number().optional(),
+	suggestionStrength: z.enum(["fast", "balanced", "deep"]).optional(),
+});
+
 
 // ── Multiplayer: Client → Server ──
 
@@ -107,6 +115,16 @@ export const EmojiReactionMessage = z.object({
 	emoji: z.string(),
 });
 
+export const RematchMessage = z.object({
+	type: z.literal("REMATCH"),
+	gameType: z.enum(["go", "chess", "janggi"]).optional(),
+	autoplay: z.boolean().optional(),
+});
+
+export const MpLeaveMessage = z.object({
+	type: z.literal("MP_LEAVE"),
+});
+
 export const OfferDrawMessage = z.object({
 	type: z.literal("OFFER_DRAW"),
 });
@@ -151,6 +169,7 @@ export const ClientMessage = z.discriminatedUnion("type", [
 	SetSuggestionsMessage,
 	AutoplayMessage,
 	RequestHintMessage,
+	UpdateSettingsMessage,
 	// Multiplayer
 	SetNicknameMessage,
 	CreateChallengeMessage,
@@ -162,6 +181,8 @@ export const ClientMessage = z.discriminatedUnion("type", [
 	EmojiReactionMessage,
 	OfferDrawMessage,
 	RespondDrawMessage,
+	RematchMessage,
+	MpLeaveMessage,
 ]);
 
 // Server → Client messages
@@ -379,6 +400,10 @@ export const GameSummaryPayload = z.object({
 	text: z.string(),
 });
 
+export const MpSessionEndPayload = z.object({
+	type: z.literal("MP_SESSION_END"),
+});
+
 
 // ── Multiplayer: Server → Client ──
 
@@ -406,4 +431,5 @@ export type ServerMessage =
 	| z.infer<typeof OpponentReconnectedPayload>
 	| z.infer<typeof SpectatorCountPayload>
 	| z.infer<typeof PlayerCountPayload>
-	| z.infer<typeof GameSummaryPayload>;
+	| z.infer<typeof GameSummaryPayload>
+	| z.infer<typeof MpSessionEndPayload>;

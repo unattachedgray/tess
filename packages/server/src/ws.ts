@@ -22,6 +22,7 @@ interface ClientState {
 	gameType?: string;
 	inLobby: boolean;
 	suggestionCount: number;
+	autoplayElo: number;
 	language?: string;
 	lobbyClient: LobbyClient | null;
 }
@@ -56,7 +57,7 @@ export function createWsServer(
 			(ws as unknown as { isAlive: boolean }).isAlive = true;
 		});
 
-		const state: ClientState = { _id: ++nextClientId, ws, room: null, mpRoom: null, inLobby: false, lobbyClient: null, suggestionCount: 3, language: undefined, userId: `player-${++nextClientId}` };
+		const state: ClientState = { _id: ++nextClientId, ws, room: null, mpRoom: null, inLobby: false, lobbyClient: null, suggestionCount: 3, autoplayElo: 2800, language: undefined, userId: `player-${++nextClientId}` };
 		log.info(`client #${state._id} connected`);
 		// Subscribe to lobby for challenge notifications
 		lobby.subscribe(getLobbyClient(state));
@@ -205,20 +206,139 @@ export function createWsServer(
 
 			case "REQUEST_ANALYSIS": {
 				if (state.mpRoom && state.mpRoom.status === "playing") {
-					// In multiplayer: get suggestions from engine for current MP position
-					if (state.suggestionCount <= 0) {
-						send(state.ws, { type: "SUGGESTIONS", suggestions: [] });
-						break;
-					}
+					// In multiplayer: two-pass analysis.
+					// Pass 1 (fast): shallow search with 10 MultiPV to get a ranked move list.
+					//   Elo determines which rank to pick: 800→10th, 1200→7th, 1600→4th, 2200→1st.
+					// Pass 2 (full): deep search for accurate scoring + display suggestions.
+					const elo = state.autoplayElo;
 					try {
+						let weakMove: string | null = null;
+						if (elo < 2800) {
+							if (state.mpRoom.gameType === "go") {
+								// Go: KataGo NN is too strong at any time setting.
+								// Mix random moves for low Elo, engine moves for high Elo.
+								// 800→80% random, 1200→50% random, 1600→20% random, 2200→0%
+								const randomRate = Math.max(0, (2200 - elo) / 1750);
+								if (Math.random() < randomRate) {
+									// Pick a random intersection on the board
+									const GO_COLS = "ABCDEFGHJKLMNOPQRST";
+									const sz = state.mpRoom.getBoardSize();
+									const col = GO_COLS[Math.floor(Math.random() * sz)];
+									const row = Math.floor(Math.random() * sz) + 1;
+									weakMove = `${col}${row}`;
+								} else {
+									// Use engine but pick from lower ranks
+									const weakResult = await sessionManager.analyzeFen(
+										state.mpRoom.gameType,
+										state.mpRoom.getFen(),
+										10,
+										state.mpRoom.getGoMoves(),
+										state.mpRoom.getBoardSize(),
+										state.mpRoom.getTurn(),
+										10,
+									);
+									if (weakResult.suggestions.length > 1) {
+										const targetRank = Math.max(0, Math.round((2200 - elo) / 250));
+										const rank = Math.min(targetRank, weakResult.suggestions.length - 1);
+										weakMove = weakResult.suggestions[rank].move;
+									}
+								}
+							} else {
+								// Chess/Janggi: 50ms MultiPV search + rank selection
+								const weakResult = await sessionManager.analyzeFen(
+									state.mpRoom.gameType,
+									state.mpRoom.getFen(),
+									10,
+									state.mpRoom.getGoMoves(),
+									state.mpRoom.getBoardSize(),
+									state.mpRoom.getTurn(),
+									50,
+								);
+								const validMoves = weakResult.suggestions.filter(s => {
+									if (s.move.length >= 4) {
+										const from = s.move.slice(0, 2);
+										const to = s.move.slice(2, 4);
+										return from !== to;
+									}
+									return true;
+								});
+								if (validMoves.length > 0) {
+									// Cap at rank 6 — rank 7-9 produce suicidal moves (king walks, hanging pieces)
+									// 800→rank 6, 1200→rank 4, 1600→rank 2, 2200→rank 0
+									const targetRank = Math.min(6, Math.max(0, Math.round((2200 - elo) / 250)));
+									const variance = Math.floor(Math.random() * 3) - 1;
+									const rank = Math.max(0, Math.min(validMoves.length - 1, targetRank + variance));
+									weakMove = validMoves[rank].move;
+								}
+							}
+						}
+
+						// Control search for accurate scoring
+						// Go needs more time (800ms) because KataGo needs visits to detect subtle mistakes
+						// Chess/Janggi: 300ms is enough
+						const controlTime = state.mpRoom.gameType === "go" ? 800 : 300;
 						const mpSuggestions = await sessionManager.analyzeFen(
 							state.mpRoom.gameType,
 							state.mpRoom.getFen(),
-							state.suggestionCount,
+							1,
 							state.mpRoom.getGoMoves(),
 							state.mpRoom.getBoardSize(),
+							state.mpRoom.getTurn(),
+							controlTime,
 						);
-						send(state.ws, mpSuggestions);
+
+						// Inject the weak move for the client's autoplay
+						const payload: any = { ...mpSuggestions };
+						if (weakMove) payload.weakMove = weakMove;
+						send(state.ws, payload);
+
+						// If engine returns no moves, the side to move has lost (checkmate/stalemate)
+						if (mpSuggestions.suggestions.length === 0 && state.mpRoom.status === "playing") {
+							const loser = state.mpRoom.getTurn();
+							const winner = loser === "white" ? "black" : "white";
+							log.info("no legal moves detected", { winner, loser });
+							// Force game over via resignation on behalf of the losing side
+							state.mpRoom.resign(toMpClient(state));
+						}
+
+						// Accumulate eval for post-game accuracy
+						if (mpSuggestions.suggestions.length > 0) {
+							const bestScore = mpSuggestions.suggestions[0].score;
+							const turn = state.mpRoom.getTurn();
+							// Normalize to white's perspective.
+							// Go scores are now scoreLead * 100 (centipawn equivalent, doesn't saturate)
+							const scoreWhitePov = turn === "white" ? bestScore : -bestScore;
+
+							const history = state.mpRoom.getMoveHistory();
+							const goMoves = state.mpRoom.getGoMoves();
+							const moveCount = state.mpRoom.gameType === "go" ? goMoves.length : history.length;
+
+							if (moveCount > 0) {
+								// Record eval for the position after the last move
+								state.mpRoom.recordPositionEval(scoreWhitePov);
+
+								// Compute move quality from centipawn loss
+								const preMoveScore = state.mpRoom.getPreMoveScore();
+								const moverColor: "white" | "black" = turn === "white" ? "black" : "white";
+								const evalBefore = moverColor === "white" ? preMoveScore : -preMoveScore;
+								const evalAfter = moverColor === "white" ? scoreWhitePov : -scoreWhitePov;
+								const cpLoss = Math.max(0, evalBefore - evalAfter);
+
+								let quality: string;
+								if (cpLoss <= 10) quality = "best";
+								else if (cpLoss <= 25) quality = "good";
+								else if (cpLoss <= 50) quality = "ok";
+								else if (cpLoss <= 100) quality = "inaccuracy";
+								else if (cpLoss <= 200) quality = "mistake";
+								else quality = "blunder";
+
+								const lastMove = history.length > 0 ? history[history.length - 1]?.uci : "";
+								state.mpRoom.broadcastMessage({ type: "MOVE_QUALITY", move: lastMove ?? "", quality });
+							}
+
+							// Store as pre-move score for the NEXT move
+							state.mpRoom.setPreMoveScore(scoreWhitePov);
+						}
 					} catch (err) {
 						log.error("MP analysis failed", { error: (err as Error).message });
 						send(state.ws, { type: "SUGGESTIONS", suggestions: [] });
@@ -240,6 +360,8 @@ export function createWsServer(
 			}
 
 			case "AUTOPLAY": {
+				// Store Elo for MP analysis movetime
+				if (msg.humanElo) state.autoplayElo = msg.humanElo;
 				if (!state.room) return;
 				if (msg.enabled) {
 					state.room.startAutoplay(msg.humanElo ?? null);
@@ -262,6 +384,24 @@ export function createWsServer(
 				}
 				const hint = await state.room.getHint();
 				if (hint) send(state.ws, hint);
+				break;
+			}
+
+			case "UPDATE_SETTINGS": {
+				if (msg.language) {
+					state.language = msg.language;
+					if (state.room) state.room.language = msg.language;
+				}
+				if (msg.coaching !== undefined && state.room) {
+					state.room.coachingEnabled = msg.coaching;
+				}
+				if (msg.suggestionCount !== undefined) {
+					state.suggestionCount = Math.min(3, Math.max(0, msg.suggestionCount));
+					if (state.room) state.room.suggestionCount = state.suggestionCount;
+				}
+				if (msg.suggestionStrength && state.room) {
+					state.room.suggestionStrength = msg.suggestionStrength;
+				}
 				break;
 			}
 
@@ -359,7 +499,9 @@ export function createWsServer(
 				state.mpRoom = room;
 				mpRooms.set(room.id, room);
 				lobby.removeChallenge(ch.id);
-				// Keep singleplayer rooms alive for engine analysis in MP
+				// Stop singleplayer rooms from sending stale messages during MP
+				if (creatorState.room) { creatorState.room.destroy(); creatorState.room = null; }
+				if (state.room) { state.room.destroy(); state.room = null; }
 				// Set up post-game evaluation
 				// Post-game evaluation (extracted to postGameEval.ts)
 				room.onGameEnd(async (r) => {
@@ -397,6 +539,8 @@ export function createWsServer(
 					if (creator2) {
 						room2.addPlayer(toMpClient(creator2), ch2.creatorColor);
 						creator2.mpRoom = room2;
+						// Stop singleplayer room from interfering
+						if (creator2.room) { creator2.room.destroy(); creator2.room = null; }
 					}
 					if (msg.spectate) {
 						room2.addSpectator(toMpClient(state));
@@ -404,6 +548,8 @@ export function createWsServer(
 						room2.addPlayer(toMpClient(state));
 					}
 					state.mpRoom = room2;
+					// Stop singleplayer room from interfering
+					if (state.room) { state.room.destroy(); state.room = null; }
 					mpRooms.set(room2.id, room2);
 					// Post-game evaluation for code-joined games
 					room2.onGameEnd(async (r) => {
@@ -455,9 +601,127 @@ export function createWsServer(
 				if (state.mpRoom) state.mpRoom.respondDraw(toMpClient(state), msg.accept);
 				break;
 			}
+
+			case "REMATCH": {
+				const oldRoom = state.mpRoom;
+				if (!oldRoom || oldRoom.status !== "finished") {
+					send(state.ws, { type: "ERROR", message: "No finished game to rematch" });
+					break;
+				}
+
+				const myClient = toMpClient(state);
+				const myColor = oldRoom.getPlayerColor(myClient);
+				if (!myColor) {
+					send(state.ws, { type: "ERROR", message: "You are not a player in this game" });
+					break;
+				}
+
+				// Find opponent's ClientState
+				const opponentColor = myColor === "white" ? "black" : "white";
+				const opponentMpClient = oldRoom.getPlayer(opponentColor);
+				if (!opponentMpClient) {
+					send(state.ws, { type: "ERROR", message: "Opponent not found" });
+					break;
+				}
+				const opponentState = findClientByUserId(opponentMpClient.userId);
+				if (!opponentState) {
+					send(state.ws, { type: "ERROR", message: "Opponent disconnected" });
+					break;
+				}
+
+				// Create new room — use requested gameType or keep same, swapped colors
+				const settings = oldRoom.getSettings();
+				const newGameType = msg.gameType ?? settings.gameType;
+				const newRoomId = `rematch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+				const newCode = oldRoom.code;
+				const newRoom = new MultiplayerRoom({
+					id: newRoomId,
+					code: newCode,
+					gameType: newGameType,
+					timeControl: settings.timeControl,
+					boardSize: settings.boardSize,
+				});
+
+				// Pass metadata (e.g., autoplay flag) through to MP_GAME_START
+				if (msg.autoplay) {
+					newRoom.setStartMetadata({ autoplay: true });
+				}
+
+				// Swap colors: whoever was white is now black and vice versa
+				const myNewColor = myColor === "white" ? "black" : "white";
+				const opponentNewColor = opponentColor === "white" ? "black" : "white";
+				newRoom.addPlayer(myClient, myNewColor);
+				newRoom.addPlayer(toMpClient(opponentState), opponentNewColor);
+
+				// Clean up old room
+				oldRoom.destroy();
+				mpRooms.delete(oldRoom.id);
+
+				// Assign new room to both players
+				state.mpRoom = newRoom;
+				opponentState.mpRoom = newRoom;
+				mpRooms.set(newRoom.id, newRoom);
+
+				// Set up post-game evaluation for the new room
+				newRoom.onGameEnd(async (r) => {
+					try {
+						await evaluateMultiplayerGame(
+							r,
+							{ ws: state.ws, mpRoom: state.mpRoom, language: state.language },
+							{ ws: opponentState.ws, mpRoom: opponentState.mpRoom, language: opponentState.language },
+							myNewColor,
+							sessionManager,
+							send,
+						);
+					} catch (err) {
+						log.error("MP eval failed (rematch)", { error: (err as Error).message });
+					}
+				});
+
+				log.info("Rematch started", { gameId: newRoom.id, player1: state.userId, player2: opponentState.userId });
+				break;
+			}
+
+			case "MP_LEAVE": {
+				const room = state.mpRoom;
+				if (!room) break;
+
+				const client = toMpClient(state);
+				const playerColor = room.getPlayerColor(client);
+
+				// Resign if game in progress
+				if (room.status === "playing" && playerColor) {
+					room.resign(client);
+				}
+
+				// Notify opponent
+				if (playerColor) {
+					const oppColor = playerColor === "white" ? "black" : "white";
+					const oppMpClient = room.getPlayer(oppColor);
+					if (oppMpClient) {
+						oppMpClient.send({ type: "MP_SESSION_END" });
+						// Clear opponent's mpRoom
+						const oppState = findClientByUserId(oppMpClient.userId);
+						if (oppState) oppState.mpRoom = null;
+					}
+				}
+
+				// Clean up
+				room.destroy();
+				mpRooms.delete(room.id);
+				state.mpRoom = null;
+				break;
+			}
 		}
 	}
 
+
+	function findClientByUserId(userId: string): ClientState | undefined {
+		for (const [, s] of clients) {
+			if (s.userId === userId) return s;
+		}
+		return undefined;
+	}
 
 	function findClientByLobbyClient(lobbyClient: LobbyClient): ClientState | undefined {
 		// First try exact reference match

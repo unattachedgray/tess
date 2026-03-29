@@ -34,6 +34,11 @@ export class MultiplayerRoom {
 	private pendingDraw: "white" | "black" | null = null;
 	status: RoomStatus = "waiting";
 	private onGameEndCallback: ((room: MultiplayerRoom) => void) | null = null;
+	private startMetadata: Record<string, unknown> = {};
+
+	// Incremental eval accumulation (scores from white's perspective)
+	private positionEvals: number[] = [0]; // evals[0] = starting position = 0
+	private lastPreMoveScore = 0; // score before the most recent move
 
 	constructor(opts: {
 		id: string;
@@ -223,10 +228,12 @@ export class MultiplayerRoom {
 		const movePayload = this.buildMovePayload(move);
 		this.broadcast(movePayload);
 
-		// Check game over
+		// Check game over — delay so client renders the final move first
 		if (this.isGameOver()) {
 			const result = this.getResult();
-			this.endGame(result.winner, result.reason);
+			const fen = this.game instanceof GoGame ? "(go)" : this.game.fen;
+			log.info("game over detected", { reason: result.reason, winner: result.winner, fen, lastMove: move });
+			setTimeout(() => this.endGame(result.winner, result.reason), 500);
 		}
 
 		return { ok: true };
@@ -314,9 +321,40 @@ export class MultiplayerRoom {
 	}
 
 	/** Get current position FEN (for engine analysis). */
+	getTurn(): "white" | "black" {
+		return this.game.turn;
+	}
+
 	getFen(): string {
 		if (this.game instanceof GoGame) return "";
 		return this.game.fen;
+	}
+
+	// ── Incremental eval ──
+
+	/** Record a position eval after a move was played.
+	 *  @param scoreWhitePov engine score from white's perspective (centipawns) */
+	recordPositionEval(scoreWhitePov: number): void {
+		this.positionEvals.push(scoreWhitePov);
+	}
+
+	/** Store the pre-move score (eval of the position before the move). */
+	setPreMoveScore(score: number): void {
+		this.lastPreMoveScore = score;
+	}
+
+	getPreMoveScore(): number {
+		return this.lastPreMoveScore;
+	}
+
+	/** Get accumulated evals array (position 0 = start, position i = after move i). */
+	getPositionEvals(): number[] {
+		return this.positionEvals;
+	}
+
+	/** Send message to all players and spectators (public). */
+	broadcastMessage(msg: unknown): void {
+		this.broadcast(msg);
 	}
 
 	/** Is a specific user in this room? */
@@ -325,6 +363,21 @@ export class MultiplayerRoom {
 			this.players.white?.userId === userId ||
 			this.players.black?.userId === userId
 		);
+	}
+
+	/** Get room settings for rematch. */
+	getSettings(): { gameType: GameType; timeControl: TimeControl; boardSize: number } {
+		return { gameType: this.gameType, timeControl: this.timeControl, boardSize: this.boardSize };
+	}
+
+	/** Set metadata to include in MP_GAME_START (e.g., autoplay flag). */
+	setStartMetadata(meta: Record<string, unknown>): void {
+		this.startMetadata = meta;
+	}
+
+	/** Get the player MpClient for a given color. */
+	getPlayer(color: "white" | "black"): MpClient | null {
+		return this.players[color];
 	}
 
 	destroy(): void {
@@ -364,6 +417,7 @@ export class MultiplayerRoom {
 			yourColor: "white",
 			opponentName: black.nickname || black.userId,
 			timeControl: this.timeControl,
+			...this.startMetadata,
 		});
 		console.log(`[mp] sending MP_GAME_START to black (${black.userId})`);
 		black.send({
@@ -373,6 +427,7 @@ export class MultiplayerRoom {
 			yourColor: "black",
 			opponentName: white.nickname || white.userId,
 			timeControl: this.timeControl,
+			...this.startMetadata,
 		});
 
 		// Send initial game state to both
@@ -427,7 +482,7 @@ export class MultiplayerRoom {
 		return { winner: "draw", reason: "unknown" };
 	}
 
-	private getPlayerColor(client: MpClient): "white" | "black" | null {
+	getPlayerColor(client: MpClient): "white" | "black" | null {
 		if (this.players.white?.userId === client.userId) return "white";
 		if (this.players.black?.userId === client.userId) return "black";
 		return null;
@@ -462,9 +517,12 @@ export class MultiplayerRoom {
 		} else {
 			base.fen = this.game.fen;
 			base.legalMoves = this.getCurrentTurn() === perspective ? this.game.getLegalMovesObject() : {};
-			if (this.game instanceof ChessGame || this.game instanceof JanggiGame) {
-				base.isCheck = this.game instanceof ChessGame ? this.game.isCheck : false;
+			if (this.game instanceof ChessGame) {
+				base.isCheck = this.game.isCheck;
 				base.capturedPieces = this.game.getCapturedPieces();
+			} else if (this.game instanceof JanggiGame) {
+				const cp = this.game.getCapturedPieces();
+				base.capturedPieces = { white: cp.blue, black: cp.red };
 			}
 		}
 
@@ -491,8 +549,13 @@ export class MultiplayerRoom {
 				base.move = lastMove;
 			}
 			base.legalMoves = this.game.getLegalMovesObject();
-			base.isCheck = this.game instanceof ChessGame ? this.game.isCheck : false;
-			base.capturedPieces = this.game.getCapturedPieces();
+			if (this.game instanceof ChessGame) {
+				base.isCheck = this.game.isCheck;
+				base.capturedPieces = this.game.getCapturedPieces();
+			} else {
+				const cp = this.game.getCapturedPieces();
+				base.capturedPieces = { white: cp.blue, black: cp.red };
+			}
 			(base.move as Record<string, unknown>).fen = this.game.fen;
 		}
 

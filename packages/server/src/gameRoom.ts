@@ -530,6 +530,9 @@ export class GameRoom {
 
 		if (history.length < 6) return;
 
+		// Autoplay games skip fewer opening moves for better discrimination
+		const skipMoves = this.autoplay ? 2 : 6;
+
 		// For chess: replay game and eval each position
 		if (this.gameType === "chess") {
 			const evals: number[] = [0];
@@ -538,7 +541,7 @@ export class GameRoom {
 			for (const move of history) {
 				replay.moveUci(move.uci);
 				try {
-					const result = await this.uciPool.search(replay.fen, 500, 1, undefined, null);
+					const result = await this.uciPool.search(replay.fen, 1000, 1, undefined, null);
 					// Eval from white's perspective
 					const score = result.info[0]?.score ?? 0;
 					const sideToMove = replay.turn;
@@ -548,8 +551,14 @@ export class GameRoom {
 				}
 			}
 
-			const chessResult = gameAccuracy(evals, this.playerColor);
-			await this.emitAndSummarize(chessResult, history);
+			const playerResult = gameAccuracy(evals, this.playerColor, skipMoves);
+			if (this.autoplay) {
+				const opponentColor = this.playerColor === "white" ? "black" : "white";
+				const opponentResult = gameAccuracy(evals, opponentColor, skipMoves);
+				await this.emitAndSummarize(playerResult, history, opponentResult);
+			} else {
+				await this.emitAndSummarize(playerResult, history);
+			}
 			return;
 		}
 
@@ -562,7 +571,7 @@ export class GameRoom {
 				replay.moveUci(move.uci);
 				try {
 					const variant = this.useJanggiVariant ? "janggi" : undefined;
-					const result = await this.uciPool.search(replay.fen, 300, 1, variant, null);
+					const result = await this.uciPool.search(replay.fen, 800, 1, variant, null);
 					const score = result.info[0]?.score ?? 0;
 					evals.push(replay.turn === "white" ? score : -score);
 				} catch {
@@ -570,8 +579,14 @@ export class GameRoom {
 				}
 			}
 
-			const result = gameAccuracy(evals, this.playerColor);
-			await this.emitAndSummarize(result, history);
+			const playerResult = gameAccuracy(evals, this.playerColor, skipMoves);
+			if (this.autoplay) {
+				const opponentColor = this.playerColor === "white" ? "black" : "white";
+				const opponentResult = gameAccuracy(evals, opponentColor, skipMoves);
+				await this.emitAndSummarize(playerResult, history, opponentResult);
+			} else {
+				await this.emitAndSummarize(playerResult, history);
+			}
 			return;
 		}
 
@@ -584,7 +599,7 @@ export class GameRoom {
 				const movesUpToHere = goHistory.slice(0, i);
 				const color = i % 2 === 0 ? "b" : "w";
 				try {
-					const results = await this.kataGo.analyze(movesUpToHere, color, 30, 1, this.goGame.size);
+					const results = await this.kataGo.analyze(movesUpToHere, color, 100, 1, this.goGame.size);
 					if (results.length > 0) {
 						evals.push(Math.round(results[0].winrate * 10000 - 5000));
 					} else {
@@ -595,8 +610,14 @@ export class GameRoom {
 				}
 			}
 
-			const result = gameAccuracy(evals, this.playerColor);
-			await this.emitAndSummarize(result, history);
+			const playerResult = gameAccuracy(evals, this.playerColor, skipMoves);
+			if (this.autoplay) {
+				const opponentColor = this.playerColor === "white" ? "black" : "white";
+				const opponentResult = gameAccuracy(evals, opponentColor, skipMoves);
+				await this.emitAndSummarize(playerResult, history, opponentResult);
+			} else {
+				await this.emitAndSummarize(playerResult, history);
+			}
 			return;
 		}
 
@@ -606,6 +627,7 @@ export class GameRoom {
 	private async emitAndSummarize(
 		result: { accuracy: number; acpl: number; moveAccuracies: number[] },
 		history: { san: string; uci: string }[],
+		opponentResult?: { accuracy: number; acpl: number; moveAccuracies: number[] },
 	): Promise<void> {
 		const accuracy = Math.round(result.accuracy);
 		const skill = getSkillLevel(accuracy, this.gameType);
@@ -615,15 +637,26 @@ export class GameRoom {
 			acpl: result.acpl,
 			label: skill.label,
 			moves: result.moveAccuracies.length,
+			...(opponentResult ? {
+				opponentAccuracy: Math.round(opponentResult.accuracy),
+				opponentAcpl: opponentResult.acpl,
+			} : {}),
 		});
 
 		// Emit engine-based eval immediately
-		this.emit({
+		const evalPayload: Record<string, unknown> = {
 			type: "SKILL_EVAL",
 			accuracy,
 			acpl: result.acpl,
 			skill,
-		});
+		};
+		if (opponentResult) {
+			const opAcc = Math.round(opponentResult.accuracy);
+			evalPayload.opponentAccuracy = opAcc;
+			evalPayload.opponentAcpl = opponentResult.acpl;
+			evalPayload.opponentSkill = getSkillLevel(opAcc, this.gameType);
+		}
+		this.emit(evalPayload);
 
 		// Fire off LLM narrative summary (arrives later)
 		const gameResult =
@@ -665,10 +698,10 @@ export class GameRoom {
 				moves: history,
 				pgn: this.chessGame?.pgn,
 				boardSize: this.goGame?.size,
-				accuracyWhite: this.playerColor === "white" ? accuracy : undefined,
-				accuracyBlack: this.playerColor === "black" ? accuracy : undefined,
-				acplWhite: this.playerColor === "white" ? result.acpl : undefined,
-				acplBlack: this.playerColor === "black" ? result.acpl : undefined,
+				accuracyWhite: this.playerColor === "white" ? accuracy : (opponentResult ? Math.round(opponentResult.accuracy) : undefined),
+				accuracyBlack: this.playerColor === "black" ? accuracy : (opponentResult ? Math.round(opponentResult.accuracy) : undefined),
+				acplWhite: this.playerColor === "white" ? result.acpl : (opponentResult ? opponentResult.acpl : undefined),
+				acplBlack: this.playerColor === "black" ? result.acpl : (opponentResult ? opponentResult.acpl : undefined),
 				skillLabel: skill.label,
 				skillRating: skill.rating,
 				gameSummary: summary ?? undefined,

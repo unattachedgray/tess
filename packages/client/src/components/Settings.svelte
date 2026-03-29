@@ -22,14 +22,16 @@
 
 	function toggleAutoplay() {
 		appState.autoplayActive = !appState.autoplayActive;
-		if (!appState.isMultiplayer) {
-			ws.send({
-				type: "AUTOPLAY",
-				enabled: appState.autoplayActive,
-				humanElo: appState.autoplayHumanElo,
-			});
+		// Send Elo to server (affects engine movetime for both SP and MP)
+		ws.send({
+			type: "AUTOPLAY",
+			enabled: appState.autoplayActive,
+			humanElo: appState.autoplayHumanElo,
+		});
+		if (appState.isMultiplayer && appState.autoplayActive && appState.turn === appState.playerColor && !appState.isGameOver) {
+			// MP: kick off the auto-play loop by requesting suggestions now
+			ws.send({ type: "REQUEST_ANALYSIS" });
 		}
-		// In MP: autoplay is client-side, triggered by SUGGESTIONS handler
 	}
 
 	function setHumanElo(elo: number) {
@@ -38,6 +40,7 @@
 
 	function changeLanguage(lang: Language) {
 		appState.setLanguage(lang);
+		ws.send({ type: "UPDATE_SETTINGS", language: lang });
 	}
 
 	function changeTheme(theme: Theme) {
@@ -60,6 +63,7 @@
 		{ elo: 1200, label: "1200" },
 		{ elo: 1600, label: "1600" },
 		{ elo: 2200, label: "2200" },
+		{ elo: 2800, label: "Max" },
 	];
 </script>
 

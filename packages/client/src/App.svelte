@@ -29,14 +29,24 @@
 		ws.clearHandlers();
 
 		ws.on("GAME_STATE", (msg) => {
+			// If we're in a multiplayer game, ignore GAME_STATE from other games
+			// (e.g. the auto-started singleplayer game arriving late)
+			if (appState.isMultiplayer && appState.gameId && (msg as any).gameId !== appState.gameId) {
+				console.log("[ws] ignoring stale GAME_STATE from", (msg as any).gameId, "— in MP game", appState.gameId);
+				return;
+			}
 			const wasMp = appState.isMultiplayer;
 			const wasOpponent = appState.opponentName;
+			const wasGameType = appState.gameType;
+			const wasPlayerColor = appState.playerColor;
 			appState.updateFromGameState(msg);
 			appState.view = "game";
 			// Preserve multiplayer state (GAME_STATE arrives after MP_GAME_START)
 			if (wasMp) {
 				appState.isMultiplayer = true;
 				appState.opponentName = wasOpponent;
+				appState.gameType = wasGameType;
+				appState.playerColor = wasPlayerColor;
 				// Request suggestions if it's our turn at game start
 				if (appState.turn === appState.playerColor) {
 					ws.send({ type: "REQUEST_ANALYSIS" });
@@ -64,18 +74,87 @@
 				appState.analysisLoading = false;
 			}
 		});
+		let autoplayLastMoves: string[] = [];
+		let autoplayLastFens: string[] = [];
+		let autoplayLossStreak = 0;
 		ws.on("SUGGESTIONS", (msg) => {
 			appState.updateSuggestions(msg.suggestions);
-			// MP autoplay: if active and it's our turn, play the top suggestion
-			if (appState.isMultiplayer && appState.autoplayActive && !appState.isGameOver
+			// Autoplay: server sends weakMove (Elo-limited engine move) alongside
+			// full-strength suggestions. Use weakMove for autoplay, best move for display.
+			if (appState.autoplayActive && !appState.isGameOver
 				&& appState.turn === appState.playerColor && msg.suggestions?.length > 0) {
-				const topMove = msg.suggestions[0].move;
-				// Play immediately — suggestion is already displayed
-				if (topMove.toUpperCase() === "PASS") {
-					ws.send({ type: "PASS" });
+				const data = msg as any;
+				// Use Elo-limited move if available, otherwise best move
+				const chosenMove = data.weakMove ?? msg.suggestions[0].move;
+				const topScore = msg.suggestions[0].score;
+				const delay = appState.isMultiplayer ? 300 : 800;
+
+				// Track positions for repetition detection
+				// For Go, use move count as proxy since FEN is always empty
+				const fenKey = appState.gameType === 'go'
+					? `go-${appState.moveHistory.length}-${chosenMove}`
+					: appState.fen.split(" ").slice(0, 3).join(" ");
+				autoplayLastFens.push(fenKey);
+				autoplayLastMoves.push(chosenMove);
+				if (autoplayLastFens.length > 10) { autoplayLastFens.shift(); autoplayLastMoves.shift(); }
+
+				// Stop conditions:
+				// 1. Same move suggested 2+ times in last 4 moves (short cycle)
+				const recentMoves = autoplayLastMoves.slice(-4);
+				const moveRepeat = recentMoves.filter(m => m === chosenMove).length >= 2;
+				// 2. Same position appeared before (position repetition) — skip for Go
+				const fenRepeat = appState.gameType !== 'go' && autoplayLastFens.slice(0, -1).includes(fenKey);
+				// 3. Engine says score=0 at high depth (drawn) and game is past opening
+				const drawnPosition = Math.abs(topScore) === 0 && (msg.suggestions[0].depth ?? 0) > 25 && appState.moveHistory.length > 40;
+				// 4. Hopelessly lost: resign like engines/pros do
+				//    Chess/Janggi: score < -500 for 3+ consecutive moves (clear material loss)
+				//    Go: score < -600 (~15% winrate) for 3+ moves past move 40
+				if (!autoplayLossStreak) autoplayLossStreak = 0;
+				const resignThreshold = appState.gameType === 'go' ? -400 : -500;
+				const resignMinMoves = appState.gameType === 'go' ? 60 : 20;
+				const resignStreakNeeded = appState.gameType === 'go' ? 5 : 3;
+				if (topScore < resignThreshold && appState.moveHistory.length > resignMinMoves) {
+					autoplayLossStreak++;
 				} else {
-					ws.send({ type: "PLAY_MOVE", move: topMove });
-				} // Small delay so the user can see the suggestion
+					autoplayLossStreak = Math.max(0, autoplayLossStreak - 1); // decay slowly instead of reset
+				}
+				const hopelesslyLost = autoplayLossStreak >= resignStreakNeeded;
+
+				if (moveRepeat || fenRepeat || drawnPosition || hopelesslyLost) {
+					console.log("[autoplay] stopping —", hopelesslyLost ? `hopeless (score ${topScore}, ${autoplayLossStreak} streak)` : moveRepeat ? "move repeat" : fenRepeat ? "position repeat" : "drawn position");
+					appState.autoplayActive = false;
+					autoplayLastMoves = [];
+					autoplayLastFens = [];
+					autoplayLossStreak = 0;
+					// In MP: resign to end the game
+					if (appState.isMultiplayer && !appState.isGameOver && appState.moveHistory.length > resignMinMoves) {
+						ws.send({ type: "RESIGN" });
+					}
+				// Go: allow pass in endgame, resign if passing while losing
+				} else if (chosenMove.toUpperCase() === "PASS") {
+					if (appState.moveHistory.length < 100) {
+						console.log("[autoplay] skipping pass — game too early");
+					} else if (topScore < -200 && appState.isMultiplayer) {
+						console.log("[autoplay] would pass while losing — resigning instead");
+						appState.autoplayActive = false;
+						ws.send({ type: "RESIGN" });
+					} else {
+						// Legitimate endgame pass
+						setTimeout(() => {
+							if (!appState.autoplayActive || appState.isGameOver) return;
+							ws.send({ type: "PASS" });
+						}, delay);
+					}
+				} else {
+					setTimeout(() => {
+						if (!appState.autoplayActive || appState.isGameOver) return;
+						if (chosenMove.toUpperCase() === "PASS") {
+							ws.send({ type: "PASS" });
+						} else {
+							ws.send({ type: "PLAY_MOVE", move: chosenMove });
+						}
+					}, delay);
+				}
 			}
 		});
 		ws.on("ANALYSIS", (msg) => {
@@ -103,16 +182,28 @@
 			appState.lobbyPlayerCount = data.activePlayers ?? 0;
 		});
 		ws.on("MP_GAME_START", (msg) => {
-			// Clear stale singleplayer suggestions
-			appState.suggestions = [];
+			// Reset game state before MP starts — prevents stale data from causing render errors
+			appState.reset();
 			// Sync suggestion count to server for MP
 			ws.send({ type: "SET_SUGGESTIONS", count: appState.suggestionCount });
 			console.log("[MP] MP_GAME_START received!", msg);
 			const data = msg as any;
+			appState.gameId = data.gameId;
+			appState.gameType = data.gameType;
 			appState.isMultiplayer = true;
 			appState.opponentName = data.opponentName;
 			appState.playerColor = data.yourColor;
 			appState.view = "game";
+			// Re-enable autoplay if the rematch was initiated with autoplay flag
+			if (data.autoplay) {
+				setTimeout(() => {
+					appState.autoplayActive = true;
+					ws.send({ type: 'AUTOPLAY', enabled: true, humanElo: appState.autoplayHumanElo });
+					if (data.yourColor === 'white' || data.gameType === 'go') {
+						ws.send({ type: 'REQUEST_ANALYSIS' });
+					}
+				}, 500);
+			}
 		});
 		ws.on("CLOCK_UPDATE", (msg) => {
 			const data = msg as any;
@@ -131,6 +222,12 @@
 		});
 		ws.on("OPPONENT_RECONNECTED", () => {
 			appState.opponentDisconnected = false;
+		});
+		ws.on("MP_SESSION_END", () => {
+			console.log("[MP] Session ended by opponent");
+			appState.isMultiplayer = false;
+			appState.autoplayActive = false;
+			appState.opponentName = '';
 		});
 		(ws as any).debugHandlers?.();
 	}
@@ -215,14 +312,19 @@
 			setTimeout(() => showLeaveConfirm = false, 5000);
 			return;
 		}
-		// Resign if game in progress
-		if (appState.isMultiplayer && !appState.isGameOver) {
-			ws.send({ type: 'RESIGN' });
-		}
 		showLeaveConfirm = false;
-		// Mark MP as ended but keep the board for pondering
+		// Send MP_LEAVE — server handles resign + notifying opponent
+		ws.send({ type: 'MP_LEAVE' });
 		appState.isMultiplayer = false;
 		appState.autoplayActive = false;
+	}
+
+	function rematch(gameType?: "chess" | "go" | "janggi") {
+		ws.send({ type: 'REMATCH', ...(gameType ? { gameType } : {}) });
+	}
+
+	function autoplayRematch() {
+		ws.send({ type: 'REMATCH', autoplay: true });
 	}
 
 	function exitToSingleplayer() {
@@ -346,7 +448,7 @@
 				gameSummary={appState.gameSummary ?? undefined}
 			/>
 		{:else}
-			<Game {ws} />
+			<Game {ws} onRematch={rematch} onAutoplayRematch={autoplayRematch} />
 		{/if}
 		<!-- Challenge notification toast -->
 		{#if challengeNotification}

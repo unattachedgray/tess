@@ -66,14 +66,26 @@ export class SessionManager {
 		topN = 3,
 		goMoves?: [string, string][],
 		boardSize?: number,
+		turn?: "white" | "black",
+		movetime?: number,
+		eloLimit?: number | null,
 	): Promise<{ type: "SUGGESTIONS"; suggestions: Array<{ move: string; san?: string; score: number; depth: number; pv: string[] }> }> {
 		if (gameType === "go") {
 			if (!this.kataGo) return { type: "SUGGESTIONS", suggestions: [] };
 			try {
-				const results = await this.kataGo.analyze(goMoves ?? [], "b", 200, topN, boardSize ?? 19);
-				const suggestions = results.slice(0, topN).map((info: any) => ({
+				const turnColor = turn === "white" ? "w" : "b";
+				const goTime = movetime ?? 800;
+				const results = await this.kataGo.analyze(goMoves ?? [], turnColor, goTime, topN, boardSize ?? 19);
+				// Never suggest pass in early/mid game
+				const moveCount = (goMoves ?? []).length;
+				const filtered = moveCount < 150
+					? results.filter((info: any) => info.move?.toLowerCase() !== "pass")
+					: results;
+				const suggestions = (filtered.length > 0 ? filtered : results).slice(0, topN).map((info: any) => ({
 					move: info.move,
-					score: Math.round((info.winrate - 0.5) * 2000), // convert to centipawn-like
+					// Use scoreLead (points) * 100 for centipawn-equivalent.
+					// scoreLead doesn't saturate like winrate, so ACPL works properly.
+					score: Math.round((info.scoreLead ?? (info.winrate - 0.5) * 20) * 100),
 					depth: info.visits ?? 0,
 					pv: [info.move],
 				}));
@@ -87,8 +99,9 @@ export class SessionManager {
 		const pool = gameType === "janggi" && this.janggiPool ? this.janggiPool : this.chessPool;
 		const variant = gameType === "janggi" ? "janggi" : undefined;
 
+		const chessTime = movetime ?? 1000;
 		try {
-			const result = await pool.search(fen, 1000, topN, variant);
+			const result = await pool.search(fen, chessTime, topN, variant, eloLimit);
 			const suggestions = result.info
 				.filter((info: any) => info.pv && info.pv.length > 0)
 				.slice(0, topN)

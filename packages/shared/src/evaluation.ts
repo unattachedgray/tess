@@ -84,31 +84,61 @@ export function getSkillLevel(accuracy: number, gameType: "chess" | "go" | "jang
 	// Chess/Janggi: blend accuracy with ACPL for more realistic rating
 	// High accuracy in a losing position doesn't mean good play
 	if (gameType === "chess" || gameType === "janggi") {
-		// Penalize accuracy score based on ACPL
-		// ACPL 0-20: no penalty, 20-50: mild, 50-100: significant, 100+: heavy
-		let adjustedAcc = accuracy;
-		if (acpl !== undefined && acpl > 15) {
-			const penalty = Math.min(40, (acpl - 15) * 0.5);
-			adjustedAcc = Math.max(0, accuracy - penalty);
+		// Use ACPL as primary metric — it honestly reflects move quality
+		// regardless of position balance. Accuracy is secondary.
+		if (acpl !== undefined && acpl > 0) {
+			if (acpl <= 15)
+				return { label: "Engine", rating: "2800+", description: "Near-perfect engine play" };
+			if (acpl <= 35)
+				return { label: "Grandmaster", rating: "2500-2700", description: "World-class accuracy" };
+			if (acpl <= 60)
+				return { label: "Master", rating: "2200-2500", description: "Master-level precision" };
+			if (acpl <= 100)
+				return { label: "Expert", rating: "2000-2200", description: "Expert-level play" };
+			if (acpl <= 150)
+				return { label: "Advanced", rating: "1800-2000", description: "Strong club player" };
+			if (acpl <= 220)
+				return { label: "Intermediate", rating: "1500-1800", description: "Average club player" };
+			if (acpl <= 320)
+				return { label: "Casual", rating: "1200-1500", description: "Developing player" };
+			return { label: "Beginner", rating: "Under 1200", description: "Learning the basics" };
 		}
-		if (adjustedAcc >= 95)
+		// Fallback to accuracy if ACPL not available
+		if (accuracy >= 95)
 			return { label: "Engine", rating: "2800+", description: "Near-perfect engine play" };
-		if (adjustedAcc >= 90)
+		if (accuracy >= 88)
 			return { label: "Grandmaster", rating: "2500-2700", description: "World-class accuracy" };
-		if (adjustedAcc >= 82)
+		if (accuracy >= 78)
 			return { label: "Master", rating: "2200-2500", description: "Master-level precision" };
-		if (adjustedAcc >= 72)
+		if (accuracy >= 68)
 			return { label: "Expert", rating: "2000-2200", description: "Expert-level play" };
-		if (adjustedAcc >= 62)
+		if (accuracy >= 55)
 			return { label: "Advanced", rating: "1800-2000", description: "Strong club player" };
-		if (adjustedAcc >= 50)
+		if (accuracy >= 42)
 			return { label: "Intermediate", rating: "1500-1800", description: "Average club player" };
-		if (adjustedAcc >= 35)
+		if (accuracy >= 28)
 			return { label: "Casual", rating: "1200-1500", description: "Developing player" };
 		return { label: "Beginner", rating: "Under 1200", description: "Learning the basics" };
 	}
 
-	// Go accuracy-to-rank mapping
+	// Go: use ACPL as primary (same reason as chess — accuracy is too forgiving)
+	// KataGo scores are in centipawn-equivalents: (winrate - 0.5) * 2000
+	if (acpl !== undefined && acpl > 0) {
+		if (acpl <= 20)
+			return { label: "Pro", rating: "9 dan+", description: "Professional-level play" };
+		if (acpl <= 50)
+			return { label: "High Dan", rating: "4-6 dan", description: "Very strong amateur" };
+		if (acpl <= 100)
+			return { label: "Dan", rating: "1-3 dan", description: "Dan-level player" };
+		if (acpl <= 160)
+			return { label: "High Kyu", rating: "1-3 kyu", description: "Strong kyu player" };
+		if (acpl <= 250)
+			return { label: "Mid Kyu", rating: "4-8 kyu", description: "Intermediate player" };
+		if (acpl <= 400)
+			return { label: "Low Kyu", rating: "9-15 kyu", description: "Developing player" };
+		return { label: "Beginner", rating: "16+ kyu", description: "Learning the basics" };
+	}
+	// Fallback to accuracy
 	if (accuracy >= 95)
 		return { label: "Pro", rating: "9 dan+", description: "Professional-level play" };
 	if (accuracy >= 88)

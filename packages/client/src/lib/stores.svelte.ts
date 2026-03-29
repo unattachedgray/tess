@@ -175,6 +175,9 @@ class AppState {
 		accuracy: number;
 		acpl: number;
 		skill: { label: string; rating: string; description: string };
+		opponentAccuracy?: number;
+		opponentAcpl?: number;
+		opponentSkill?: { label: string; rating: string; description: string };
 	} | null>(null);
 	gameSummary = $state<string | null>(null);
 

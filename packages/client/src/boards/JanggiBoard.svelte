@@ -18,6 +18,8 @@
 	let selected = $state<string | null>(null);
 	let validDests = $state<string[]>([]);
 
+	const flipped = $derived(orientation === "black");
+
 	const grid = $derived.by(() => {
 		const rows = fen.split(" ")[0].split("/");
 		const result: string[][] = [];
@@ -32,6 +34,10 @@
 				}
 			}
 			result.push(gridRow);
+		}
+		if (flipped) {
+			result.reverse();
+			for (const row of result) row.reverse();
 		}
 		return result;
 	});
@@ -52,11 +58,15 @@
 		const rank = parseInt(sq.slice(1), 10);
 		const row = 10 - rank;
 		if (col < 0 || col > 8 || row < 0 || row > 9) return null;
-		return { x: 8 + col * 10.5, y: 8 + row * 10.5 };
+		const dc = flipped ? 8 - col : col;
+		const dr = flipped ? 9 - row : row;
+		return { x: 8 + dc * 10.5, y: 8 + dr * 10.5 };
 	}
 
 	function toSquare(col: number, row: number): string {
-		return `${String.fromCharCode(97 + col)}${10 - row}`;
+		const c = flipped ? 8 - col : col;
+		const r = flipped ? 9 - row : row;
+		return `${String.fromCharCode(97 + c)}${10 - r}`;
 	}
 
 	function handleClick(col: number, row: number) {
@@ -116,10 +126,10 @@
 
 		<!-- Coordinates -->
 		{#each Array(9) as _, c}
-			<text x={8 + c * 10.5} y="4" text-anchor="middle" font-size="3" fill="#8B6914" style="pointer-events:none;user-select:none">{String.fromCharCode(97 + c)}</text>
+			<text x={8 + c * 10.5} y="4" text-anchor="middle" font-size="3" fill="#8B6914" style="pointer-events:none;user-select:none">{String.fromCharCode(97 + (flipped ? 8 - c : c))}</text>
 		{/each}
 		{#each Array(10) as _, r}
-			<text x="3" y={8 + r * 10.5 + 1} text-anchor="middle" font-size="3" fill="#8B6914" style="pointer-events:none;user-select:none">{10 - r}</text>
+			<text x="3" y={8 + r * 10.5 + 1} text-anchor="middle" font-size="3" fill="#8B6914" style="pointer-events:none;user-select:none">{flipped ? r + 1 : 10 - r}</text>
 		{/each}
 
 		<!-- Visual elements (all pointer-events:none) -->

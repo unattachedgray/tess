@@ -12,7 +12,11 @@
 	import Suggestions from "../components/Suggestions.svelte";
 	import Analysis from "../components/Analysis.svelte";
 
-	let { ws }: { ws: WsClient } = $props();
+	let { ws, onRematch, onAutoplayRematch }: {
+		ws: WsClient;
+		onRematch?: (gameType?: "chess" | "go" | "janggi") => void;
+		onAutoplayRematch?: () => void;
+	} = $props();
 
 	let lastMoveCount = $state(0);
 	let hoveredMove = $state<string | null>(null);
@@ -285,12 +289,38 @@
 		<!-- Controls -->
 		<div class="flex gap-2">
 			{#if appState.isGameOver}
-				<button
-					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-colors"
-					onclick={newGame}
-				>
-					{t("game.newGame", appState.language)}
-				</button>
+				{#if appState.isMultiplayer && onRematch}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-colors"
+						onclick={() => onRematch?.()}
+					>
+						Rematch
+					</button>
+					{#if onAutoplayRematch}
+						<button
+							class="py-2.5 px-3 rounded-xl text-xs font-medium bg-[var(--success)] text-[var(--bg-primary)] hover:opacity-90 transition-colors"
+							onclick={() => onAutoplayRematch?.()}
+							title="Rematch with autoplay enabled (same Elo settings)"
+						>
+							Auto
+						</button>
+					{/if}
+					{#each (["chess", "go", "janggi"] as const).filter(g => g !== appState.gameType) as game}
+						<button
+							class="py-2.5 px-3 rounded-xl text-xs font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors capitalize"
+							onclick={() => onRematch?.(game)}
+						>
+							{game}
+						</button>
+					{/each}
+				{:else}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-colors"
+						onclick={newGame}
+					>
+						{t("game.newGame", appState.language)}
+					</button>
+				{/if}
 				{#if appState.gameType === 'chess'}
 					<button
 						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"

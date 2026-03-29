@@ -3,8 +3,9 @@ module.exports = {
 		{
 			name: "tess",
 			cwd: "./packages/server",
-			script: "npx",
-			args: "tsx src/index.ts",
+			interpreter: "node",
+			interpreter_args: "--import tsx/esm",
+			script: "src/index.ts",
 			env: {
 				NODE_ENV: "production",
 				PORT: "8082",

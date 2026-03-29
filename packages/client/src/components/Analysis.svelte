@@ -13,7 +13,7 @@
 		messages: AnalysisMessage[];
 		loading: boolean;
 		currentMoveNumber: number;
-		skillEval?: { accuracy: number; acpl: number; skill: { label: string; rating: string; description: string } } | null;
+		skillEval?: { accuracy: number; acpl: number; skill: { label: string; rating: string; description: string }; opponentAccuracy?: number; opponentAcpl?: number; opponentSkill?: { label: string; rating: string; description: string } } | null;
 		gameSummary?: string | null;
 	} = $props();
 
@@ -81,7 +81,7 @@
 				</div>
 				<div class="space-y-1">
 					<div class="flex justify-between text-xs text-[var(--text-muted)]">
-						<span>Accuracy</span>
+						<span>{t("coach.accuracy", appState.language)}</span>
 						<span>{skillEval.accuracy}%</span>
 					</div>
 					<div class="h-2 rounded-full bg-[var(--bg-hover)] overflow-hidden">
@@ -92,7 +92,25 @@
 					</div>
 				</div>
 				{#if skillEval.acpl > 0}
-					<div class="text-xs text-[var(--text-muted)]">ACPL: {skillEval.acpl}</div>
+					<div class="text-xs text-[var(--text-muted)]">{t("coach.acpl", appState.language)}: {skillEval.acpl}</div>
+				{/if}
+				{#if skillEval.opponentAccuracy !== undefined && skillEval.opponentSkill}
+					<div class="pt-2 mt-2 border-t border-[var(--accent)]/20 space-y-1">
+						<div class="flex items-center justify-between">
+							<span class="text-xs font-medium text-[var(--text-muted)]">AI</span>
+							<span class="text-xs text-[var(--text-secondary)]">{skillEval.opponentSkill.label} ~{skillEval.opponentSkill.rating}</span>
+						</div>
+						<div class="flex justify-between text-xs text-[var(--text-muted)]">
+							<span>{t("coach.accuracy", appState.language)}</span>
+							<span>{skillEval.opponentAccuracy}%</span>
+						</div>
+						<div class="h-1.5 rounded-full bg-[var(--bg-hover)] overflow-hidden">
+							<div
+								class="h-full rounded-full transition-all duration-1000 {skillEval.opponentAccuracy >= 90 ? 'bg-[var(--success)]' : skillEval.opponentAccuracy >= 70 ? 'bg-[var(--accent)]' : skillEval.opponentAccuracy >= 50 ? 'bg-[var(--warning)]' : 'bg-[var(--danger)]'}"
+								style="width: {skillEval.opponentAccuracy}%"
+							></div>
+						</div>
+					</div>
 				{/if}
 				{#if gameSummary}
 					<div class="text-sm text-[var(--text-primary)] leading-relaxed pt-2 border-t border-[var(--accent)]/20">
@@ -116,7 +134,7 @@
 		{#if messages.length === 0 && !loading && !skillEval}
 			<p class="text-sm text-[var(--text-muted)] text-center py-4">
 				{#if appState.isGameOver}
-					{appState.isMultiplayer ? "Good game!" : t("coach.makeMove", appState.language)}
+					{appState.isMultiplayer ? t("coach.goodGame", appState.language) : t("coach.makeMove", appState.language)}
 				{:else}
 					{t("coach.makeMove", appState.language)}
 				{/if}
@@ -130,7 +148,7 @@
 					<span class="text-[10px] font-medium {isCurrent ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} uppercase">
 						{t("coach.afterMove", appState.language)} {msg.moveNumber}
 						{#if msg.moveNumber < currentMoveNumber - 2}
-							<span class="text-[var(--text-muted)]">(earlier)</span>
+							<span class="text-[var(--text-muted)]">({t("coach.earlier", appState.language)})</span>
 						{/if}
 					</span>
 				</div>
