@@ -4,7 +4,7 @@
  * Separate from GameRoom (which handles singleplayer vs AI).
  * Reuses the same shared game engines (ChessGame, GoGame, JanggiGame).
  */
-import { ChessGame, GoGame, JanggiGame } from "@tess/shared";
+import { ChessGame, GoGame, JanggiGame, PRESET_EMOJIS, PRESET_MESSAGES } from "@tess/shared";
 import { gameAccuracy, getSkillLevel } from "@tess/shared";
 import type { GameType, TimeControl } from "@tess/shared";
 import { FischerClock, type ClockState } from "./clock.js";
@@ -250,10 +250,11 @@ export class MultiplayerRoom {
 	/** Handle emoji reaction. */
 	sendEmoji(from: MpClient, emoji: string): void {
 		const fromColor = this.getPlayerColor(from);
-		if (!fromColor) return; // Spectators can't send emoji
+		if (!fromColor) return;
+		// Validate against allowed emojis — reject arbitrary strings
+		if (!(PRESET_EMOJIS as readonly string[]).includes(emoji)) return;
 		const fromName = from.nickname || from.userId;
 
-		// Send to opponent only (not back to sender)
 		const opponent = fromColor === "white" ? this.players.black : this.players.white;
 		if (opponent) {
 			opponent.send({ type: "EMOJI_RECEIVED", emoji, from: fromName });
@@ -264,6 +265,8 @@ export class MultiplayerRoom {
 	sendPresetMessage(from: MpClient, message: string): void {
 		const fromColor = this.getPlayerColor(from);
 		if (!fromColor) return;
+		// Validate against allowed message keys — reject arbitrary strings
+		if (!(PRESET_MESSAGES as readonly string[]).includes(message)) return;
 		const fromName = from.nickname || from.userId;
 
 		const opponent = fromColor === "white" ? this.players.black : this.players.white;

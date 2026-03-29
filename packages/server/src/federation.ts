@@ -104,6 +104,8 @@ export class FederationService {
 				let buffer = "";
 				socket.on("data", (data: Buffer) => {
 					buffer += data.toString();
+					// Prevent memory exhaustion from peers sending without newlines
+					if (buffer.length > 4096) { buffer = ""; return; }
 					const lines = buffer.split("\n");
 					buffer = lines.pop() ?? "";
 					for (const line of lines) {
@@ -136,28 +138,40 @@ export class FederationService {
 
 	private handleSwarmMessage(raw: string, _socket: any, info: any): void {
 		try {
+			// Reject oversized messages (prevent memory abuse)
+			if (raw.length > 2048) return;
+
 			const msg = JSON.parse(raw);
 			if (msg.type !== "tess-hello") return;
 
 			const key = info.publicKey?.toString("hex")?.slice(0, 16) ?? "unknown";
 			const host = info.publicKey ? `swarm-${key}` : "unknown";
 
-			// Register as verified peer (we're already on an encrypted stream)
-			if (this.peers.size >= MAX_PEERS) return; // cap peer count
+			// Validate and sanitize fields from untrusted peer
+			const port = typeof msg.port === "number" && msg.port > 0 && msg.port < 65536
+				? msg.port : 0;
+			const name = typeof msg.name === "string"
+				? msg.name.slice(0, 64).replace(/[^\w\s\-().]/g, "") : undefined;
+			const players = typeof msg.players === "number" && msg.players >= 0 && msg.players < 10000
+				? msg.players : undefined;
+			const games = Array.isArray(msg.games)
+				? msg.games.filter((g: unknown) => typeof g === "string").slice(0, 10) : undefined;
+
+			if (this.peers.size >= MAX_PEERS) return;
 			const peerKey = `swarm:${key}`;
 			this.peers.set(peerKey, {
 				host,
-				port: msg.port ?? 0,
+				port,
 				url: `swarm://${key}`,
-				name: msg.name,
-				players: msg.players,
-				games: msg.games,
+				name,
+				players,
+				games,
 				lastSeen: Date.now(),
 				verified: true,
 				source: "hyperswarm",
 			});
 
-			log.info("swarm peer verified", { name: msg.name, key });
+			log.info("swarm peer verified", { name, key });
 		} catch {
 			// Invalid message — ignore
 		}
@@ -263,11 +277,14 @@ export class FederationService {
 			clearTimeout(timeout);
 
 			if (res.ok) {
-				const data = (await res.json()) as { name?: string; players?: number; games?: string[] };
+				// Size-limit response to prevent memory abuse from malicious "peers"
+				const text = await res.text();
+				if (text.length > 4096) { this.peers.delete(key); return; }
+				const data = JSON.parse(text) as { name?: string; players?: number; games?: string[] };
 				peer.verified = true;
-				peer.name = data.name;
-				peer.players = data.players;
-				peer.games = data.games;
+				peer.name = typeof data.name === "string" ? data.name.slice(0, 64) : undefined;
+				peer.players = typeof data.players === "number" && data.players < 10000 ? data.players : undefined;
+				peer.games = Array.isArray(data.games) ? data.games.slice(0, 10) : undefined;
 				peer.lastSeen = Date.now();
 				log.info("HTTP peer verified", { key, name: data.name });
 			} else {
