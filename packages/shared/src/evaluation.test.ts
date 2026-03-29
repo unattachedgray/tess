@@ -115,16 +115,20 @@ describe("getSkillLevel", () => {
 	});
 
 	it("uses Go ranks for Go games", () => {
+		// accuracy 80 → Go maxAccuracy: Pro=82 (no), Club+=70 (yes)
 		const level = getSkillLevel(80, "go");
-		expect(level.label).toBe("Pro");
-		expect(level.rating).toContain("dan");
+		expect(level.label).toBe("Club+");
+		expect(level.rating).toContain("kyu");
 	});
 
-	it("Go ACPL-based tiers", () => {
-		expect(getSkillLevel(50, "go", 15).label).toBe("Superhuman");
-		expect(getSkillLevel(50, "go", 60).label).toBe("Pro");
-		expect(getSkillLevel(50, "go", 120).label).toBe("Club+");
-		expect(getSkillLevel(50, "go", 180).label).toBe("Club");
+	it("Go ACPL-based tiers (tightened from sim data)", () => {
+		expect(getSkillLevel(50, "go", 10).label).toBe("Superhuman");
+		expect(getSkillLevel(50, "go", 25).label).toBe("Pro+");
+		expect(getSkillLevel(50, "go", 50).label).toBe("Pro");
+		expect(getSkillLevel(50, "go", 90).label).toBe("Club+");
+		expect(getSkillLevel(50, "go", 140).label).toBe("Club");
+		expect(getSkillLevel(50, "go", 200).label).toBe("Casual+");
+		expect(getSkillLevel(50, "go", 280).label).toBe("Casual");
 		expect(getSkillLevel(50, "go", 500).label).toBe("Beginner");
 	});
 
