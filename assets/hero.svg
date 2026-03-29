@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="800" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="200" rx="16" fill="url(#bg)"/>
+  <!-- Grid pattern (Go board hint) -->
+  <g opacity="0.06" stroke="#38bdf8" stroke-width="0.5">
+    <line x1="40" y1="30" x2="40" y2="170"/><line x1="65" y1="30" x2="65" y2="170"/>
+    <line x1="90" y1="30" x2="90" y2="170"/><line x1="115" y1="30" x2="115" y2="170"/>
+    <line x1="140" y1="30" x2="140" y2="170"/><line x1="165" y1="30" x2="165" y2="170"/>
+    <line x1="40" y1="40" x2="165" y2="40"/><line x1="40" y1="65" x2="165" y2="65"/>
+    <line x1="40" y1="90" x2="165" y2="90"/><line x1="40" y1="115" x2="165" y2="115"/>
+    <line x1="40" y1="140" x2="165" y2="140"/><line x1="40" y1="165" x2="165" y2="165"/>
+  </g>
+  <!-- Go stones -->
+  <circle cx="90" cy="90" r="10" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <circle cx="115" cy="65" r="10" fill="#e2e8f0"/>
+  <circle cx="65" cy="115" r="10" fill="#e2e8f0"/>
+  <circle cx="115" cy="115" r="10" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <circle cx="140" cy="90" r="10" fill="#e2e8f0"/>
+  <!-- Chess piece (king silhouette) -->
+  <g transform="translate(620, 40)" opacity="0.08" fill="#38bdf8">
+    <path d="M60 10v10h-5v5h-10v5h-5v10h-5v20h-5v30h-5v20h70v-20h-5v-30h-5v-20h-5v-10h-5v-5h-10v-5h-5v-10z"/>
+    <rect x="10" y="110" width="60" height="8" rx="2"/>
+  </g>
+  <!-- Janggi character hint -->
+  <text x="730" y="160" font-family="serif" font-size="48" fill="#38bdf8" opacity="0.06" text-anchor="middle">將</text>
+  <!-- Title -->
+  <text x="310" y="82" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="800" fill="url(#accent)" letter-spacing="-1">Tess</text>
+  <!-- Subtitle -->
+  <text x="310" y="115" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#94a3b8">Play Chess, Go, and Janggi against AI — with real-time coaching</text>
+  <!-- Feature pills -->
+  <g font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">
+    <rect x="310" y="132" width="72" height="22" rx="11" fill="#38bdf8" opacity="0.15"/>
+    <text x="346" y="147" fill="#38bdf8" text-anchor="middle">5 Languages</text>
+    <rect x="392" y="132" width="80" height="22" rx="11" fill="#38bdf8" opacity="0.15"/>
+    <text x="432" y="147" fill="#38bdf8" text-anchor="middle">Multiplayer</text>
+    <rect x="482" y="132" width="72" height="22" rx="11" fill="#38bdf8" opacity="0.15"/>
+    <text x="518" y="147" fill="#38bdf8" text-anchor="middle">AI Coaching</text>
+    <rect x="564" y="132" width="68" height="22" rx="11" fill="#38bdf8" opacity="0.15"/>
+    <text x="598" y="147" fill="#38bdf8" text-anchor="middle">Open Source</text>
+  </g>
+</svg>

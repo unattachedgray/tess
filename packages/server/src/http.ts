@@ -17,6 +17,7 @@ export function createApp(sessionManager: SessionManager): Hono {
 			uptime: Math.round(process.uptime()),
 			activeGames: sessionManager.activeRoomCount,
 			memoryMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+			discovery: process.env.TESS_DISCOVERY !== "off",
 		});
 	});
 
@@ -111,14 +112,18 @@ export function createApp(sessionManager: SessionManager): Hono {
 	});
 
 	// ── Federation API ──
+	// Guarded by TESS_DISCOVERY env var — set to "off" to disable completely
+
+	const discoveryEnabled = () => process.env.TESS_DISCOVERY !== "off";
 
 	app.post("/api/federation/peers", async (c) => {
-		// Register a peer server
+		if (!discoveryEnabled()) {
+			return c.json({ error: "Federation disabled on this server" }, 403);
+		}
 		const body = await c.req.json();
 		if (!body.url || typeof body.url !== "string") {
 			return c.json({ error: "url required" }, 400);
 		}
-		// Validate URL format
 		try { new URL(body.url); } catch {
 			return c.json({ error: "Invalid URL" }, 400);
 		}
@@ -127,25 +132,31 @@ export function createApp(sessionManager: SessionManager): Hono {
 	});
 
 	app.get("/api/federation/peers", (c) => {
-		// List known peer servers
+		if (!discoveryEnabled()) {
+			return c.json({ error: "Federation disabled on this server" }, 403);
+		}
 		// TODO: Read from peers table
 		return c.json({ peers: [] });
 	});
 
 	app.post("/api/federation/heartbeat", (c) => {
-		// Respond to peer health check
+		if (!discoveryEnabled()) {
+			return c.json({ error: "Federation disabled on this server" }, 403);
+		}
 		return c.json({
 			name: process.env.TESS_SERVER_NAME ?? "Tess",
 			version: "1.0.0",
-			players: 0, // TODO: wire to session count
+			players: sessionManager.activeRoomCount,
 			games: ["chess", "go", "janggi"],
-			discovery: process.env.TESS_DISCOVERY !== "off",
+			discovery: true,
 		});
 	});
 
 	app.get("/api/federation/challenges", (c) => {
-		// Public: list challenges for federated consumption
-		// Same as /api/v1/challenges but explicitly for federation
+		if (!discoveryEnabled()) {
+			return c.json({ error: "Federation disabled on this server" }, 403);
+		}
+		// TODO: Read from lobby
 		return c.json({ challenges: [] });
 	});
 
