@@ -414,6 +414,8 @@ export const PlayerCountPayload = z.object({
 	go: z.number(),
 	janggi: z.number(),
 	total: z.number(),
+	remotePlayers: z.number().optional(),
+	federatedServers: z.number().optional(),
 });
 
 export const GameSummaryPayload = z.object({

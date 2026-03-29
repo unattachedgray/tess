@@ -98,16 +98,27 @@ async function main() {
 	}
 
 	const sessionManager = new SessionManager(chessPool, janggiPool, kataGo);
-	const app = createApp(sessionManager);
+
+	// Start federation / DHT discovery
+	const { FederationService } = await import("./federation.js");
+	const federation = new FederationService(PORT);
+
+	const app = createApp(sessionManager, federation);
 
 	const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
 		log.info(`server listening on port ${info.port}`);
 	});
 
-	createWsServer(server, sessionManager);
+	createWsServer(server, sessionManager, federation);
+
+	// Start federation after server is listening
+	federation.start().catch((err) => {
+		log.warn("federation start failed", { error: (err as Error).message });
+	});
 
 	const shutdown = () => {
 		log.info("shutting down...");
+		federation.destroy();
 		chessPool.shutdown();
 		janggiPool?.shutdown();
 		kataGo?.shutdown();

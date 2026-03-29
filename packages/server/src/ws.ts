@@ -30,6 +30,7 @@ interface ClientState {
 export function createWsServer(
 	server: ServerType,
 	sessionManager: SessionManager,
+	federation?: import("./federation.js").FederationService,
 ): WebSocketServer {
 	// biome-ignore lint: ServerType is compatible at runtime
 	const wss = new WebSocketServer({ server: server as any });
@@ -124,7 +125,11 @@ export function createWsServer(
 	});
 
 	function broadcastPlayerCounts(): void {
-		const counts = { chess: 0, go: 0, janggi: 0, total: clients.size };
+		const counts = {
+			chess: 0, go: 0, janggi: 0, total: clients.size,
+			remotePlayers: federation?.getRemotePlayerCount() ?? 0,
+			federatedServers: federation?.getVerifiedPeers().length ?? 0,
+		};
 		for (const [, state] of clients) {
 			if (state.gameType === "chess") counts.chess++;
 			else if (state.gameType === "go") counts.go++;

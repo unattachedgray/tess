@@ -12,5 +12,8 @@
 		"@biomejs/biome": "^1.9.0",
 		"concurrently": "^9.0.0",
 		"typescript": "^5.6.0"
+	},
+	"dependencies": {
+		"bittorrent-dht": "^11.0.11"
 	}
 }

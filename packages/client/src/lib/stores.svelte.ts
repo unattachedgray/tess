@@ -184,11 +184,13 @@ class AppState {
 	gameSummary = $state<string | null>(null);
 
 	// Player counts (from server)
-	playerCounts = $state<{ chess: number; go: number; janggi: number; total: number }>({
+	playerCounts = $state<{ chess: number; go: number; janggi: number; total: number; remotePlayers: number; federatedServers: number }>({
 		chess: 0,
 		go: 0,
 		janggi: 0,
 		total: 0,
+		remotePlayers: 0,
+		federatedServers: 0,
 	});
 
 	// --- Setters (persist on change) ---

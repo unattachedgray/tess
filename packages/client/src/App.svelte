@@ -427,9 +427,15 @@
 				{/if}
 			{/if}
 			{#if appState.playerCounts.total > 0}
-				<span class="flex items-center gap-1 text-[11px] text-[var(--text-muted)]" title="Players online: {appState.playerCounts.chess} chess, {appState.playerCounts.go} go, {appState.playerCounts.janggi} janggi">
+				<span class="flex items-center gap-1 text-[11px] text-[var(--text-muted)]" title="Local: {appState.playerCounts.chess} chess, {appState.playerCounts.go} go, {appState.playerCounts.janggi} janggi">
 					<span class="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
 					{appState.playerCounts.total}
+				</span>
+			{/if}
+			{#if appState.playerCounts.remotePlayers > 0}
+				<span class="flex items-center gap-1 text-[11px] text-[var(--text-muted)]" title="{appState.playerCounts.federatedServers} servers, {appState.playerCounts.remotePlayers} remote players">
+					<span class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+					{appState.playerCounts.remotePlayers}
 				</span>
 			{/if}
 		</div>

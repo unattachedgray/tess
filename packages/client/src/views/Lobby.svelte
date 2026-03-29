@@ -105,7 +105,18 @@
 			{t("header.back", lang)}
 		</button>
 		<h1 class="lobby-title">{t("lobby.title", lang)}</h1>
-		<span class="player-count">{activePlayers} {t("lobby.inLobby", lang)}</span>
+		<div class="player-counts">
+			<span class="player-count">
+				<span class="count-dot local"></span>
+				{activePlayers} {t("lobby.inLobby", lang)}
+			</span>
+			{#if appState.playerCounts.remotePlayers > 0}
+				<span class="player-count remote">
+					<span class="count-dot remote"></span>
+					{appState.playerCounts.remotePlayers} remote ({appState.playerCounts.federatedServers} servers)
+				</span>
+			{/if}
+		</div>
 	</div>
 
 	<!-- Join by code -->
@@ -240,9 +251,39 @@
 		color: var(--accent);
 	}
 
+	.player-counts {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
+	}
+
 	.player-count {
+		display: flex;
+		align-items: center;
+		gap: 4px;
 		font-size: 11px;
 		color: var(--text-muted);
+	}
+
+	.player-count.remote {
+		font-size: 10px;
+		color: var(--accent);
+		opacity: 0.8;
+	}
+
+	.count-dot {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+	}
+
+	.count-dot.local {
+		background: var(--success);
+	}
+
+	.count-dot.remote {
+		background: var(--accent);
 	}
 
 	.join-code-section {

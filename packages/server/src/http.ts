@@ -2,9 +2,10 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getGame, getRecentGames, getUserStats, upsertUser } from "./db.js";
+import type { FederationService } from "./federation.js";
 import type { SessionManager } from "./session.js";
 
-export function createApp(sessionManager: SessionManager): Hono {
+export function createApp(sessionManager: SessionManager, federation?: FederationService): Hono {
 	const app = new Hono();
 
 	app.use("*", cors());
@@ -18,6 +19,7 @@ export function createApp(sessionManager: SessionManager): Hono {
 			activeGames: sessionManager.activeRoomCount,
 			memoryMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
 			discovery: process.env.TESS_DISCOVERY !== "off",
+			federation: federation?.getStats() ?? null,
 		});
 	});
 
