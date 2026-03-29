@@ -21,6 +21,7 @@ export class SessionManager {
 		difficulty: DifficultyId;
 		playerColor: "white" | "black";
 		boardSize?: number;
+		userId?: string;
 	}): GameRoom {
 		const id = randomUUID().slice(0, 8);
 		// Use Janggi pool if available, otherwise fall back to chess pool

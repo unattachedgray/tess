@@ -170,6 +170,7 @@ export function createWsServer(
 					difficulty: msg.difficulty,
 					playerColor: msg.playerColor,
 					boardSize: msg.boardSize,
+					userId: state.userId,
 				});
 
 				state.room = room;
@@ -243,33 +244,22 @@ export function createWsServer(
 						let weakMove: string | null = null;
 						if (elo < 2800) {
 							if (state.mpRoom.gameType === "go") {
-								// Go: KataGo NN is too strong at any time setting.
-								// Mix random moves for low Elo, engine moves for high Elo.
-								// 800→80% random, 1200→50% random, 1600→20% random, 2200→0%
-								const randomRate = Math.max(0, (2200 - elo) / 1750);
-								if (Math.random() < randomRate) {
-									// Pick a random intersection on the board
-									const GO_COLS = "ABCDEFGHJKLMNOPQRST";
-									const sz = state.mpRoom.getBoardSize();
-									const col = GO_COLS[Math.floor(Math.random() * sz)];
-									const row = Math.floor(Math.random() * sz) + 1;
-									weakMove = `${col}${row}`;
-								} else {
-									// Use engine but pick from lower ranks
-									const weakResult = await sessionManager.analyzeFen(
-										state.mpRoom.gameType,
-										state.mpRoom.getFen(),
-										10,
-										state.mpRoom.getGoMoves(),
-										state.mpRoom.getBoardSize(),
-										state.mpRoom.getTurn(),
-										10,
-									);
-									if (weakResult.suggestions.length > 1) {
-										const targetRank = Math.max(0, Math.round((2200 - elo) / 250));
-										const rank = Math.min(targetRank, weakResult.suggestions.length - 1);
-										weakMove = weakResult.suggestions[rank].move;
-									}
+								// Go: use KataGo with low visits for weak play.
+								// Lower-ranked suggestions from multi-PV provide natural weakness.
+								// 800→rank 6, 1200→rank 4, 1600→rank 2, 2200→rank 0
+								const weakResult = await sessionManager.analyzeFen(
+									state.mpRoom.gameType,
+									state.mpRoom.getFen(),
+									8,
+									state.mpRoom.getGoMoves(),
+									state.mpRoom.getBoardSize(),
+									state.mpRoom.getTurn(),
+									10, // low visits = weaker analysis
+								);
+								if (weakResult.suggestions.length > 1) {
+									const targetRank = Math.max(0, Math.round((2200 - elo) / 300));
+									const rank = Math.min(targetRank, weakResult.suggestions.length - 1);
+									weakMove = weakResult.suggestions[rank].move;
 								}
 							} else {
 								// Chess/Janggi: 50ms MultiPV search + rank selection

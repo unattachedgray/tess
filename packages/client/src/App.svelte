@@ -100,8 +100,9 @@
 
 				// Stop conditions:
 				// 1. Same move suggested 2+ times in last 4 moves (short cycle)
+				//    Skip for Go — same coordinate can be valid at different board states
 				const recentMoves = autoplayLastMoves.slice(-4);
-				const moveRepeat = recentMoves.filter(m => m === chosenMove).length >= 2;
+				const moveRepeat = appState.gameType !== 'go' && recentMoves.filter(m => m === chosenMove).length >= 2;
 				// 2. Same position appeared before (position repetition) — skip for Go
 				const fenRepeat = appState.gameType !== 'go' && autoplayLastFens.slice(0, -1).includes(fenKey);
 				// 3. Engine says score=0 at high depth (drawn) and game is past opening

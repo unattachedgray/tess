@@ -48,6 +48,7 @@ export class GameRoom {
 	readonly gameType: GameType;
 	readonly difficulty: DifficultyId;
 	readonly playerColor: "white" | "black";
+	readonly userId: string | undefined;
 	private game: IGame;
 	private engine: GameEngine;
 	private moveCallbacks: ((data: unknown) => void)[] = [];
@@ -71,11 +72,13 @@ export class GameRoom {
 		kataGo: KataGoAdapter | null;
 		boardSize?: number;
 		useJanggiVariant?: boolean;
+		userId?: string;
 	}) {
 		this.id = config.id;
 		this.gameType = config.gameType;
 		this.difficulty = config.difficulty;
 		this.playerColor = config.playerColor;
+		this.userId = config.userId;
 		this.game = createGame(config.gameType, config.boardSize);
 		this.engine = createGameEngine(
 			config.gameType,
@@ -451,8 +454,8 @@ export class GameRoom {
 			saveGame({
 				id: this.id,
 				gameType: this.gameType,
-				whiteUserId: this.playerColor === "white" ? undefined : "ai",
-				blackUserId: this.playerColor === "black" ? undefined : "ai",
+				whiteUserId: this.playerColor === "white" ? (this.userId ?? undefined) : "ai",
+				blackUserId: this.playerColor === "black" ? (this.userId ?? undefined) : "ai",
 				difficulty: this.difficulty,
 				result: gameResult?.winner,
 				resultReason: gameResult?.reason,
