@@ -430,9 +430,9 @@
 				{/if}
 			{:else}
 				<button
-					class="text-[11px] font-medium px-2 py-0.5 rounded-md transition-all {appState.view === 'lobby' ? 'bg-[var(--accent)] text-[var(--bg-primary)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}"
+					class="text-[11px] font-bold px-2.5 py-0.5 rounded-md transition-all border {appState.view === 'lobby' ? 'bg-[var(--accent)] text-[var(--bg-primary)] border-[var(--accent)]' : 'bg-[var(--bg-hover)] text-[var(--accent)] border-[var(--accent)]/40 hover:border-[var(--accent)] hover:bg-[var(--accent)]/10'}"
 					onclick={() => appState.view = appState.view === 'lobby' ? 'game' : 'lobby'}
-				>MP</button>
+				>MULTI</button>
 				{#if appState.challenges.length > 0 && appState.view !== 'lobby'}
 					{@const ch = appState.challenges[0]}
 					<button
