@@ -307,9 +307,11 @@
 		const challs = appState.challenges;
 		if (challs.length > prevChallengeCount && appState.view !== 'lobby') {
 			const newest = challs[challs.length - 1];
-			if (newest) {
+			// Don't show notification for own challenges
+			const myName = appState.nickname || appState.userId;
+			if (newest && newest.creatorName !== myName) {
 				const mins = Math.floor(newest.timeControl.initial / 60);
-				const timeLabel = newest.timeControl.initial === 0 ? 'No limit' : `${mins}+${newest.timeControl.increment}`;
+				const timeLabel = newest.timeControl.initial === 0 ? '∞' : `${mins}+${newest.timeControl.increment}`;
 				challengeNotification = { id: newest.id, creatorName: newest.creatorName, gameType: newest.gameType, timeLabel };
 				setTimeout(() => { if (challengeNotification?.id === newest.id) challengeNotification = null; }, 15000);
 			}
@@ -433,8 +435,9 @@
 					class="text-[11px] font-bold px-2.5 py-0.5 rounded-md transition-all border {appState.view === 'lobby' ? 'bg-[var(--accent)] text-[var(--bg-primary)] border-[var(--accent)]' : 'bg-[var(--bg-hover)] text-[var(--accent)] border-[var(--accent)]/40 hover:border-[var(--accent)] hover:bg-[var(--accent)]/10'}"
 					onclick={() => appState.view = appState.view === 'lobby' ? 'game' : 'lobby'}
 				>Multiplayer</button>
-				{#if appState.challenges.length > 0 && appState.view !== 'lobby'}
-					{@const ch = appState.challenges[0]}
+				{@const otherChallenges = appState.challenges.filter(c => c.creatorName !== (appState.nickname || appState.userId))}
+				{#if otherChallenges.length > 0 && appState.view !== 'lobby'}
+					{@const ch = otherChallenges[0]}
 					<button
 						class="text-[11px] font-bold px-3 py-0.5 rounded-md bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-all animate-pulse"
 						onclick={() => { ws.send({ type: 'ACCEPT_CHALLENGE', challengeId: ch.id }); }}
