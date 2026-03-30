@@ -55,6 +55,8 @@ export class GameRoom {
 	private moveInProgress = false;
 	private destroyed = false;
 	private lastSuggestions: Suggestion[] = [];
+	private analysisInFlight = false;
+	private analysisPending = false;
 	coachingEnabled = true;
 	suggestionCount = 3;
 	suggestionStrength: "fast" | "balanced" | "deep" = "deep";
@@ -254,13 +256,33 @@ export class GameRoom {
 					this.emit({ type: "MOVE_QUALITY", move: playerMove, quality });
 				}
 				if (this.coachingEnabled) {
-					this.requestAnalysis();
+					this.scheduleAnalysis();
 				}
 			})
 			.catch((err) => {
 				log.error("suggestions failed", { error: (err as Error).message });
 				this.emit({ type: "SUGGESTIONS", suggestions: [] });
 			});
+	}
+
+	/** Throttle coaching: only one analysis in flight at a time.
+	 *  If player moves while analysis is running, queue ONE follow-up
+	 *  for the latest position (skip intermediate positions). */
+	private scheduleAnalysis(): void {
+		if (this.analysisInFlight) {
+			this.analysisPending = true; // will run after current finishes
+			return;
+		}
+		this.analysisInFlight = true;
+		this.analysisPending = false;
+		this.requestAnalysis().finally(() => {
+			this.analysisInFlight = false;
+			// If a new move came in while we were analyzing, run once more for latest position
+			if (this.analysisPending && !this.game.isGameOver) {
+				this.analysisPending = false;
+				this.scheduleAnalysis();
+			}
+		});
 	}
 
 	private assessMoveQuality(
@@ -580,7 +602,7 @@ export class GameRoom {
 			.then((sugPayload) => {
 				this.emit(sugPayload);
 				this.lastSuggestions = sugPayload.suggestions;
-				if (this.coachingEnabled) this.requestAnalysis();
+				if (this.coachingEnabled) this.scheduleAnalysis();
 			})
 			.catch((err) => {
 				log.error("opening suggestions failed", { error: (err as Error).message, retries });
