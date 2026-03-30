@@ -12,7 +12,7 @@
 	let myChallenge = $state<string | null>(null);
 
 	// Creation form state
-	let showCreate = $state(false);
+	let showCreate = $state(false); // kept for recent opponents quick-create
 	let createGameType = $state<"chess" | "go" | "janggi">(
 		(localStorage.getItem("mp-gameType") as "chess" | "go" | "janggi") ?? "chess"
 	);
@@ -146,21 +146,7 @@
 		</div>
 	</div>
 
-	<!-- Join by code -->
-	<div class="join-code-section">
-		<input
-			type="text"
-			class="code-input"
-			placeholder={t("lobby.enterCode", lang)}
-			maxlength="6"
-			bind:value={joinCode}
-			oninput={(e) => joinCode = (e.target as HTMLInputElement).value.toUpperCase()}
-			onkeydown={(e) => { if (e.key === "Enter") joinByCode(); }}
-		/>
-		<button class="join-btn" onclick={joinByCode} disabled={joinCode.length !== 6}>{t("lobby.join", lang)}</button>
-	</div>
-
-	<!-- Create challenge -->
+	<!-- Create challenge (always visible) -->
 	{#if myChallenge}
 		<div class="my-challenge">
 			<span class="waiting-text">
@@ -169,7 +155,7 @@
 			</span>
 			<button class="cancel-btn" onclick={cancelChallenge}>{t("lobby.cancel", lang)}</button>
 		</div>
-	{:else if showCreate}
+	{:else}
 		<div class="create-form">
 			<div class="form-row">
 				<span class="form-label">{t("lobby.gameLabel", lang)}</span>
@@ -203,26 +189,13 @@
 					<button class="option-btn" class:active={createColor === "black"} onclick={() => createColor = "black"}>{t("color.black", lang)}</button>
 				</div>
 			</div>
-			<div class="form-actions">
-				<button class="create-btn" onclick={createChallenge}>{t("lobby.create", lang)}</button>
-				<button class="cancel-btn" onclick={() => showCreate = false}>{t("lobby.cancel", lang)}</button>
-			</div>
+			<button class="create-btn" onclick={createChallenge}>{t("lobby.create", lang)}</button>
 		</div>
-	{:else}
-		<button class="create-challenge-btn" onclick={() => showCreate = true}>
-			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>
-			{t("lobby.create", lang)}
-		</button>
 	{/if}
 
-	<!-- Challenge list -->
-	<div class="challenge-list">
-		{#if otherChallenges.length === 0}
-			<div class="empty-state">
-				<p class="empty-text">{t("lobby.noChallenges", lang)}</p>
-				<p class="empty-hint">{t("lobby.noChallengesHint", lang)}</p>
-			</div>
-		{:else}
+	<!-- Open challenges -->
+	{#if otherChallenges.length > 0}
+		<div class="challenge-list">
 			{#each otherChallenges as ch}
 				<div class="challenge-card">
 					<div class="challenge-info">
@@ -240,8 +213,8 @@
 					{/if}
 				</div>
 			{/each}
-		{/if}
-	</div>
+		</div>
+	{/if}
 
 	<!-- Recent Opponents -->
 	{#if appState.recentOpponents.length > 0}
@@ -265,7 +238,7 @@
 							class="accept-btn"
 							onclick={() => {
 								createGameType = (opp.gameType as "chess" | "go" | "janggi") ?? "chess";
-								showCreate = true;
+								createChallenge();
 							}}
 						>{t("lobby.create", lang)}</button>
 					</div>
@@ -274,10 +247,24 @@
 		</div>
 	{/if}
 
+	<!-- Join by code -->
+	<div class="join-code-section">
+		<input
+			type="text"
+			class="code-input"
+			placeholder={t("lobby.enterCode", lang)}
+			maxlength="6"
+			bind:value={joinCode}
+			oninput={(e) => joinCode = (e.target as HTMLInputElement).value.toUpperCase()}
+			onkeydown={(e) => { if (e.key === "Enter") joinByCode(); }}
+		/>
+		<button class="join-btn" onclick={joinByCode} disabled={joinCode.length !== 6}>{t("lobby.join", lang)}</button>
+	</div>
+
 	<!-- Federation -->
 	<div class="federation-section">
 		<div class="federation-header">
-			<span class="federation-label">Network Play</span>
+			<span class="federation-label">{t("lobby.network", lang)}</span>
 			<button
 				class="toggle-btn {federationEnabled ? 'on' : 'off'}"
 				onclick={toggleFederation}
