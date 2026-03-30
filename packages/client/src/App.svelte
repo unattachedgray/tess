@@ -411,28 +411,28 @@
 					>{tt('header.leaveGame')}</button>
 				{:else if !appState.wsConnected || appState.opponentDisconnected}
 					<button
-						class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--warning)] text-[var(--bg-primary)] cursor-pointer"
+						class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[var(--warning)] text-[var(--bg-primary)] cursor-pointer"
 						onclick={leaveMultiplayer}
 						title={appState.opponentDisconnected ? "Opponent disconnected" : "Connection lost — reconnecting..."}
-					>MP</button>
+					>Multiplayer</button>
 				{:else if appState.isGameOver}
 					<button
-						class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--accent)] hover:text-[var(--bg-primary)] transition-all"
+						class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--success)] hover:text-[var(--bg-primary)] transition-all"
 						onclick={leaveMultiplayer}
 						title="End live session"
-					>{tt('header.live')}</button>
+					>MULTI LIVE</button>
 				{:else}
 					<button
-						class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--accent)] text-[var(--bg-primary)] cursor-pointer hover:bg-[var(--danger)] transition-all"
+						class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[var(--success)] text-[var(--bg-primary)] cursor-pointer hover:bg-[var(--danger)] transition-all"
 						onclick={leaveMultiplayer}
 						title="Click to leave game"
-					>{tt('header.live')}</button>
+					>MULTI LIVE</button>
 				{/if}
 			{:else}
 				<button
 					class="text-[11px] font-bold px-2.5 py-0.5 rounded-md transition-all border {appState.view === 'lobby' ? 'bg-[var(--accent)] text-[var(--bg-primary)] border-[var(--accent)]' : 'bg-[var(--bg-hover)] text-[var(--accent)] border-[var(--accent)]/40 hover:border-[var(--accent)] hover:bg-[var(--accent)]/10'}"
 					onclick={() => appState.view = appState.view === 'lobby' ? 'game' : 'lobby'}
-				>MULTI</button>
+				>Multiplayer</button>
 				{#if appState.challenges.length > 0 && appState.view !== 'lobby'}
 					{@const ch = appState.challenges[0]}
 					<button
