@@ -200,6 +200,11 @@ export class GameRoom {
 			if (!this.game.isGameOver) {
 				this.sendSuggestionsAndAnalysis(move);
 			} else {
+				// Emit explicit GAME_OVER so the client properly transitions
+				const result = this.game.getResult();
+				if (result) {
+					this.emit({ type: "GAME_OVER", result });
+				}
 				this.emitSkillEvaluation();
 			}
 
@@ -620,6 +625,10 @@ export class GameRoom {
 		this.autoplayRunning = false;
 
 		if (this.game.isGameOver) {
+			const result = this.game.getResult();
+			if (result) {
+				this.emit({ type: "GAME_OVER", result });
+			}
 			this.emitSkillEvaluation();
 		}
 	}
