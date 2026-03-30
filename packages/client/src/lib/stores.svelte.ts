@@ -372,7 +372,10 @@ class AppState {
 			...this.analysisMessages,
 			{ moveNumber: moveNum, text, timestamp: Date.now() },
 		];
-		this.analysisLoading = false;
+		// Don't clear loading after game over — SKILL_EVAL will clear it
+		if (!this.isGameOver) {
+			this.analysisLoading = false;
+		}
 	}
 
 	requestHint() {
