@@ -57,10 +57,11 @@ Available in **English, Korean, Spanish, Vietnamese, and Mongolian**.
 
 Each game has 5 AI levels calibrated from thousands of simulated games. The AI at "Beginner" makes realistic mistakes. At "Superhuman," you're playing against an engine stronger than any human who has ever lived. You can switch difficulty mid-game from the header.
 
-At Superhuman level:
-- **Chess**: Fairy-Stockfish at full strength (~3000+ Elo) — stronger than peak Magnus Carlsen (2882) or Garry Kasparov (2851). Comparable to Deep Blue, the machine that defeated Kasparov in 1997, but with three decades of engine progress behind it.
-- **Go**: KataGo at 5000 visits (~9 dan professional) — the open-source successor to AlphaGo, which defeated world champion Lee Sedol 4-1 in 2016. Would beat virtually any human Go player.
-- **Janggi**: Fairy-Stockfish at full engine strength — stronger than top Korean professional players (기왕급). Among the strongest Janggi engines available.
+At Superhuman level, you're playing against an engine stronger than any human who has ever lived:
+
+<p align="center"><img src="assets/difficulty-chess.svg" alt="Chess difficulty scale" width="100%"/></p>
+<p align="center"><img src="assets/difficulty-go.svg" alt="Go difficulty scale" width="100%"/></p>
+<p align="center"><img src="assets/difficulty-janggi.svg" alt="Janggi difficulty scale" width="100%"/></p>
 
 ### Your Moves Get Rated
 
