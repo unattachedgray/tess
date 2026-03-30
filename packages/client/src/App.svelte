@@ -495,6 +495,22 @@
 					{/if}
 				</div>
 			{/if}
+			<select
+				class="text-[11px] py-0.5 px-1 rounded-md bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border)] cursor-pointer appearance-none text-center"
+				style="width: 52px;"
+				value={appState.language}
+				onchange={(e) => {
+					const lang = (e.target as HTMLSelectElement).value;
+					appState.setLanguage(lang as any);
+					ws.send({ type: "UPDATE_SETTINGS", language: lang });
+				}}
+			>
+				<option value="en">EN</option>
+				<option value="ko">한국</option>
+				<option value="es">ES</option>
+				<option value="vi">VI</option>
+				<option value="mn">МН</option>
+			</select>
 			<Settings {ws} />
 		</div>
 	</header>
