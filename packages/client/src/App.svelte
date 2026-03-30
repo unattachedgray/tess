@@ -407,6 +407,9 @@
 
 		<div class="flex items-center gap-3">
 			<span class="text-[15px] font-bold tracking-tight text-[var(--accent)]">Tess</span>
+			<span class="text-[11px] text-[var(--text-muted)]" title={appState.userId}>
+				{appState.nickname ? appState.nickname : appState.userId}
+			</span>
 			{#if appState.isMultiplayer}
 				{#if showLeaveConfirm}
 					<button
@@ -463,9 +466,6 @@
 		</div>
 
 		<div class="flex items-center gap-3">
-			<span class="text-[11px] text-[var(--text-muted)]" title={appState.userId}>
-				{appState.nickname ? appState.nickname : appState.userId}
-			</span>
 			{#if !appState.isMultiplayer}
 				<div class="relative">
 					<button
@@ -475,7 +475,7 @@
 						onclick={() => showDifficultyPicker = !showDifficultyPicker}
 						title="Change AI opponent difficulty (starts new game)"
 					>
-						{DIFFICULTY_LABELS[appState.difficulty] ?? appState.difficulty}
+						AI: {DIFFICULTY_LABELS[appState.difficulty] ?? appState.difficulty}
 					</button>
 					{#if showDifficultyPicker}
 						<div class="fixed inset-0 z-40" onclick={() => showDifficultyPicker = false} role="presentation"></div>
