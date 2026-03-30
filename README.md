@@ -82,10 +82,17 @@ After the game ends, you get:
 - **Move-by-move quality** (Best, Good, Inaccuracy, Mistake, Blunder)
 - **AI narrative summary** — a paragraph about your strengths and mistakes
 - **Board replay** for chess with arrow-key navigation
+- **Game duration** shown in the status bar
 
-### Themes
+### Stats & Progression
 
-Three visual themes: **Midnight** (dark blue), **Forest** (green), **Sandstorm** (warm).
+- **Win/Loss/Draw record** with accuracy averages
+- **Win streak tracker** — current streak with 🔥 indicator, longest streak saved
+- **Recent opponents** — see who you've played, with game type and result, quick re-challenge
+
+### Themes & Settings
+
+Three visual themes: **Midnight** (dark blue), **Forest** (green), **Sandstorm** (warm). Sound effects toggle. All preferences persist across sessions.
 
 ## Multiplayer
 
@@ -103,9 +110,26 @@ When another Tess server is running somewhere in the world, their challenges sho
 
 You can also play manually: share your IP or use a tunnel (Tailscale, Cloudflare Tunnel), and your friend opens it in their browser.
 
+### Challenge Notifications
+
+When someone creates a challenge, all connected users see it — a "Play {name}" button appears in the header. With multiple open challenges, it shows "N games open" and opens the lobby to choose. Your own challenges don't show as notifications.
+
 ### In-Game Chat
 
 Send emoji reactions (👍 👏 😅 🤔 ⚡ 🤝) and preset messages during multiplayer games. Messages are translated into each player's language automatically.
+
+### Spectators
+
+Share a watch link (`/watch/CODE`) and others can watch your game live. Spectator count shows in the status bar.
+
+### Connection Status
+
+The **Multiplayer** button in the header reflects the live connection state:
+- **Multiplayer** — not in a game
+- **MULTI LIVE** (green) — connected, game in progress
+- **Multiplayer** (yellow) — connection lost or opponent disconnected
+
+If the server restarts, all connected clients get a brief "Server restarting" banner and auto-refresh when the server comes back — no manual reload needed.
 
 ### Privacy
 
