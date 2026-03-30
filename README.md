@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/screenshot.png" alt="Tess gameplay — chess with AI coaching in Korean" width="720"/>
+  <img src="assets/screenshot-v2.png" alt="Tess gameplay — chess with AI coaching and game summary" width="720"/>
 </p>
 
 <p align="center">
