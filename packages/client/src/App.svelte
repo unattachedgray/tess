@@ -69,20 +69,16 @@
 			appState.isGameOver = true;
 			appState.result = msg.result;
 			appState.suggestionsStale = false;
+			appState.suggestions = [];
+			// Show eval loading dots while SKILL_EVAL is computed (all games, SP + MP)
+			appState.analysisLoading = true;
 			const r = msg.result as any;
 			const won = r?.winner === appState.playerColor;
 			const drew = r?.winner === "draw";
-			// Track win streaks (both SP and MP)
 			if (!drew) appState.recordResult(won);
-			if (appState.isMultiplayer) {
-				appState.suggestions = [];
-				appState.analysisLoading = true;
-				if (appState.opponentName) {
-					const resultStr = won ? "win" : drew ? "draw" : "loss";
-					appState.addRecentOpponent(appState.opponentName, appState.gameType, resultStr);
-				}
-			} else {
-				appState.analysisLoading = false;
+			if (appState.isMultiplayer && appState.opponentName) {
+				const resultStr = won ? "win" : drew ? "draw" : "loss";
+				appState.addRecentOpponent(appState.opponentName, appState.gameType, resultStr);
 			}
 		});
 		let autoplayLastMoves: string[] = [];
