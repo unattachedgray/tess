@@ -45,31 +45,20 @@
 
 	onMount(() => {
 		api = Chessground(boardEl, {
-			fen,
-			orientation,
-			turnColor: turn as Color,
+			animation: { enabled: true, duration: 200 },
+			draggable: { enabled: true },
+			premovable: { enabled: false },
+			highlight: { lastMove: true, check: true },
+			coordinates: true,
 			movable: {
 				free: false,
-				color: orientation as Color,
-				dests: toDests(legalMoves),
 				events: {
 					after(orig, dest) {
 						onMove(orig as string, dest as string);
 					},
 				},
 			},
-			lastMove: lastMove as [Key, Key] | undefined,
-			check: isCheck,
-			animation: { enabled: true, duration: 200 },
-			draggable: { enabled: true },
-			premovable: { enabled: false },
-			highlight: { lastMove: true, check: true },
-			coordinates: true,
-			drawable: {
-				enabled: true,
-				visible: true,
-				autoShapes: toDrawShapes(arrows),
-			},
+			drawable: { enabled: true, visible: true },
 		});
 
 		return () => {
@@ -78,14 +67,10 @@
 		};
 	});
 
+	// Single $effect handles ALL state updates including initial render
 	$effect(() => {
 		if (!api) return;
-		// Guard: skip empty/invalid FEN (can happen during game type switch)
-		const validFen = fen && fen.includes("/") && fen.split("/").length >= 8;
-		if (!validFen) {
-			console.warn("[board] skipping invalid FEN:", fen);
-			return;
-		}
+		if (!fen || !fen.includes("/")) return;
 		api.set({
 			fen,
 			orientation,
