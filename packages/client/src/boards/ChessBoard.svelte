@@ -75,6 +75,12 @@
 
 	$effect(() => {
 		if (!api) return;
+		// Guard: skip empty/invalid FEN (can happen during game type switch)
+		const validFen = fen && fen.includes("/") && fen.split("/").length >= 8;
+		if (!validFen) {
+			console.warn("[board] skipping invalid FEN:", fen);
+			return;
+		}
 		api.set({
 			fen,
 			orientation,
