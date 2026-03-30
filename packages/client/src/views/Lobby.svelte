@@ -19,8 +19,8 @@
 	let createTimeIdx = $state(
 		Number(localStorage.getItem("mp-timeIdx") ?? "2")
 	);
-	let createColor = $state<"white" | "black" | undefined>(
-		(localStorage.getItem("mp-color") as "white" | "black" | undefined) ?? undefined
+	let createColor = $state<"white" | "black">(
+		(localStorage.getItem("mp-color") as "white" | "black") ?? "white"
 	);
 
 	let federationEnabled = $state(true);
@@ -184,9 +184,12 @@
 			<div class="form-row">
 				<span class="form-label">{t("lobby.colorLabel", lang)}</span>
 				<div class="form-options">
-					<button class="option-btn" class:active={!createColor} onclick={() => createColor = undefined}>{t("lobby.random", lang)}</button>
-					<button class="option-btn" class:active={createColor === "white"} onclick={() => createColor = "white"}>{t("color.white", lang)}</button>
-					<button class="option-btn" class:active={createColor === "black"} onclick={() => createColor = "black"}>{t("color.black", lang)}</button>
+					<button class="option-btn" class:active={createColor === "white"} onclick={() => createColor = "white"}>
+						{createGameType === "janggi" ? t("color.blue", lang) : createGameType === "go" ? t("color.black", lang) : t("color.white", lang)}
+					</button>
+					<button class="option-btn" class:active={createColor === "black"} onclick={() => createColor = "black"}>
+						{createGameType === "janggi" ? t("color.red", lang) : createGameType === "go" ? t("color.white", lang) : t("color.black", lang)}
+					</button>
 				</div>
 			</div>
 			<button class="create-btn" onclick={createChallenge}>{t("lobby.create", lang)}</button>
