@@ -57,6 +57,8 @@ export class GameRoom {
 	private lastSuggestions: Suggestion[] = [];
 	private analysisInFlight = false;
 	private analysisPending = false;
+	private analyzedMoves = new Set<number>(); // move numbers already coached
+	private backfillTimer: ReturnType<typeof setTimeout> | null = null;
 	coachingEnabled = true;
 	suggestionCount = 3;
 	suggestionStrength: "fast" | "balanced" | "deep" = "deep";
@@ -102,6 +104,7 @@ export class GameRoom {
 	destroy(): void {
 		this.destroyed = true;
 		this.moveCallbacks = [];
+		if (this.backfillTimer) clearTimeout(this.backfillTimer);
 	}
 
 	// --- State accessors ---
@@ -265,22 +268,73 @@ export class GameRoom {
 			});
 	}
 
-	/** Throttle coaching: only one analysis in flight at a time.
-	 *  If player moves while analysis is running, queue ONE follow-up
-	 *  for the latest position (skip intermediate positions). */
+	/** Throttle coaching: analyze latest move first, then backfill
+	 *  older unanalyzed moves when the player is idle. */
 	private scheduleAnalysis(): void {
+		// Cancel any pending backfill — player just moved, prioritize latest
+		if (this.backfillTimer) {
+			clearTimeout(this.backfillTimer);
+			this.backfillTimer = null;
+		}
+
 		if (this.analysisInFlight) {
-			this.analysisPending = true; // will run after current finishes
+			this.analysisPending = true;
 			return;
 		}
+
 		this.analysisInFlight = true;
 		this.analysisPending = false;
+		const moveNum = this.game.getSnapshot().moveHistory.length;
+
 		this.requestAnalysis().finally(() => {
+			this.analyzedMoves.add(moveNum);
 			this.analysisInFlight = false;
-			// If a new move came in while we were analyzing, run once more for latest position
+
 			if (this.analysisPending && !this.game.isGameOver) {
+				// Player moved again — analyze their latest position
 				this.analysisPending = false;
 				this.scheduleAnalysis();
+			} else if (!this.game.isGameOver) {
+				// Player is idle — schedule backfill for missed moves after a delay
+				this.backfillTimer = setTimeout(() => this.backfillAnalysis(), 5000);
+			}
+		});
+	}
+
+	/** Backfill coaching for older moves the player skipped past.
+	 *  Runs one at a time with 3s gaps. Stops if player makes a new move. */
+	private backfillAnalysis(): void {
+		if (this.game.isGameOver || this.analysisInFlight || this.destroyed) return;
+
+		const history = this.game.getSnapshot().moveHistory;
+		// Find the most recent unanalyzed player move (skip AI moves)
+		let targetMove: number | null = null;
+		for (let i = history.length; i >= 1; i--) {
+			if (this.analyzedMoves.has(i)) continue;
+			// Only backfill player's moves (odd = white's move 1,3,5... even = black's 2,4,6...)
+			const isPlayerMove = this.playerColor === "white" ? i % 2 === 1 : i % 2 === 0;
+			if (!isPlayerMove) continue;
+			// Skip opening moves (first 4)
+			if (i <= 4) continue;
+			targetMove = i;
+			break;
+		}
+
+		if (targetMove === null) return; // all moves analyzed
+
+		this.analysisInFlight = true;
+		const moveIdx = targetMove;
+		this.requestAnalysis().finally(() => {
+			this.analyzedMoves.add(moveIdx);
+			this.analysisInFlight = false;
+
+			if (this.analysisPending) {
+				// Player moved — stop backfill, handle new move
+				this.analysisPending = false;
+				this.scheduleAnalysis();
+			} else if (!this.game.isGameOver) {
+				// Continue backfilling after a pause
+				this.backfillTimer = setTimeout(() => this.backfillAnalysis(), 3000);
 			}
 		});
 	}
