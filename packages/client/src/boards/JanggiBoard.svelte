@@ -107,8 +107,8 @@
 </script>
 
 <div class="janggi-wrap">
-	<svg viewBox="0 0 100 110" class="janggi-board">
-		<rect width="100" height="110" fill="#E8C07A" rx="2" />
+	<svg viewBox="-2 0 104 110" class="janggi-board">
+		<rect x="-2" width="104" height="110" fill="#E8C07A" rx="2" />
 
 		<!-- Grid -->
 		{#each Array(9) as _, c}
@@ -194,6 +194,6 @@
 </div>
 
 <style>
-	.janggi-wrap { aspect-ratio: 9 / 10; height: 100%; position: relative; }
-	.janggi-board { width: 100%; height: 100%; }
+	.janggi-wrap { aspect-ratio: 10 / 11; height: 100%; position: relative; }
+	.janggi-board { width: 100%; height: 100%; overflow: visible; }
 </style>
