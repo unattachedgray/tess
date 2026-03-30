@@ -108,25 +108,51 @@ export interface AnalysisContext {
 const TIMEOUT_MS = 30000;
 const MAX_CONCURRENT = 2;
 let activeCalls = 0;
+const analysisQueue: { prompt: string; resolve: (v: string | null) => void }[] = [];
+
+function processQueue(): void {
+	while (analysisQueue.length > 0 && activeCalls < MAX_CONCURRENT) {
+		const item = analysisQueue.shift()!;
+		activeCalls++;
+		callClaude(item.prompt)
+			.then((result) => item.resolve(result))
+			.catch((err) => {
+				log.error("queued analysis failed", { error: (err as Error).message });
+				item.resolve(null);
+			})
+			.finally(() => {
+				activeCalls--;
+				processQueue();
+			});
+	}
+}
 
 export async function analyzePosition(ctx: AnalysisContext): Promise<string | null> {
-	if (activeCalls >= MAX_CONCURRENT) {
-		log.debug("skipping analysis, too many concurrent calls");
-		return null;
-	}
-
 	const prompt = buildPrompt(ctx);
-	activeCalls++;
 
-	try {
-		const result = await callClaude(prompt);
-		return result;
-	} catch (err) {
-		log.error("analysis failed", { error: (err as Error).message });
-		return null;
-	} finally {
-		activeCalls--;
+	if (activeCalls < MAX_CONCURRENT) {
+		activeCalls++;
+		try {
+			const result = await callClaude(prompt);
+			return result;
+		} catch (err) {
+			log.error("analysis failed", { error: (err as Error).message });
+			return null;
+		} finally {
+			activeCalls--;
+			processQueue();
+		}
 	}
+
+	// Queue if busy — only keep the latest request (most relevant position)
+	if (analysisQueue.length >= 1) {
+		const dropped = analysisQueue.shift()!;
+		dropped.resolve(null);
+	}
+
+	return new Promise<string | null>((resolve) => {
+		analysisQueue.push({ prompt, resolve });
+	});
 }
 
 export interface GameSummaryContext {
