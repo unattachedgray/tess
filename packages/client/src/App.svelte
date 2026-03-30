@@ -20,7 +20,6 @@
 
 	let showMenu = $state(false);
 	let serverRestarting = $state(false);
-	let restartCountdown = $state(60);
 
 	// Reactive translation — re-evaluates when language changes
 	const tt = (key: string) => t(key, appState.language);
@@ -189,14 +188,7 @@
 		ws.on("SERVER_RESTART", () => {
 			console.log("[ws] server restarting...");
 			serverRestarting = true;
-			restartCountdown = 60;
-			const timer = setInterval(() => {
-				restartCountdown--;
-				if (restartCountdown <= 0) {
-					clearInterval(timer);
-					window.location.reload();
-				}
-			}, 1000);
+			// Reconnect logic in ws.ts will auto-reload when connection comes back
 		});
 		ws.on("SPECTATOR_COUNT", (msg) => { appState.spectatorCount = (msg as any).count ?? 0; });
 		ws.on("ERROR", (msg) => { console.error("[game]", (msg as any).message); });
@@ -512,12 +504,8 @@
 	</header>
 
 	{#if serverRestarting}
-		<div class="flex items-center justify-center gap-3 px-4 py-2 bg-[var(--warning)] text-[var(--bg-primary)] text-sm font-semibold">
-			<span>Server restarting — refreshing in {restartCountdown}s</span>
-			<button
-				class="px-2 py-0.5 rounded text-xs bg-[var(--bg-primary)] text-[var(--warning)] font-bold"
-				onclick={() => window.location.reload()}
-			>Refresh now</button>
+		<div class="flex items-center justify-center gap-2 px-4 py-1.5 bg-[var(--warning)] text-[var(--bg-primary)] text-xs font-semibold">
+			<span>Server restarting — will refresh automatically</span>
 		</div>
 	{/if}
 
