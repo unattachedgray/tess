@@ -59,6 +59,8 @@ export class GameRoom {
 	private analysisPending = false;
 	private analyzedMoves = new Set<number>(); // move numbers already coached
 	private backfillTimer: ReturnType<typeof setTimeout> | null = null;
+	// Incremental eval accumulation from suggestions (like MP's positionEvals)
+	private positionEvals: number[] = [0]; // evals[0] = starting position = 0
 	coachingEnabled = true;
 	suggestionCount = 3;
 	suggestionStrength: "fast" | "balanced" | "deep" = "deep";
@@ -402,6 +404,15 @@ export class GameRoom {
 			}
 
 			this.lastSuggestions = suggestions;
+
+			// Record eval for incremental accuracy (avoid expensive post-game replay)
+			if (suggestions.length > 0) {
+				const score = suggestions[0].score;
+				// Convert to white's perspective
+				const scoreWhitePov = this.game.turn === "white" ? score : -score;
+				this.positionEvals.push(scoreWhitePov);
+			}
+
 			return { type: "SUGGESTIONS" as const, suggestions };
 		} catch (err) {
 			log.error("suggestions failed", { error: (err as Error).message });
@@ -439,17 +450,25 @@ export class GameRoom {
 
 		const skipMoves = this.autoplay ? 2 : 6;
 
-		// Replay the game position by position, evaluating each
-		const replay = createGame(this.gameType, snap.boardSize);
-		const evals: number[] = [0];
-
-		for (const move of history) {
-			replay.move(move.notation);
-			try {
-				const score = await this.engine.evaluate(replay);
-				evals.push(score);
-			} catch {
-				evals.push(evals[evals.length - 1] ?? 0);
+		// Use incrementally accumulated evals if we have enough (>50% coverage)
+		// This makes SKILL_EVAL near-instant instead of replaying every position
+		let evals: number[];
+		if (this.positionEvals.length > history.length * 0.5) {
+			evals = this.positionEvals;
+			log.info("using incremental evals", { collected: evals.length - 1, moves: history.length });
+		} else {
+			// Fallback: replay the game (expensive but accurate)
+			log.info("replaying game for evals", { collected: this.positionEvals.length - 1, moves: history.length });
+			const replay = createGame(this.gameType, snap.boardSize);
+			evals = [0];
+			for (const move of history) {
+				replay.move(move.notation);
+				try {
+					const score = await this.engine.evaluate(replay);
+					evals.push(score);
+				} catch {
+					evals.push(evals[evals.length - 1] ?? 0);
+				}
 			}
 		}
 
