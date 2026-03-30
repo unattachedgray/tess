@@ -109,7 +109,7 @@ async function main() {
 		log.info(`server listening on port ${info.port}`);
 	});
 
-	createWsServer(server, sessionManager, federation);
+	const wss = createWsServer(server, sessionManager, federation);
 
 	// Start federation after server is listening
 	federation.start().catch((err) => {
@@ -118,12 +118,17 @@ async function main() {
 
 	const shutdown = () => {
 		log.info("shutting down...");
-		federation.destroy();
-		chessPool.shutdown();
-		janggiPool?.shutdown();
-		kataGo?.shutdown();
-		server.close();
-		process.exit(0);
+		// Notify all clients to refresh before shutdown
+		(wss as any).broadcastRefresh?.();
+		// Give clients a moment to receive the message
+		setTimeout(() => {
+			federation.destroy();
+			chessPool.shutdown();
+			janggiPool?.shutdown();
+			kataGo?.shutdown();
+			server.close();
+			process.exit(0);
+		}, 500);
 	};
 
 	process.on("SIGINT", shutdown);

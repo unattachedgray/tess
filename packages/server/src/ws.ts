@@ -138,6 +138,16 @@ export function createWsServer(
 
 	wss.on("close", () => { clearInterval(heartbeat); clearInterval(roomCleanup); });
 
+	/** Notify all clients to refresh (called before server shutdown) */
+	(wss as any).broadcastRefresh = () => {
+		const msg = JSON.stringify({ type: "SERVER_RESTART" });
+		for (const ws of wss.clients) {
+			if (ws.readyState === ws.OPEN) {
+				try { ws.send(msg); } catch {}
+			}
+		}
+	};
+
 	wss.on("connection", (ws: WebSocket) => {
 		(ws as unknown as { isAlive: boolean }).isAlive = true;
 		ws.on("pong", () => {

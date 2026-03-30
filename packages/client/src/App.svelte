@@ -184,6 +184,10 @@
 			appState.analysisLoading = false;
 		});
 		ws.on("PLAYER_COUNT", (msg) => { appState.playerCounts = msg as any; });
+		ws.on("SERVER_RESTART", () => {
+			console.log("[ws] server restarting, will refresh...");
+			setTimeout(() => window.location.reload(), 3000);
+		});
 		ws.on("SPECTATOR_COUNT", (msg) => { appState.spectatorCount = (msg as any).count ?? 0; });
 		ws.on("ERROR", (msg) => { console.error("[game]", (msg as any).message); });
 		// Multiplayer handlers
