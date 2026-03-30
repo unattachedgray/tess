@@ -185,6 +185,7 @@
 			{/if}
 			<EvalBar score={appState.eval} orientation={appState.playerColor} />
 
+			{#key appState.gameType}
 			{#if appState.gameType === 'go'}
 				<GoBoard
 					boardState={appState.boardState}
@@ -225,6 +226,7 @@
 					{onMove}
 				/>
 			{/if}
+			{/key}
 		</div>
 
 		<!-- Your player bar -->

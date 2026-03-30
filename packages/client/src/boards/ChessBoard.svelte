@@ -71,6 +71,11 @@
 				autoShapes: toDrawShapes(arrows),
 			},
 		});
+
+		return () => {
+			api?.destroy();
+			api = null;
+		};
 	});
 
 	$effect(() => {
