@@ -564,4 +564,12 @@
 			</div>
 		{/if}
 	</main>
+
+	<footer class="flex items-center justify-center gap-3 px-4 py-2 text-[10px] text-[var(--text-muted)] border-t border-[var(--border)]">
+		<span>Tess v1.0</span>
+		<span>·</span>
+		<a href="https://github.com/unattachedgray/tess" target="_blank" rel="noopener" class="hover:text-[var(--accent)] transition-colors">GitHub</a>
+		<span>·</span>
+		<span>&copy; {new Date().getFullYear()} unattachedgray</span>
+	</footer>
 </div>
