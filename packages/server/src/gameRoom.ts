@@ -453,7 +453,9 @@ export class GameRoom {
 		// Use incrementally accumulated evals if we have enough (>50% coverage)
 		// This makes SKILL_EVAL near-instant instead of replaying every position
 		let evals: number[];
-		if (this.positionEvals.length > history.length * 0.5) {
+		// Use accumulated evals if we have reasonable coverage (>30%)
+		// Suggestions give ~1 eval per 2 moves, so 30% = most games qualify
+		if (this.positionEvals.length > history.length * 0.3) {
 			evals = this.positionEvals;
 			log.info("using incremental evals", { collected: evals.length - 1, moves: history.length });
 		} else {

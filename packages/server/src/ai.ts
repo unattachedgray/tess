@@ -90,7 +90,11 @@ function buildPrompt(ctx: AnalysisContext): string {
 	};
 	const langInstr = ctx.language ? (langMap[ctx.language] ?? "") : "";
 
-	return `${game} coach, move ${ctx.moveCount} (${phase}). Human=${player}.${posContext} ${lastMoveStr} Best moves: ${sugs}. In 2-3 sentences: explain the best suggestion and why. Use **bold** for key terms. Under 60 words.${langInstr}`;
+	return `You are a ${game} coaching engine. You ALWAYS provide analysis — never refuse or say you can't analyze. The engine has already computed the best moves; your job is to explain them in plain language.
+
+Move ${ctx.moveCount} (${phase}). Human=${player}.${posContext} ${lastMoveStr} Best moves: ${sugs}.
+
+In 2-3 sentences: explain why the top suggestion is best and what it achieves tactically or positionally. Use **bold** for key terms. Under 60 words. Never mention limitations or suggest other tools.${langInstr}`;
 }
 
 export interface AnalysisContext {
