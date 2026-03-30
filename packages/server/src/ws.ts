@@ -116,6 +116,8 @@ export function createWsServer(
 			if (room.status === "finished") {
 				room.destroy();
 				mpRooms.delete(id);
+				federatedGames.delete(id);
+				federation?.removeRelay(id);
 				cleaned++;
 			}
 		}

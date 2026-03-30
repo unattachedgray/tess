@@ -32,8 +32,7 @@
 		ws.clearHandlers();
 
 		ws.on("GAME_STATE", (msg) => {
-			// If we're in a multiplayer game, ignore GAME_STATE from other games
-			// (e.g. the auto-started singleplayer game arriving late)
+			appState.gameStartTime = Date.now();
 			if (appState.isMultiplayer && appState.gameId && (msg as any).gameId !== appState.gameId) {
 				console.log("[ws] ignoring stale GAME_STATE from", (msg as any).gameId, "— in MP game", appState.gameId);
 				return;
@@ -69,13 +68,16 @@
 			appState.isGameOver = true;
 			appState.result = msg.result;
 			appState.suggestionsStale = false;
+			const r = msg.result as any;
+			const won = r?.winner === appState.playerColor;
+			const drew = r?.winner === "draw";
+			// Track win streaks (both SP and MP)
+			if (!drew) appState.recordResult(won);
 			if (appState.isMultiplayer) {
 				appState.suggestions = [];
 				appState.analysisLoading = true;
-				// Record opponent for recent players list
 				if (appState.opponentName) {
-					const r = msg.result as any;
-					const resultStr = r?.winner === appState.playerColor ? "win" : r?.winner === "draw" ? "draw" : "loss";
+					const resultStr = won ? "win" : drew ? "draw" : "loss";
 					appState.addRecentOpponent(appState.opponentName, appState.gameType, resultStr);
 				}
 			} else {
@@ -182,6 +184,7 @@
 			appState.analysisLoading = false;
 		});
 		ws.on("PLAYER_COUNT", (msg) => { appState.playerCounts = msg as any; });
+		ws.on("SPECTATOR_COUNT", (msg) => { appState.spectatorCount = (msg as any).count ?? 0; });
 		ws.on("ERROR", (msg) => { console.error("[game]", (msg as any).message); });
 		// Multiplayer handlers
 		ws.on("LOBBY_STATE", (msg) => {

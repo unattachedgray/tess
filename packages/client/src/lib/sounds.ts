@@ -1,3 +1,5 @@
+import { appState } from "./stores.svelte.ts";
+
 const audioCache = new Map<string, HTMLAudioElement>();
 
 function getAudio(name: string): HTMLAudioElement {
@@ -10,6 +12,7 @@ function getAudio(name: string): HTMLAudioElement {
 }
 
 export function playSound(type: "move" | "capture" | "check" | "gameEnd"): void {
+	if (!appState.soundEnabled) return;
 	try {
 		const audio = getAudio(type);
 		audio.currentTime = 0;

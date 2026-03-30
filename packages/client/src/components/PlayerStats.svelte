@@ -45,6 +45,9 @@
 			? Math.round((stats.wins / stats.gamesPlayed) * 100)
 			: null
 	);
+
+	const streak = $derived(appState.currentWinStreak);
+	const bestStreak = $derived(appState.longestWinStreak);
 </script>
 
 {#if stats && stats.gamesPlayed > 0}
@@ -79,6 +82,20 @@
 				<span class="stat-label">{t("stats.acc", appState.language)}</span>
 			</div>
 		{/if}
+		{#if streak > 0 || bestStreak > 0}
+			<div class="stat-divider"></div>
+			<div class="stat" title="Current / Best win streak">
+				<span class="stat-value" class:good={streak >= 3}>{streak}</span>
+				<span class="stat-label">{streak > 0 ? "🔥" : "—"}</span>
+			</div>
+		{/if}
+	</div>
+{:else if appState.currentWinStreak > 0}
+	<div class="stats-bar">
+		<div class="stat" title="Current win streak">
+			<span class="stat-value good">{appState.currentWinStreak}🔥</span>
+			<span class="stat-label">streak</span>
+		</div>
 	</div>
 {/if}
 

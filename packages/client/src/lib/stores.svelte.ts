@@ -123,15 +123,39 @@ class AppState {
 	recentOpponents = $state<{ name: string; lastPlayed: number; gameType: string; result?: string }[]>(
 		loadPref("recentOpponents", []),
 	);
+	// Win streak tracking (persisted)
+	currentWinStreak = $state<number>(loadPref("currentWinStreak", 0));
+	longestWinStreak = $state<number>(loadPref("longestWinStreak", 0));
+	// Sound preference
+	soundEnabled = $state<boolean>(loadPref("soundEnabled", true));
+	// Game timer
+	gameStartTime = $state<number>(0);
 
 	addRecentOpponent(name: string, gameType: string, result?: string) {
-		// Remove duplicate, add to front, cap at 20
 		const filtered = this.recentOpponents.filter((o) => o.name !== name);
 		this.recentOpponents = [
 			{ name, lastPlayed: Date.now(), gameType, result },
 			...filtered,
 		].slice(0, 20);
 		savePref("recentOpponents", this.recentOpponents);
+	}
+
+	recordResult(won: boolean) {
+		if (won) {
+			this.currentWinStreak++;
+			if (this.currentWinStreak > this.longestWinStreak) {
+				this.longestWinStreak = this.currentWinStreak;
+			}
+		} else {
+			this.currentWinStreak = 0;
+		}
+		savePref("currentWinStreak", this.currentWinStreak);
+		savePref("longestWinStreak", this.longestWinStreak);
+	}
+
+	setSoundEnabled(enabled: boolean) {
+		this.soundEnabled = enabled;
+		savePref("soundEnabled", enabled);
 	}
 
 	// Connection state

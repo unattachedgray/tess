@@ -103,6 +103,7 @@ export class MultiplayerRoom {
 
 	/** Add a spectator. */
 	addSpectator(client: MpClient): void {
+		if (this.spectators.size >= 50) return; // cap spectators
 		this.spectators.add(client);
 		this.broadcastSpectatorCount();
 

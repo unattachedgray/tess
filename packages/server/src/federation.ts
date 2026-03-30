@@ -411,6 +411,12 @@ export class FederationService {
 				this.peers.delete(key);
 			}
 		}
+		// Expire remote challenges older than 30 minutes
+		for (const [id, ch] of this.remoteChallenges) {
+			if (!this.peers.has(ch.peerKey)) {
+				this.remoteChallenges.delete(id);
+			}
+		}
 		// Re-verify HTTP-based peers
 		for (const [key, peer] of this.peers) {
 			if (peer.source !== "hyperswarm") {
@@ -474,6 +480,7 @@ export class FederationService {
 	acceptRemoteChallenge(challengeId: string, gameId: string, acceptorName: string): boolean {
 		const remote = this.remoteChallenges.get(challengeId);
 		if (!remote) return false;
+		this.remoteChallenges.delete(challengeId); // clean up accepted challenge
 		this.gameRelays.set(gameId, remote.peerKey);
 		return this.sendToPeer(remote.peerKey, {
 			type: "tess-accept",

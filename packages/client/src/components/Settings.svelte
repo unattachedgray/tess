@@ -143,6 +143,18 @@
 				</button>
 			</div>
 
+			<!-- Sound -->
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">Sound</span>
+				<button
+					class="w-10 h-5 rounded-full transition-colors relative {appState.soundEnabled ? 'bg-[var(--accent)]' : 'bg-[var(--bg-hover)]'}"
+					onclick={() => appState.setSoundEnabled(!appState.soundEnabled)}
+					aria-label="Toggle Sound"
+				>
+					<div class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform {appState.soundEnabled ? 'translate-x-5' : 'translate-x-0.5'}"></div>
+				</button>
+			</div>
+
 			<!-- Theme -->
 			<div class="space-y-1.5">
 				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.theme", appState.language)}</span>

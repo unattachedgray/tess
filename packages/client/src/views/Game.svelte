@@ -278,7 +278,7 @@
 					</span>
 				</div>
 				<span class="text-xs font-mono text-[var(--text-muted)]">
-					{Math.ceil(appState.moveHistory.length / 2)}
+					{Math.ceil(appState.moveHistory.length / 2)}{#if appState.isGameOver && appState.gameStartTime} · {Math.round((Date.now() - appState.gameStartTime) / 60000)}m{/if}{#if appState.spectatorCount > 0} · 👁 {appState.spectatorCount}{/if}
 				</span>
 			</div>
 			{#if appState.opening}
