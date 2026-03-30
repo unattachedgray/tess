@@ -238,6 +238,15 @@ class AppState {
 	// --- Setters (persist on change) ---
 
 	setGameType(t: GameType) {
+		// Reset FEN before changing gameType to prevent the new board
+		// component from mounting with an incompatible FEN format
+		// (e.g., Janggi 9x10 FEN parsed by Chessground → crash)
+		if (t !== this.gameType) {
+			this.fen = t === "go" ? "" : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+			this.legalMoves = {};
+			this.moveHistory = [];
+			this.boardState = [];
+		}
 		this.gameType = t;
 		savePref("gameType", t);
 	}
