@@ -437,12 +437,19 @@
 				>Multiplayer</button>
 				{@const otherChallenges = appState.challenges.filter(c => c.creatorName !== (appState.nickname || appState.userId))}
 				{#if otherChallenges.length > 0 && appState.view !== 'lobby'}
-					{@const ch = otherChallenges[0]}
-					<button
-						class="text-[11px] font-bold px-3 py-0.5 rounded-md bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-all animate-pulse"
-						onclick={() => { ws.send({ type: 'ACCEPT_CHALLENGE', challengeId: ch.id }); }}
-						title="{ch.creatorName} wants to play {ch.gameType}"
-					>Play {ch.creatorName}</button>
+					{#if otherChallenges.length === 1}
+						{@const ch = otherChallenges[0]}
+						<button
+							class="text-[11px] font-bold px-3 py-0.5 rounded-md bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-all animate-pulse"
+							onclick={() => { ws.send({ type: 'ACCEPT_CHALLENGE', challengeId: ch.id }); }}
+							title="{ch.creatorName} wants to play {ch.gameType}"
+						>Play {ch.creatorName}</button>
+					{:else}
+						<button
+							class="text-[11px] font-bold px-3 py-0.5 rounded-md bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-all animate-pulse"
+							onclick={() => { appState.view = 'lobby'; }}
+						>{otherChallenges.length} games open</button>
+					{/if}
 				{/if}
 			{/if}
 			{#if appState.playerCounts.total > 0}
