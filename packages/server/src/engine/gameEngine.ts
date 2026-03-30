@@ -145,6 +145,19 @@ export class KataGoGameEngine implements GameEngine {
 		const moves = extra.kataGoMoves ?? [];
 		const color = game.turn === "black" ? "b" : "w";
 		const size = extra.size ?? 19;
+
+		// For weak difficulty, get multiple candidates and pick a lower-ranked one
+		// KataGo's neural net is too strong even at low visits, so we need deliberate noise
+		if (visits <= 50) {
+			const results = await this.kataGo.analyze(moves, color, Math.max(visits, 10), 8, size);
+			if (results.length > 1) {
+				// beginner (10 visits) → pick rank 4-7, casual (50) → pick rank 1-3
+				const maxRank = visits <= 10 ? 7 : 3;
+				const rank = Math.min(Math.floor(Math.random() * maxRank) + 1, results.length - 1);
+				return results[rank].move;
+			}
+		}
+
 		return this.kataGo.getMove(moves, color, visits, size);
 	}
 
