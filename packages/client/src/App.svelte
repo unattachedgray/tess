@@ -496,8 +496,7 @@
 				</div>
 			{/if}
 			<select
-				class="text-[11px] py-0.5 px-1 rounded-md bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border)] cursor-pointer appearance-none text-center"
-				style="width: 52px;"
+				class="text-[11px] py-0.5 px-1 rounded-md bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border)] cursor-pointer"
 				value={appState.language}
 				onchange={(e) => {
 					const lang = (e.target as HTMLSelectElement).value;
@@ -505,11 +504,11 @@
 					ws.send({ type: "UPDATE_SETTINGS", language: lang });
 				}}
 			>
-				<option value="en">EN</option>
-				<option value="ko">한국</option>
-				<option value="es">ES</option>
-				<option value="vi">VI</option>
-				<option value="mn">МН</option>
+				<option value="en">English</option>
+				<option value="ko">한국어</option>
+				<option value="es">Español</option>
+				<option value="vi">Tiếng Việt</option>
+				<option value="mn">Монгол</option>
 			</select>
 			<Settings {ws} />
 		</div>
