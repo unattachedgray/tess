@@ -9,6 +9,7 @@ export class WsClient {
 	private pendingMessages: string[] = [];
 	private url: string;
 	private connected = false;
+	private wasConnected = false; // tracks if we ever had a connection
 	/** Called when connection state changes — wire to appState */
 	onConnectionChange?: (connected: boolean) => void;
 
@@ -27,6 +28,13 @@ export class WsClient {
 			console.log("[ws] connected");
 			this.connected = true;
 			this.onConnectionChange?.(true);
+			// If reconnecting after a drop, reload to get fresh state
+			if (this.wasConnected) {
+				console.log("[ws] reconnected after drop — reloading");
+				window.location.reload();
+				return;
+			}
+			this.wasConnected = true;
 			// Flush any messages queued while disconnected
 			for (const msg of this.pendingMessages) {
 				this.ws!.send(msg);
