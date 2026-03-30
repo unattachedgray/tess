@@ -2,7 +2,7 @@
 
 ## Approach
 
-Build incrementally. Each phase produces a working app you can use. The `../boardgames/` codebase is a cheatsheet for engine protocols, prompt patterns, and game logic — but all code is fresh.
+Build incrementally. Each phase produces a working app you can use. 
 
 We use Claude Code CLI for development (this tool) and for the app's AI features (`claude --print`).
 
@@ -192,7 +192,7 @@ Do this first so everything else has a place to land.
 We build each phase with Claude Code CLI:
 1. Read the phase plan
 2. Implement each step, testing as we go
-3. Reference `../boardgames/` for engine protocol patterns and prompt templates
-4. All new code — no copy-paste from boardgames
+
+
 
 Each phase ends with a working, testable app. We don't move to the next phase until the current one works.

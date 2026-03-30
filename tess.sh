@@ -46,29 +46,9 @@ check_pnpm() {
 
 check_engines() {
     local engine_dir="assets/engines"
-    local boardgames_dir="../boardgames/assets/engines"
-
     mkdir -p "$engine_dir"
 
-    # Try symlinking from sibling boardgames project first
-    if [ -d "$boardgames_dir" ]; then
-        [ ! -f "$engine_dir/fairy-stockfish" ] && [ -f "$boardgames_dir/fairy-stockfish" ] && \
-            ln -sf "$(realpath "$boardgames_dir/fairy-stockfish")" "$engine_dir/fairy-stockfish" && \
-            log "Linked Fairy-Stockfish from boardgames"
-        [ ! -f "$engine_dir/nn-46832cfbead3.nnue" ] && [ -f "$boardgames_dir/nn-46832cfbead3.nnue" ] && \
-            ln -sf "$(realpath "$boardgames_dir/nn-46832cfbead3.nnue")" "$engine_dir/nn-46832cfbead3.nnue"
-        for name in fairy-stockfish-largeboard fairy-stockfish-largeboard_x86-64-bmi2.exe; do
-            [ ! -f "$engine_dir/$name" ] && [ -f "$boardgames_dir/$name" ] && \
-                ln -sf "$(realpath "$boardgames_dir/$name")" "$engine_dir/$name"
-        done
-        [ ! -f "$engine_dir/janggi-9991472750de.nnue" ] && [ -f "$boardgames_dir/janggi-9991472750de.nnue" ] && \
-            ln -sf "$(realpath "$boardgames_dir/janggi-9991472750de.nnue")" "$engine_dir/janggi-9991472750de.nnue"
-        [ ! -d "$engine_dir/katago" ] && [ -d "$boardgames_dir/katago" ] && \
-            ln -sf "$(realpath "$boardgames_dir/katago")" "$engine_dir/katago" && \
-            log "Linked KataGo from boardgames"
-    fi
-
-    # If engines still missing, offer to download
+    # If engines missing, download them
     if [ ! -f "$engine_dir/fairy-stockfish" ]; then
         warn "Chess engine not found."
         log "Attempting to download engines..."

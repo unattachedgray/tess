@@ -22,7 +22,7 @@
 
 ### Why Svelte over Vanilla TS
 
-The boardgames app proved that vanilla TS doesn't scale for this UI. `main.ts` was 2000+ lines handling rendering, state, events, and game switching all in one file. Svelte gives us:
+Vanilla TS doesn't scale for a multi-game UI. Svelte gives us:
 
 - **Component isolation**: each game board is its own `.svelte` file with scoped styles
 - **Reactive state**: `$state()` and `$derived()` replace manual DOM updates
@@ -31,7 +31,7 @@ The boardgames app proved that vanilla TS doesn't scale for this UI. `main.ts` w
 
 ### Why Hono over raw http
 
-The boardgames app used Node's raw `http` module (338 lines in server.ts). Hono gives routing, middleware (CORS, static files, logging), and request parsing for ~14kb. Not as heavy as Express/Fastify, but structured enough to avoid reinventing routing.
+Hono gives routing, middleware (CORS, static files, logging), and request parsing for ~14kb. Not as heavy as Express/Fastify, but structured enough to avoid reinventing routing.
 
 ### Why No SvelteKit
 

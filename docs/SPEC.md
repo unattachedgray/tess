@@ -4,7 +4,7 @@
 
 A web app for playing Go, Chess, and Janggi against AI opponents with real-time coaching. Multiplayer (human vs human) is a secondary mode.
 
-The predecessor project (`../boardgames/`) was a vanilla TS monolith (~8k lines) that proved the concept. Tess is a clean rebuild with a proper component model, persistence, and multiplayer support.
+Tess is a clean rebuild with a proper component model, persistence, and multiplayer support.
 
 ## Supported Games
 

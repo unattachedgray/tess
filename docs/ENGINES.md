@@ -194,12 +194,7 @@ This will report which engines are found and which are missing.
 
 ## Engine Resolution
 
-Tess searches for engines in this order:
-
-1. `assets/engines/` (primary location)
-2. `../boardgames/assets/engines/` (fallback for development alongside the predecessor project)
-
-The `tess.sh` installer will automatically create symlinks from the boardgames directory if engines are found there.
+Engines are stored in `assets/engines/` (gitignored). Run `./scripts/download-engines.sh` to download them automatically.
 
 ## Difficulty Calibration
 

@@ -59,15 +59,6 @@ node test-mp-autoplay.cjs chess 800 2200   # Run autoplay simulation
 - `packages/server/src/postGameEval.ts` — MP post-game evaluation
 - `packages/client/src/lib/i18n.ts` — All translations (en/ko/es/vi/mn)
 
-## Reference
-`../boardgames/` is the predecessor. Use as a cheatsheet for:
-- Engine protocols (GTP commands for KataGo, UCI for Stockfish)
-- Prompt templates (game-specific context injection for AI analysis)
-- Game logic patterns (Go captures, Janggi piece movement, Ko detection)
-- Piece SVG assets
-
-Do not copy code directly. Write fresh.
-
 ## Conventions
 - TypeScript strict mode
 - Biome for formatting (no Prettier)

@@ -247,7 +247,6 @@
 			appState.autoplayActive = false;
 			appState.opponentName = '';
 		});
-		(ws as any).debugHandlers?.();
 	}
 
 	function startNewGame() {

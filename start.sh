@@ -5,22 +5,10 @@ MODE="${1:-dev}"
 
 check_engines() {
     local engine_dir="assets/engines"
-    local boardgames_dir="../boardgames/assets/engines"
 
     if [ ! -f "$engine_dir/fairy-stockfish" ]; then
-        if [ -f "$boardgames_dir/fairy-stockfish" ]; then
-            echo "Symlinking engines from boardgames..."
-            mkdir -p "$engine_dir"
-            ln -sf "$(realpath "$boardgames_dir/fairy-stockfish")" "$engine_dir/fairy-stockfish"
-            [ -f "$boardgames_dir/nn-46832cfbead3.nnue" ] && \
-                ln -sf "$(realpath "$boardgames_dir/nn-46832cfbead3.nnue")" "$engine_dir/nn-46832cfbead3.nnue"
-        else
-            echo "WARNING: Fairy-Stockfish not found."
-            echo "Place binary at $engine_dir/fairy-stockfish"
-        fi
-    fi
-
-    if [ -f "$engine_dir/fairy-stockfish" ]; then
+        echo "Engines not found. Run: ./scripts/download-engines.sh"
+    else
         echo "Fairy-Stockfish: OK"
     fi
 }
