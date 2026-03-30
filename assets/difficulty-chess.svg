@@ -52,15 +52,20 @@
   </g>
   <!-- Famous player markers -->
   <g font-family="system-ui, sans-serif" font-size="8">
-    <circle cx="196" cy="148" r="3" fill="#f59e0b"/>
-    <text x="196" y="162" fill="#f59e0b" text-anchor="middle">Average player</text>
-    <circle cx="380" cy="148" r="3" fill="#818cf8"/>
-    <text x="380" y="162" fill="#818cf8" text-anchor="middle">GM Hikaru</text>
-    <circle cx="456" cy="148" r="3" fill="#a78bfa"/>
-    <text x="456" y="162" fill="#a78bfa" text-anchor="middle">Carlsen 2882</text>
-    <circle cx="520" cy="148" r="3" fill="#22c55e"/>
-    <text x="520" y="162" fill="#22c55e" text-anchor="middle">Tess AI</text>
+    <circle cx="140" cy="145" r="3" fill="#f59e0b"/>
+    <text x="140" y="158" fill="#f59e0b" text-anchor="middle">Average player</text>
+    <circle cx="340" cy="145" r="3" fill="#818cf8"/>
+    <text x="340" y="158" fill="#818cf8" text-anchor="middle">GM Hikaru ~2800</text>
+    <circle cx="420" cy="145" r="3" fill="#a78bfa"/>
+    <text x="420" y="158" fill="#a78bfa" text-anchor="middle">Carlsen 2882</text>
+    <circle cx="490" cy="145" r="3" fill="#22c55e"/>
+    <text x="490" y="158" fill="#22c55e" text-anchor="middle" font-weight="700">Tess ~3000</text>
+  </g>
+  <!-- Stronger engines to the right -->
+  <g font-family="system-ui, sans-serif" font-size="7" fill="#475569">
+    <text x="490" y="170" text-anchor="middle">▸ Stockfish 17 ~3600</text>
+    <text x="490" y="180" text-anchor="middle">▸ AlphaZero ~3700+</text>
   </g>
   <!-- Bottom note -->
-  <text x="300" y="188" font-family="system-ui, sans-serif" font-size="8" fill="#475569" text-anchor="middle">Elo calibrated from Fairy-Stockfish UCI_LimitStrength autoplay simulations</text>
+  <text x="300" y="195" font-family="system-ui, sans-serif" font-size="8" fill="#475569" text-anchor="middle">Elo calibrated from Fairy-Stockfish UCI_LimitStrength autoplay simulations</text>
 </svg>
