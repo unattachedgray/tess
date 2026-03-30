@@ -450,12 +450,11 @@ export class GameRoom {
 
 		const skipMoves = this.autoplay ? 2 : 6;
 
-		// Use incrementally accumulated evals if we have enough (>50% coverage)
-		// This makes SKILL_EVAL near-instant instead of replaying every position
+		// Use accumulated evals for chess/janggi (instant SKILL_EVAL).
+		// Go uses replay — winrate-to-centipawn conversion in suggestions
+		// produces unstable ACPL that doesn't match the calibrated Go scale.
 		let evals: number[];
-		// Use accumulated evals if we have reasonable coverage (>30%)
-		// Suggestions give ~1 eval per 2 moves, so 30% = most games qualify
-		if (this.positionEvals.length > history.length * 0.3) {
+		if (this.gameType !== "go" && this.positionEvals.length > history.length * 0.3) {
 			evals = this.positionEvals;
 			log.info("using incremental evals", { collected: evals.length - 1, moves: history.length });
 		} else {

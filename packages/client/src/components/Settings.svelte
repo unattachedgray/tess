@@ -114,21 +114,26 @@
 				</div>
 			</div>
 
-			<!-- Suggestion strength -->
+			<!-- Suggestion strength slider -->
 			<div class="space-y-1.5">
-				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.depth", appState.language)}</span>
-				<div class="flex gap-1">
-					{#each [["fast", "Fast"], ["balanced", "Mid"], ["deep", "Deep"]] as [val, label]}
-						<button
-							class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all {appState.suggestionStrength === val
-								? 'bg-[var(--accent)] text-[var(--bg-primary)]'
-								: 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
-							onclick={() => setStrength(val as "fast" | "balanced" | "deep")}
-						>
-							{label}
-						</button>
-					{/each}
+				<div class="flex items-center justify-between">
+					<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.depth", appState.language)}</span>
+					<span class="text-[10px] font-mono text-[var(--text-muted)]">
+						{appState.suggestionStrength === "fast" ? "Fast" : appState.suggestionStrength === "deep" ? "Deep" : "Mid"}
+					</span>
 				</div>
+				<input
+					type="range"
+					min="0"
+					max="2"
+					step="1"
+					value={appState.suggestionStrength === "fast" ? 0 : appState.suggestionStrength === "balanced" ? 1 : 2}
+					oninput={(e) => {
+						const v = Number((e.target as HTMLInputElement).value);
+						setStrength(v === 0 ? "fast" : v === 1 ? "balanced" : "deep");
+					}}
+					class="w-full h-1.5 rounded-full appearance-none bg-[var(--bg-hover)] accent-[var(--accent)] cursor-pointer"
+				/>
 			</div>
 
 			<!-- Coaching toggle -->
