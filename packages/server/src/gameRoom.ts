@@ -329,10 +329,19 @@ export class GameRoom {
 
 		if (targetMove === null) return; // all moves analyzed
 
+		// requestAnalysis can only analyze the live position. If that position
+		// is already covered, calling again would emit a duplicate of the
+		// latest card and waste an API call — mark stale targets done instead.
+		if (this.analyzedMoves.has(history.length)) {
+			for (let i = 1; i <= history.length; i++) this.analyzedMoves.add(i);
+			return;
+		}
+
 		this.analysisInFlight = true;
 		const moveIdx = targetMove;
 		this.requestAnalysis().finally(() => {
 			this.analyzedMoves.add(moveIdx);
+			this.analyzedMoves.add(this.game.getSnapshot().moveHistory.length);
 			this.analysisInFlight = false;
 
 			if (this.analysisPending) {
@@ -362,6 +371,10 @@ export class GameRoom {
 		const snap = this.game.getSnapshot();
 		const extra = snap.extra as Record<string, unknown>;
 		const history = snap.moveHistory;
+		// Queued/backfill runs can land on a position that was already covered
+		// when moves outpace the LLM — emitting again would duplicate the card.
+		if (this.analyzedMoves.has(history.length)) return;
+		this.analyzedMoves.add(history.length);
 		const lastEntry = history.length > 0 ? history[history.length - 1] : null;
 
 		const ctx: AnalysisContext = {
@@ -372,6 +385,7 @@ export class GameRoom {
 			lastMove: lastEntry?.display,
 			lastMoveColor: snap.turn === "white" ? "Black" : "White",
 			suggestions: this.lastSuggestions,
+			history: history.map((m) => m.display),
 			pgn: extra.pgn as string | undefined,
 			language: this.language,
 		};
@@ -540,7 +554,7 @@ export class GameRoom {
 			result: gameResult
 				? `${gameResult.winner === this.playerColor ? "Player wins" : gameResult.winner === "draw" ? "Draw" : "Player loses"} — ${gameResult.reason}`
 				: "Unknown",
-			pgn: extra.pgn as string | undefined,
+			pgn: (extra.pgn as string | undefined) ?? history.map((m) => m.san).join(" "),
 			language: this.language,
 			moveAccuracies: result.moveAccuracies,
 		});

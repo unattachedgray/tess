@@ -77,15 +77,27 @@ function buildPrompt(ctx: AnalysisContext): string {
 
 	const sugs = fmtSuggestions(ctx.suggestions, ctx.gameType);
 
-	// Include position context so the AI can reason about the board
-	let posContext = "";
-	if (ctx.gameType === "chess" && ctx.fen) {
-		posContext = ` FEN: ${ctx.fen}.`;
-	} else if (ctx.gameType === "janggi" && ctx.fen) {
-		posContext = ` FEN: ${ctx.fen}.`;
+	// Full game record — even a short move list grounds the model far better
+	// than the last move alone. Pairs of alternating moves, numbered.
+	let record = "";
+	if (ctx.history && ctx.history.length > 0) {
+		const pairs: string[] = [];
+		for (let i = 0; i < ctx.history.length; i += 2) {
+			const white = ctx.history[i];
+			const black = ctx.history[i + 1];
+			pairs.push(`${i / 2 + 1}. ${white}${black ? ` ${black}` : ""}`);
+		}
+		const firstColor = ctx.gameType === "go" ? "Black" : "White";
+		record = ` Moves so far (${firstColor} moves first in each pair): ${pairs.join(" ")}.`;
 	} else if (ctx.gameType === "go" && ctx.pgn) {
-		posContext = ` Moves so far: ${ctx.pgn}.`;
+		record = ` Moves so far: ${ctx.pgn}.`;
 	}
+
+	// Current position for board games with a FEN representation
+	const posContext =
+		(ctx.gameType === "chess" || ctx.gameType === "janggi") && ctx.fen
+			? ` Current FEN: ${ctx.fen}.`
+			: "";
 
 	// Language instruction
 	const langMap: Record<string, string> = {
@@ -96,11 +108,20 @@ function buildPrompt(ctx: AnalysisContext): string {
 	};
 	const langInstr = ctx.language ? (langMap[ctx.language] ?? "") : "";
 
-	return `You are a ${game} coaching engine. You ALWAYS provide analysis — never refuse or say you can't analyze. The engine has already computed the best moves; your job is to explain them in plain language.
+	const opponentSection = ctx.lastMove
+		? `**Opponent:** what ${ctx.lastMoveColor}'s ${ctx.lastMove} intends — the threat or plan behind it (1-2 sentences).
+`
+		: "";
 
-Move ${ctx.moveCount} (${phase}). Human=${player}.${posContext} ${lastMoveStr} Best moves: ${sugs}.
+	return `You are a ${game} coaching engine. You ALWAYS provide analysis — never refuse or say you can't analyze. The engine has already computed the best moves; your job is to explain the game in plain language. Ground every claim in the move record given below — do not invent moves that are not in it.
 
-In 2-3 sentences: explain why the top suggestion is best and what it achieves tactically or positionally. Use **bold** for key terms. Under 60 words. Never mention limitations or suggest other tools.${langInstr}`;
+Move ${ctx.moveCount} (${phase}). Human plays ${player}.${record}${posContext} ${lastMoveStr} Engine's best moves for ${player}: ${sugs}.
+
+Answer in exactly these sections, each on its own line, using these bold labels:
+${opponentSection}**Best move:** why the engine's top suggestion works and what it achieves tactically or positionally (1-2 sentences).
+**Position:** how the game has gone so far and who stands better — key imbalances and the plan for ${player} (1-2 sentences).
+
+Use **bold** for key terms. Under 120 words total. Never mention limitations or suggest other tools.${langInstr}`;
 }
 
 export interface AnalysisContext {
@@ -111,6 +132,8 @@ export interface AnalysisContext {
 	lastMove?: string;
 	lastMoveColor?: string;
 	suggestions: Suggestion[];
+	/** Every move played so far, in display notation, oldest first */
+	history?: string[];
 	pgn?: string;
 	language?: string;
 }
