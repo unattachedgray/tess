@@ -34,7 +34,7 @@
 	.eval-bar {
 		width: 32px;
 		height: 100%;
-		background: #1a1a2e;
+		background: color-mix(in srgb, var(--bg-secondary) 70%, black);
 		border-radius: 6px;
 		position: relative;
 		overflow: hidden;
@@ -58,7 +58,7 @@
 		transform: translateX(-50%);
 		font-size: 10px;
 		font-weight: 700;
-		font-family: "SF Mono", "Cascadia Mono", "Fira Code", monospace;
+		font-family: var(--font-mono);
 		color: var(--text-muted);
 		white-space: nowrap;
 		z-index: 1;

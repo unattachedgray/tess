@@ -406,7 +406,7 @@
 		</div>
 
 		<div class="flex items-center gap-3">
-			<span class="text-[15px] font-bold tracking-tight text-[var(--accent)]">Tess</span>
+			<span class="text-[16px] font-[650] tracking-[-0.03em] text-[var(--accent)] select-none">Tess</span>
 			<span class="text-[11px] text-[var(--text-muted)]" title={appState.userId}>
 				{appState.nickname ? appState.nickname : appState.userId}
 			</span>
@@ -427,13 +427,13 @@
 						class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-primary)] cursor-pointer hover:bg-[var(--success)] hover:text-[var(--bg-primary)] transition-all"
 						onclick={leaveMultiplayer}
 						title="End live session"
-					>MULTI LIVE</button>
+					>Live game</button>
 				{:else}
 					<button
 						class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[var(--success)] text-[var(--bg-primary)] cursor-pointer hover:bg-[var(--danger)] transition-all"
 						onclick={leaveMultiplayer}
 						title="Click to leave game"
-					>MULTI LIVE</button>
+					>Live game</button>
 				{/if}
 			{:else}
 				<button
@@ -479,7 +479,7 @@
 					</button>
 					{#if showDifficultyPicker}
 						<div class="fixed inset-0 z-40" onclick={() => showDifficultyPicker = false} role="presentation"></div>
-						<div class="absolute right-0 top-7 z-50 w-36 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-xl p-1.5 space-y-0.5">
+						<div class="absolute right-0 top-7 z-50 w-36 panel shadow-xl p-1.5 space-y-0.5">
 							<div class="text-[9px] font-medium text-[var(--text-muted)] uppercase tracking-wider px-2 py-1">{tt('header.aiOpponent')}</div>
 							{#each DIFFICULTY_IDS as id}
 								<button

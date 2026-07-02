@@ -83,7 +83,7 @@
 		<div class="fixed inset-0 z-40" onclick={() => open = false} role="presentation"></div>
 
 		<!-- Dropdown -->
-		<div class="absolute right-0 top-8 z-50 w-56 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-xl p-3 space-y-3">
+		<div class="absolute right-0 top-8 z-50 w-56 panel shadow-xl p-3 space-y-3">
 			<!-- Nickname -->
 			<div class="space-y-1.5">
 				<span class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{t("settings.nickname", appState.language)}</span>

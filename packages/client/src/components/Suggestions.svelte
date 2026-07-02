@@ -38,7 +38,7 @@
 	}
 </script>
 
-<div class="rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] overflow-hidden {stale ? 'opacity-50' : ''} flex-shrink-0">
+<div class="panel overflow-hidden {stale ? 'opacity-50' : ''} flex-shrink-0">
 	<div class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">
 		<h3 class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
 			{t("engine.title", appState.language)}

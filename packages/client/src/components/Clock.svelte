@@ -34,7 +34,7 @@
 	.clock {
 		padding: 4px 10px;
 		border-radius: 8px;
-		font-family: "SF Mono", "Cascadia Mono", "Fira Code", monospace;
+		font-family: var(--font-mono);
 		font-size: 14px;
 		font-weight: 700;
 		color: var(--text-secondary);

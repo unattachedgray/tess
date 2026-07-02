@@ -127,7 +127,7 @@
 		{/if}
 
 		<!-- Move list -->
-		<div class="flex-1 overflow-y-auto rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] p-2">
+		<div class="flex-1 overflow-y-auto panel p-2">
 			<div class="grid grid-cols-[2rem_1fr_1fr] gap-x-2 gap-y-0.5 text-sm">
 				{#each movePairs as pair}
 					<span class="text-[var(--text-muted)] text-right">{pair.number}.</span>

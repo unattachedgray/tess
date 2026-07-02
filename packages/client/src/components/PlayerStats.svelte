@@ -109,7 +109,7 @@
 		border-radius: 8px;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border);
-		font-family: "SF Mono", "Cascadia Mono", monospace;
+		font-family: var(--font-mono);
 	}
 
 	.stat {

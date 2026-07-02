@@ -398,7 +398,7 @@
 		display: flex;
 		gap: 1rem;
 		padding: 0.75rem;
-		height: calc(100vh - 49px); /* viewport minus header */
+		height: calc(100dvh - 76px); /* viewport minus header (44px) and footer (32px) */
 		max-width: 1400px;
 		margin: 0 auto;
 	}
@@ -414,7 +414,7 @@
 		display: flex;
 		gap: 4px;
 		/* Board fills available height, maintaining square aspect ratio */
-		height: min(calc(100vh - 120px), calc(100vw - 400px));
+		height: min(calc(100dvh - 150px), calc(100vw - 400px));
 		max-height: 800px;
 	}
 
@@ -464,7 +464,7 @@
 		.game-container {
 			flex-direction: column;
 			height: auto;
-			min-height: calc(100vh - 44px);
+			min-height: calc(100dvh - 44px);
 			padding: 0.5rem;
 			gap: 0.5rem;
 		}
@@ -564,7 +564,7 @@
 	}
 
 	.quality-icon {
-		font-family: "SF Mono", "Cascadia Mono", monospace;
+		font-family: var(--font-mono);
 		font-size: 10px;
 	}
 

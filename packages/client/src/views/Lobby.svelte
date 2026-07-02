@@ -493,7 +493,7 @@
 		border: 1px solid var(--border);
 		background: var(--bg-secondary);
 		color: var(--text-primary);
-		font-family: "SF Mono", "Cascadia Mono", monospace;
+		font-family: var(--font-mono);
 		font-size: 16px;
 		letter-spacing: 0.15em;
 		text-transform: uppercase;
@@ -660,7 +660,7 @@
 	.challenge-time { font-size: 11px; color: var(--text-muted); margin-left: 6px; }
 	.challenge-creator { font-size: 12px; color: var(--text-secondary); }
 	.challenge-code {
-		font-family: "SF Mono", "Cascadia Mono", monospace;
+		font-family: var(--font-mono);
 		font-size: 11px;
 		color: var(--text-muted);
 		padding: 2px 6px;
