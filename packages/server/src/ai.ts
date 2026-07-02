@@ -1,29 +1,35 @@
-import { execFile } from "node:child_process";
-import { mkdirSync, accessSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { GameType, Suggestion } from "@tess/shared";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("ai");
 
-import { homedir } from "node:os";
-
-// Resolve claude CLI path — may be in ~/.local/bin which isn't always in PATH
-const CLAUDE_BIN = (() => {
-	const localBin = join(homedir(), ".local", "bin", "claude");
+// Gemini API keys: process.env first, then ~/.env (where local secrets live).
+// Order matters — free-tier key first, paid key as 429 fallback.
+const GEMINI_KEYS: string[] = (() => {
+	let envFile = "";
 	try {
-		accessSync(localBin);
-		return localBin;
-	} catch {
-		return "claude"; // Fall back to PATH
-	}
+		envFile = readFileSync(join(homedir(), ".env"), "utf8");
+	} catch {}
+	const fromFile = (name: string): string | null => {
+		const m = envFile.match(new RegExp(`^${name}=(.+)$`, "m"));
+		return m ? m[1].trim().replace(/^["']|["']$/g, "") : null;
+	};
+	const keys = [
+		process.env.GEMINI_API_KEY ?? fromFile("GEMINI_API_KEY"),
+		process.env.GEMINI_PAID_API_KEY ?? fromFile("GEMINI_PAID_API_KEY"),
+	].filter((k): k is string => !!k);
+	const deduped = [...new Set(keys)];
+	if (deduped.length === 0)
+		log.warn("GEMINI_API_KEY not found in env or ~/.env — AI coaching disabled");
+	return deduped;
 })();
 
-const SANDBOX_DIR = join(tmpdir(), "tess-claude-sandbox");
-try {
-	mkdirSync(SANDBOX_DIR, { recursive: true });
-} catch {}
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-flash-latest";
+// Post-game summaries are worth a stronger model (one call per game)
+const GEMINI_SUMMARY_MODEL = process.env.GEMINI_SUMMARY_MODEL ?? "gemini-pro-latest";
 
 const PHASE_THRESHOLDS: Record<GameType, [number, number]> = {
 	chess: [10, 30],
@@ -118,7 +124,7 @@ function processQueue(): void {
 	while (analysisQueue.length > 0 && activeCalls < MAX_CONCURRENT) {
 		const item = analysisQueue.shift()!;
 		activeCalls++;
-		callClaude(item.prompt)
+		callGemini(item.prompt, TIMEOUT_MS)
 			.then((result) => item.resolve(result))
 			.catch((err) => {
 				log.error("queued analysis failed", { error: (err as Error).message });
@@ -137,7 +143,7 @@ export async function analyzePosition(ctx: AnalysisContext): Promise<string | nu
 	if (activeCalls < MAX_CONCURRENT) {
 		activeCalls++;
 		try {
-			const result = await callClaude(prompt);
+			const result = await callGemini(prompt, TIMEOUT_MS);
 			return result;
 		} catch (err) {
 			log.error("analysis failed", { error: (err as Error).message });
@@ -190,7 +196,7 @@ export async function generateGameSummary(ctx: GameSummaryContext): Promise<stri
 Write a 3-4 sentence game summary for the player. Comment on their strengths, key mistakes, and one specific improvement tip. Be encouraging but honest. Use **bold** for key concepts. Under 80 words.${ctx.language && ctx.language !== "en" ? ` Respond in ${({ ko: "Korean", es: "Spanish", vi: "Vietnamese", mn: "Mongolian" })[ctx.language] ?? "English"}.` : ""}`;
 
 	try {
-		const result = await callClaudeOpus(prompt);
+		const result = await callGemini(prompt, 45000, GEMINI_SUMMARY_MODEL);
 		return result;
 	} catch (err) {
 		log.error("game summary failed", { error: (err as Error).message });
@@ -198,82 +204,64 @@ Write a 3-4 sentence game summary for the player. Comment on their strengths, ke
 	}
 }
 
-function callClaudeOpus(prompt: string): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const timer = setTimeout(() => {
-			reject(new Error("Claude CLI timeout"));
-		}, 45000);
-
-		execFile(
-			CLAUDE_BIN,
-			[
-				"--print",
-				"--output-format",
-				"text",
-				"--no-session-persistence",
-				"--max-turns",
-				"1",
-				"--model",
-				"claude-sonnet-4-6",
-				"-p",
-				prompt,
-			],
-			{
-				timeout: 45000,
-				cwd: SANDBOX_DIR,
-				maxBuffer: 1024 * 1024,
-			},
-			(error, stdout, stderr) => {
-				clearTimeout(timer);
-				if (error) {
-					reject(error);
-					return;
-				}
-				if (stderr) {
-					log.debug("claude opus stderr", { stderr: stderr.trim() });
-				}
-				resolve(stdout.trim());
-			},
-		);
-	});
+async function callGemini(
+	prompt: string,
+	timeoutMs: number,
+	model = GEMINI_MODEL,
+): Promise<string> {
+	if (GEMINI_KEYS.length === 0) throw new Error("GEMINI_API_KEY not configured");
+	// Try each key in order; a rate-limited (429) key falls through to the next.
+	// If every key is rate limited, wait once and retry the last key.
+	for (let attempt = 0; attempt < GEMINI_KEYS.length + 1; attempt++) {
+		const key = GEMINI_KEYS[Math.min(attempt, GEMINI_KEYS.length - 1)];
+		try {
+			return await geminiRequest(prompt, timeoutMs, key, model);
+		} catch (err) {
+			const rateLimited = (err as Error).message.includes("429");
+			if (!rateLimited || attempt === GEMINI_KEYS.length) throw err;
+			if (attempt === GEMINI_KEYS.length - 1) await new Promise((r) => setTimeout(r, 4000));
+		}
+	}
+	throw new Error("unreachable");
 }
 
-function callClaude(prompt: string): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const timer = setTimeout(() => {
-			reject(new Error("Claude CLI timeout"));
-		}, TIMEOUT_MS);
-
-		execFile(
-			CLAUDE_BIN,
-			[
-				"--print",
-				"--output-format",
-				"text",
-				"--no-session-persistence",
-				"--max-turns",
-				"1",
-				"--model",
-				"claude-haiku-4-5-20251001",
-				"-p",
-				prompt,
-			],
+async function geminiRequest(
+	prompt: string,
+	timeoutMs: number,
+	key: string,
+	model: string,
+): Promise<string> {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		const res = await fetch(
+			`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
 			{
-				timeout: TIMEOUT_MS,
-				cwd: SANDBOX_DIR,
-				maxBuffer: 1024 * 1024,
-			},
-			(error, stdout, stderr) => {
-				clearTimeout(timer);
-				if (error) {
-					reject(error);
-					return;
-				}
-				if (stderr) {
-					log.debug("claude stderr", { stderr: stderr.trim() });
-				}
-				resolve(stdout.trim());
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-goog-api-key": key,
+				},
+				body: JSON.stringify({
+					contents: [{ parts: [{ text: prompt }] }],
+				}),
+				signal: controller.signal,
 			},
 		);
-	});
+		if (!res.ok) {
+			const body = await res.text().catch(() => "");
+			throw new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 200)}`);
+		}
+		const data = (await res.json()) as {
+			candidates?: { content?: { parts?: { text?: string }[] } }[];
+		};
+		const text = data.candidates?.[0]?.content?.parts
+			?.map((p) => p.text ?? "")
+			.join("")
+			.trim();
+		if (!text) throw new Error("Gemini returned empty response");
+		return text;
+	} finally {
+		clearTimeout(timer);
+	}
 }

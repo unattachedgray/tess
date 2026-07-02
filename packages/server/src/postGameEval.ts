@@ -1,20 +1,21 @@
+import { gameAccuracy, getSkillLevel } from "@tess/shared";
 /**
  * Post-game evaluation for multiplayer games.
  *
  * Uses incrementally accumulated engine evals from during gameplay.
  * No post-game engine replay needed — SKILL_EVAL is instant.
- * Claude AI narrative runs in background.
+ * AI narrative (Gemini) runs in background.
  */
-import { gameAccuracy, getSkillLevel } from "@tess/shared";
-import type { MultiplayerRoom } from "./multiplayerRoom.js";
-import type { SessionManager } from "./session.js";
+import type { WebSocket } from "ws";
 import { generateGameSummary } from "./ai.js";
 import { createLogger } from "./logger.js";
+import type { MultiplayerRoom } from "./multiplayerRoom.js";
+import type { SessionManager } from "./session.js";
 
 const log = createLogger("eval");
 
 export interface EvalClient {
-	ws: { readyState: number };
+	ws: WebSocket;
 	mpRoom: MultiplayerRoom | null;
 	language?: string;
 }
@@ -25,7 +26,7 @@ export async function evaluateMultiplayerGame(
 	acceptorClient: EvalClient,
 	creatorColor: "white" | "black",
 	_sessionManager: SessionManager,
-	send: (ws: unknown, data: unknown) => void,
+	send: (ws: WebSocket, data: unknown) => void,
 ): Promise<void> {
 	const history = room.getMoveHistory();
 	const moveCount = room.gameType === "go" ? room.getGoMoves().length : history.length;
@@ -82,7 +83,7 @@ export async function evaluateMultiplayerGame(
 		} else {
 			// Fallback: estimate from game result margin
 			const goResult = room.getResult();
-			const margin = parseFloat(goResult.reason.replace(/[^0-9.]/g, "")) || 0;
+			const margin = Number.parseFloat(goResult.reason.replace(/[^0-9.]/g, "")) || 0;
 			const winnerAcc = Math.min(95, 70 + margin * 0.5);
 			const loserAcc = Math.max(20, 70 - margin * 0.5);
 			const wAcc = goResult.winner === "white" ? winnerAcc : loserAcc;
@@ -188,7 +189,7 @@ async function generateSummaries(
 	acceptorAcpl: number,
 	totalMoves: number,
 	result: string,
-	send: (ws: unknown, data: unknown) => void,
+	send: (ws: WebSocket, data: unknown) => void,
 	pgn?: string,
 	creatorMoveAccuracies?: number[],
 	acceptorMoveAccuracies?: number[],

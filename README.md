@@ -43,13 +43,13 @@ cd tess
 
 That's it. The script installs dependencies, downloads game engines, and opens your browser. Takes about 2 minutes on first run.
 
-> **Requirements:** Node.js 20+ (checked automatically). Works on Linux and WSL2. Optional: [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) for AI coaching.
+> **Requirements:** Node.js 20+ (checked automatically). Works on Linux and WSL2. Optional: a [Gemini API key](https://aistudio.google.com/apikey) (`GEMINI_API_KEY` in env or `~/.env`) for AI coaching.
 
 ## Features
 
 ### AI Coaching That Actually Helps
 
-The AI coach (powered by Claude) doesn't just say "Nf3 was better." It explains the position, the threat, and what your move missed. Coaching works during the game and as a post-game review.
+The AI coach (powered by Gemini) doesn't just say "Nf3 was better." It explains the position, the threat, and what your move missed. Coaching works during the game and as a post-game review.
 
 Available in **English, Korean, Spanish, Vietnamese, and Mongolian**.
 
@@ -151,7 +151,7 @@ Tess runs on your machine as a local web server. You open it in your browser lik
 ```
 Your Browser ←→ Tess Server (localhost:8082) ←→ Game Engines (Fairy-Stockfish, KataGo)
                      │
-                     ├── AI Coaching (Claude CLI)
+                     ├── AI Coaching (Gemini API)
                      ├── Game Database (SQLite)
                      └── Federation (Hyperswarm P2P)
 ```

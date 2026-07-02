@@ -181,7 +181,7 @@ Server:  Not running
 Chess:   OK
 Go:      OK
 Janggi:  OK
-Claude:  OK
+Gemini:  OK
 ```
 
 Or run the install check:

@@ -63,12 +63,11 @@ check_engines() {
     fi
 }
 
-check_claude() {
-    if command -v claude &>/dev/null; then
-        log "Claude CLI: OK"
+check_gemini() {
+    if [ -n "$GEMINI_API_KEY" ] || grep -q "^GEMINI_API_KEY=" "$HOME/.env" 2>/dev/null; then
+        log "Gemini API key: OK"
     else
-        warn "Claude CLI not found. AI coaching will be unavailable."
-        warn "  Install from: https://docs.anthropic.com/en/docs/claude-code"
+        warn "GEMINI_API_KEY not found (env or ~/.env). AI coaching will be unavailable."
     fi
 }
 
@@ -81,7 +80,7 @@ do_install() {
     pnpm install
     pnpm rebuild better-sqlite3 2>/dev/null || true
     check_engines
-    check_claude
+    check_gemini
     # Generate sound files if missing
     if [ ! -f "packages/client/public/sounds/move.mp3" ]; then
         bash scripts/download-engines.sh --sounds-only
@@ -152,7 +151,7 @@ do_status() {
     [ -f "assets/engines/fairy-stockfish" ] && echo -e "Chess:   ${GREEN}OK${NC}" || echo -e "Chess:   ${RED}Missing${NC}"
     [ -d "assets/engines/katago" ] && echo -e "Go:      ${GREEN}OK${NC}" || echo -e "Go:      ${YELLOW}Missing${NC}"
     ([ -f "assets/engines/fairy-stockfish-largeboard" ] || [ -f "assets/engines/fairy-stockfish-largeboard_x86-64-bmi2.exe" ]) && echo -e "Janggi:  ${GREEN}OK${NC}" || echo -e "Janggi:  ${YELLOW}Missing${NC}"
-    command -v claude &>/dev/null && echo -e "Claude:  ${GREEN}OK${NC}" || echo -e "Claude:  ${YELLOW}Not installed${NC}"
+    ([ -n "$GEMINI_API_KEY" ] || grep -q "^GEMINI_API_KEY=" "$HOME/.env" 2>/dev/null) && echo -e "Gemini:  ${GREEN}OK${NC}" || echo -e "Gemini:  ${YELLOW}No API key${NC}"
     echo ""
 }
 
