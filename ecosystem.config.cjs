@@ -6,9 +6,11 @@ module.exports = {
 			interpreter: "node",
 			interpreter_args: "--import tsx/esm",
 			script: "src/index.ts",
+			namespace: "tess",
 			env: {
 				NODE_ENV: "production",
-				PORT: "8082",
+				PORT: "8460",
+				TESS_DISCOVERY: "off",
 			},
 			autorestart: true,
 			max_restarts: 5,

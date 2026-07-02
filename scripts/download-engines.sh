@@ -36,7 +36,7 @@ mkdir -p "$ENGINE_DIR/katago"
 
 # --- Fairy-Stockfish ---
 
-FAIRY_SF_VERSION="fairy_sf_14_0_1"
+FAIRY_SF_VERSION="fairy_sf_14_0_1_xq"
 FAIRY_SF_REPO="https://github.com/fairy-stockfish/Fairy-Stockfish/releases/download"
 
 download_fairy_stockfish() {
@@ -98,9 +98,28 @@ download_nnue() {
     fi
 }
 
+download_janggi_nnue() {
+    local janggi_nnue="janggi-9991472750de.nnue"
+    # Raw .nnue is only hosted on Google Drive (GitHub releases embed it in binaries)
+    local janggi_nnue_url="https://drive.google.com/u/0/uc?id=1dAEzbK1rOm8UGm_-CLdDEgeopFDcAtQP&export=download"
+
+    if [ -f "$ENGINE_DIR/$janggi_nnue" ]; then
+        log "Janggi NNUE already exists, skipping."
+    else
+        info "Downloading Janggi NNUE (~11MB)..."
+        if curl -fsSL -o "$ENGINE_DIR/$janggi_nnue" "$janggi_nnue_url" 2>/dev/null || \
+           wget -q -O "$ENGINE_DIR/$janggi_nnue" "$janggi_nnue_url" 2>/dev/null; then
+            log "Janggi NNUE downloaded."
+        else
+            warn "Janggi NNUE download failed. Janggi will use classical evaluation."
+            warn "  Manual: see https://fairy-stockfish.github.io/nnue/"
+        fi
+    fi
+}
+
 # --- KataGo ---
 
-KATAGO_VERSION="v1.15.3"
+KATAGO_VERSION="v1.16.5"
 KATAGO_REPO="https://github.com/lightvector/KataGo/releases/download"
 
 download_katago() {
@@ -157,6 +176,26 @@ download_katago() {
             err ""
             err "  For GPU (CUDA): name the binary katago-cuda instead of katago"
             return 1
+        fi
+    fi
+
+    # OpenCL build for GPU (runs on the plain NVIDIA/AMD driver, no cuDNN)
+    if command -v nvidia-smi &>/dev/null && [ ! -f "$katago_dir/katago-cuda" ]; then
+        local ocl_zip="katago-${KATAGO_VERSION}-opencl-linux-x64.zip"
+        local ocl_url="$KATAGO_REPO/$KATAGO_VERSION/$ocl_zip"
+        info "GPU detected — downloading KataGo OpenCL build..."
+        local ocl_tmp="/tmp/katago-ocl-$$.zip"
+        if curl -fSL -o "$ocl_tmp" "$ocl_url" 2>/dev/null || wget -q -O "$ocl_tmp" "$ocl_url" 2>/dev/null; then
+            local ocl_dir="/tmp/katago-ocl-extract-$$"
+            mkdir -p "$ocl_dir" && unzip -oq "$ocl_tmp" -d "$ocl_dir" 2>/dev/null
+            find "$ocl_dir" -name "katago" -type f -exec cp {} "$katago_dir/katago-cuda" \; 2>/dev/null
+            rm -rf "$ocl_tmp" "$ocl_dir"
+            if [ -f "$katago_dir/katago-cuda" ]; then
+                chmod +x "$katago_dir/katago-cuda"
+                log "KataGo OpenCL (GPU) binary installed as katago-cuda."
+            fi
+        else
+            warn "KataGo OpenCL download failed — CPU build will be used."
         fi
     fi
 
@@ -276,6 +315,7 @@ case "$MODE" in
     --chess-only)
         download_fairy_stockfish
         download_nnue
+        download_janggi_nnue
         ;;
     --go-only)
         download_katago
@@ -283,6 +323,7 @@ case "$MODE" in
     --all|"")
         download_fairy_stockfish
         download_nnue
+        download_janggi_nnue
         download_katago
         download_sounds
         ;;

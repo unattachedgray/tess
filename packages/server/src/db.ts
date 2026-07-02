@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
@@ -18,6 +18,7 @@ export function initDb(dbPath?: string): Database.Database {
 	const path = dbPath ?? resolve(__dirname, "../../../data/tess.db");
 	log.info("opening database", { path });
 
+	mkdirSync(dirname(path), { recursive: true });
 	db = new Database(path);
 	db.pragma("journal_mode = WAL");
 	db.pragma("foreign_keys = ON");
