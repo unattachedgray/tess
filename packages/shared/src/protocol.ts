@@ -15,14 +15,13 @@ export const NewGameMessage = z.object({
 	language: z.string().optional(),
 });
 
-export const JoinGameMessage = z.object({
-	type: z.literal("JOIN_GAME"),
-	gameId: z.string(),
-});
-
 export const PlayMoveMessage = z.object({
 	type: z.literal("PLAY_MOVE"),
 	move: z.string(),
+});
+
+export const UndoMessage = z.object({
+	type: z.literal("UNDO"),
 });
 
 export const ResignMessage = z.object({
@@ -70,6 +69,12 @@ export const UpdateSettingsMessage = z.object({
 export const SetNicknameMessage = z.object({
 	type: z.literal("SET_NICKNAME"),
 	nickname: z.string().min(2).max(20),
+	/**
+	 * Random client-held secret (localStorage). The server hashes it into a
+	 * stable userId so a reload/drop can rejoin an in-progress multiplayer
+	 * game. Never displayed or broadcast.
+	 */
+	sessionKey: z.string().min(8).max(64).optional(),
 });
 
 export const TimeControlSchema = z.object({
@@ -179,8 +184,8 @@ export type Challenge = {
 
 export const ClientMessage = z.discriminatedUnion("type", [
 	NewGameMessage,
-	JoinGameMessage,
 	PlayMoveMessage,
+	UndoMessage,
 	ResignMessage,
 	PassMessage,
 	RequestAnalysisMessage,
@@ -288,6 +293,8 @@ export const GameOverPayload = z.object({
 	result: z.object({
 		winner: z.enum(["white", "black", "draw"]),
 		reason: z.string(),
+		/** Score margin in points (Go counting results) */
+		margin: z.number().optional(),
 	}),
 });
 
@@ -304,21 +311,31 @@ export const MoveQualityPayload = z.object({
 
 export const HintPayload = z.object({
 	type: z.literal("HINT"),
+	/** 1 = where to look (origin square / board area), 2 = the full move */
 	level: z.number(),
-	piece: z.string().optional(),
-	destination: z.string().optional(),
-	fullMove: z.string().optional(),
+	from: z.string().optional(),
+	to: z.string().optional(),
+	move: z.string().optional(),
+	san: z.string().optional(),
+	/** Go level-1: i18n key naming a board region (hint.area.*) */
+	area: z.string().optional(),
+});
+
+const skillShape = z.object({
+	label: z.string(),
+	rating: z.string(),
+	description: z.string(),
 });
 
 export const SkillEvalPayload = z.object({
 	type: z.literal("SKILL_EVAL"),
 	accuracy: z.number(),
 	acpl: z.number(),
-	skill: z.object({
-		label: z.string(),
-		rating: z.string(),
-		description: z.string(),
-	}),
+	skill: skillShape,
+	// Present for autoplay/MP evaluations
+	opponentAccuracy: z.number().optional(),
+	opponentAcpl: z.number().optional(),
+	opponentSkill: skillShape.optional(),
 });
 
 export const DifficultyTiersPayload = z.object({

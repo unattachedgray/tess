@@ -101,7 +101,7 @@
 			<div class="grid grid-cols-2 gap-2">
 				<button
 					class="px-4 py-3 rounded-xl text-sm font-medium transition-all {appState.playerColor === 'white'
-						? 'bg-white text-gray-900 shadow-lg'
+						? 'bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-lg'
 						: 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}"
 					onclick={() => appState.setPlayerColor('white')}
 				>
@@ -109,7 +109,7 @@
 				</button>
 				<button
 					class="px-4 py-3 rounded-xl text-sm font-medium transition-all {appState.playerColor === 'black'
-						? 'bg-gray-800 text-white shadow-lg border border-[var(--border)]'
+						? 'bg-[#14171d] text-[#f1f5f9] shadow-lg border border-[var(--border)]'
 						: 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'}"
 					onclick={() => appState.setPlayerColor('black')}
 				>

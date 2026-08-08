@@ -5,6 +5,8 @@
 		legalMoves = {},
 		lastMove,
 		arrows = [],
+		checkSquare = null,
+		hintSquare = null,
 		onMove,
 	}: {
 		fen: string;
@@ -12,6 +14,10 @@
 		legalMoves: Record<string, string[]>;
 		lastMove?: [string, string];
 		arrows?: [string, string][];
+		/** Square of the general in check — red ring */
+		checkSquare?: string | null;
+		/** Hint origin square — pulsing ring */
+		hintSquare?: string | null;
 		onMove: (from: string, to: string) => void;
 	} = $props();
 
@@ -157,6 +163,13 @@
 					<circle cx={cx} cy={cy} r="4.2" fill="#FFF8E7" stroke={p.color} stroke-width="0.5" style="pointer-events:none" />
 					<text x={cx} y={cy + 1.5} text-anchor="middle" font-size="5" font-weight="bold" fill={p.color} style="pointer-events:none;user-select:none">{p.char}</text>
 				{/if}
+
+				{#if checkSquare && toSquare(col, row) === checkSquare}
+					<circle cx={cx} cy={cy} r="5.2" fill="none" stroke="rgba(220,38,38,0.85)" stroke-width="0.7" class="check-ring" style="pointer-events:none" />
+				{/if}
+				{#if hintSquare && toSquare(col, row) === hintSquare}
+					<circle cx={cx} cy={cy} r="5.2" fill="none" stroke="rgba(234,179,8,0.85)" stroke-width="0.7" class="hint-ring" style="pointer-events:none" />
+				{/if}
 			{/each}
 		{/each}
 
@@ -196,4 +209,22 @@
 <style>
 	.janggi-wrap { aspect-ratio: 10 / 11; height: 100%; position: relative; }
 	.janggi-board { width: 100%; height: 100%; overflow: visible; }
+
+	@media (max-width: 768px) {
+		.janggi-wrap { height: auto; width: 100%; }
+	}
+
+	.check-ring {
+		animation: ring-pulse 1.2s ease-in-out infinite;
+	}
+	.hint-ring {
+		animation: ring-pulse 1.6s ease-in-out infinite;
+	}
+	@keyframes ring-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.35; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.check-ring, .hint-ring { animation: none; }
+	}
 </style>

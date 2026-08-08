@@ -22,6 +22,9 @@ export class UciAdapter {
 	private ready = false;
 	private initPromise: Promise<void> | null = null;
 	private engineName = "";
+	/** Variant currently configured on the engine — pooled adapters are shared
+	 *  across games, so a janggi search must not leak into later chess searches. */
+	private currentVariant = "chess";
 
 	constructor(
 		private readonly enginePath: string,
@@ -61,6 +64,7 @@ export class UciAdapter {
 
 			this.waitFor("uciok", 10000)
 				.then(() => {
+					this.currentVariant = "chess"; // fresh process starts at the default variant
 					for (const [name, value] of Object.entries(this.options)) {
 						this.send(`setoption name ${name} value ${value}`);
 					}
@@ -88,9 +92,12 @@ export class UciAdapter {
 		// Clear buffer before configuring — prevents stale readyok matches
 		this.buffer = "";
 
-		if (variant) {
-			this.send(`setoption name UCI_Variant value ${variant}`);
-			this.send("setoption name Use NNUE value false");
+		const targetVariant = variant ?? "chess";
+		if (targetVariant !== this.currentVariant) {
+			this.send(`setoption name UCI_Variant value ${targetVariant}`);
+			// NNUE nets are per-variant; only the chess net is loaded
+			this.send(`setoption name Use NNUE value ${targetVariant === "chess"}`);
+			this.currentVariant = targetVariant;
 		}
 		// Set Elo limiting for realistic difficulty
 		if (eloLimit !== undefined) {

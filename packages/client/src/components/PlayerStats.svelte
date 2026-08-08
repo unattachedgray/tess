@@ -86,7 +86,7 @@
 			<div class="stat-divider"></div>
 			<div class="stat" title="Current / Best win streak">
 				<span class="stat-value" class:good={streak >= 3}>{streak}</span>
-				<span class="stat-label">{streak > 0 ? "🔥" : "—"}</span>
+				<span class="stat-label">{streak > 0 ? "🔥" : "streak"}</span>
 			</div>
 		{/if}
 	</div>

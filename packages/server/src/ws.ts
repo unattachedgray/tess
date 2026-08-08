@@ -1,5 +1,5 @@
 import type { ServerType } from "@hono/node-server";
-import { ClientMessage } from "@tess/shared";
+import { ClientMessage, classifyMoveQuality } from "@tess/shared";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { GameRoom } from "./gameRoom.js";
 import { createLogger } from "./logger.js";
@@ -265,6 +265,17 @@ export function createWsServer(
 
 		switch (msg.type) {
 			case "NEW_GAME": {
+				// A reloading client auto-sends NEW_GAME on connect. If we just
+				// rejoined them to a live MP game, a fresh SP GAME_STATE would
+				// stomp the restored board — resend the MP session instead.
+				if (state.mpRoom?.status === "playing" && state.mpRoom.hasPlayer(state.userId ?? "")) {
+					const sessionStart = state.mpRoom.buildSessionStart(state.userId ?? "");
+					if (sessionStart) {
+						send(state.ws, sessionStart);
+						state.mpRoom.addPlayer(toMpClient(state)); // resends state + clock
+						break;
+					}
+				}
 				if (state.room) {
 					sessionManager.removeRoom(state.room.id);
 				}
@@ -338,9 +349,22 @@ export function createWsServer(
 					send(state.ws, { type: "ERROR", message: "No active game" });
 					return;
 				}
+				// Keep the room alive: resign() kicks off SKILL_EVAL, GAME_SUMMARY,
+				// and the DB save, which need the room's emit channel. Cleanup
+				// happens on the next NEW_GAME or on disconnect.
 				send(state.ws, state.room.resign(state.room.playerColor));
-				sessionManager.removeRoom(state.room.id);
-				state.room = null;
+				break;
+			}
+
+			case "UNDO": {
+				if (!state.room) {
+					send(state.ws, { type: "ERROR", message: "No active game" });
+					return;
+				}
+				const undoResult = state.room.undo();
+				if (!undoResult.ok) {
+					send(state.ws, { type: "ERROR", message: undoResult.error });
+				}
 				break;
 			}
 
@@ -421,13 +445,11 @@ export function createWsServer(
 						if (weakMove) payload.weakMove = weakMove;
 						send(state.ws, payload);
 
-						// If engine returns no moves, the side to move has lost (checkmate/stalemate)
+						// Engine returned no moves — settle by game rules (checkmate vs
+						// stalemate), never by resigning whichever client asked
 						if (mpSuggestions.suggestions.length === 0 && state.mpRoom.status === "playing") {
-							const loser = state.mpRoom.getTurn();
-							const winner = loser === "white" ? "black" : "white";
-							log.info("no legal moves detected", { winner, loser });
-							// Force game over via resignation on behalf of the losing side
-							state.mpRoom.resign(toMpClient(state));
+							log.info("no legal moves detected", { sideToMove: state.mpRoom.getTurn() });
+							state.mpRoom.settleNoLegalMoves();
 						}
 
 						// Accumulate eval for post-game accuracy
@@ -442,7 +464,9 @@ export function createWsServer(
 							const goMoves = state.mpRoom.getGoMoves();
 							const moveCount = state.mpRoom.gameType === "go" ? goMoves.length : history.length;
 
-							if (moveCount > 0) {
+							// Both clients analyze each ply — only the first requester
+							// records the eval and broadcasts quality
+							if (moveCount > 0 && state.mpRoom.claimEvalForMove(moveCount)) {
 								// Record eval for the position after the last move
 								state.mpRoom.recordPositionEval(scoreWhitePov);
 
@@ -452,14 +476,7 @@ export function createWsServer(
 								const evalBefore = moverColor === "white" ? preMoveScore : -preMoveScore;
 								const evalAfter = moverColor === "white" ? scoreWhitePov : -scoreWhitePov;
 								const cpLoss = Math.max(0, evalBefore - evalAfter);
-
-								let quality: string;
-								if (cpLoss <= 10) quality = "best";
-								else if (cpLoss <= 25) quality = "good";
-								else if (cpLoss <= 50) quality = "ok";
-								else if (cpLoss <= 100) quality = "inaccuracy";
-								else if (cpLoss <= 200) quality = "mistake";
-								else quality = "blunder";
+								const quality = classifyMoveQuality(cpLoss);
 
 								const lastMove = history.length > 0 ? history[history.length - 1]?.uci : "";
 								state.mpRoom.broadcastMessage({
@@ -549,18 +566,36 @@ export function createWsServer(
 				break;
 			}
 
-			case "JOIN_GAME":
-				send(state.ws, { type: "ERROR", message: "Use JOIN_BY_CODE for multiplayer" });
-				break;
-
 			// ── Multiplayer messages ──
 
 			case "SET_NICKNAME": {
 				const name = msg.nickname.trim().slice(0, 20);
 				if (!name) break;
 				state.nickname = name;
-				// Nickname is display-only. userId is server-assigned and immutable.
-				// This prevents impersonation via userId spoofing.
+				// Nickname is display-only. userId is derived server-side: either
+				// minted per connection, or (when the client holds a sessionKey
+				// secret) a hash of that secret — stable across reconnects but
+				// not guessable from the visible nickname, so seats can't be
+				// hijacked by name.
+				if (msg.sessionKey) {
+					const { createHash } = await import("node:crypto");
+					state.userId = `u-${createHash("sha256").update(msg.sessionKey).digest("hex").slice(0, 16)}`;
+
+					// Auto-rejoin an in-progress MP game after a reload or drop
+					if (!state.mpRoom) {
+						for (const room of mpRooms.values()) {
+							if (room.status === "playing" && room.hasPlayer(state.userId)) {
+								state.mpRoom = room;
+								state.gameType = room.gameType;
+								const sessionStart = room.buildSessionStart(state.userId);
+								if (sessionStart) send(state.ws, sessionStart);
+								room.addPlayer(toMpClient(state)); // reconnect path: state + clock
+								log.info("auto-rejoined MP game", { gameId: room.id, userId: state.userId });
+								break;
+							}
+						}
+					}
+				}
 				if (state.lobbyClient) {
 					state.lobbyClient.nickname = state.nickname;
 				}

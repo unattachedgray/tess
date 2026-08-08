@@ -174,6 +174,8 @@ class AppState {
 	lastMessageReceived = $state<{ message: string; from: string } | null>(null);
 	chatHistory = $state<{ text: string; from: string; isEmoji: boolean; ts: number }[]>([]);
 	opponentDisconnected = $state(false);
+	/** Opponent offered a draw — show accept/decline UI */
+	drawOffered = $state(false);
 
 	// User identity (persistent)
 	userId = $state<string>(
@@ -185,6 +187,16 @@ class AppState {
 			})(),
 	);
 	browserKey = $state<string>(getBrowserKey());
+	/** Random secret the server hashes into a stable identity — enables
+	 *  rejoining a live multiplayer game after a reload or connection drop. */
+	sessionKey = $state<string>(
+		loadPref("sessionKey", "") ||
+			(() => {
+				const key = crypto.randomUUID();
+				savePref("sessionKey", key);
+				return key;
+			})(),
+	);
 
 	// Active game state (not persisted)
 	view = $state<View>("game");
@@ -196,8 +208,10 @@ class AppState {
 	moveHistory = $state<{ san: string; uci: string; fen: string; moveNumber: number }[]>([]);
 	capturedPieces = $state<{ white: string[]; black: string[] }>({ white: [], black: [] });
 	isCheck = $state(false);
+	checkSquare = $state<string | null>(null);
 	isGameOver = $state(false);
-	result = $state<{ winner: "white" | "black" | "draw"; reason: string } | null>(null);
+	result = $state<{ winner: "white" | "black" | "draw"; reason: string; margin?: number } | null>(null);
+	errorToast = $state<string | null>(null);
 
 	// Go-specific
 	boardState = $state<(string | null)[][]>([]);
@@ -211,7 +225,7 @@ class AppState {
 	analysisLoading = $state(false);
 	eval = $state<number>(0);
 	lastMoveQuality = $state<MoveQuality>(null);
-	hintLevel = $state(0);
+	hint = $state<{ level: number; from?: string; to?: string; move?: string; san?: string; area?: string } | null>(null);
 	showArrows = $state(true);
 	opening = $state<{ eco: string; name: string } | null>(null);
 	autoplayActive = $state(false);
@@ -332,12 +346,17 @@ class AppState {
 		this.moveHistory = data.moveHistory;
 		this.capturedPieces = data.capturedPieces;
 		this.isCheck = data.isCheck;
+		this.checkSquare = (data as any).checkSquare ?? null;
 		this.isGameOver = data.isGameOver;
 		this.result = data.result ?? null;
 		if ((data as any).opening) this.opening = (data as any).opening;
 		if (data.boardState !== undefined) this.boardState = data.boardState;
 		if (data.boardSize !== undefined) this.boardSize = data.boardSize;
 		if (data.prisoners !== undefined) this.prisoners = data.prisoners;
+		// A fresh GAME_STATE (e.g. after a takeback) invalidates transient move UI
+		this.hint = null;
+		this.lastMoveQuality = null;
+		this.suggestionsStale = true;
 	}
 
 	updateFromMove(data: {
@@ -358,6 +377,7 @@ class AppState {
 		this.legalMoves = data.legalMoves;
 		this.capturedPieces = data.capturedPieces;
 		this.isCheck = data.isCheck;
+		this.checkSquare = (data as any).checkSquare ?? null;
 		this.isGameOver = data.isGameOver;
 		this.result = data.result ?? null;
 		if (data.boardState) this.boardState = data.boardState;
@@ -365,7 +385,7 @@ class AppState {
 		if (data.lastStone !== undefined) this.goLastMove = data.lastStone;
 		if ((data as any).opening) this.opening = (data as any).opening;
 		this.suggestionsStale = true;
-		this.hintLevel = 0;
+		this.hint = null;
 		if (this.coachingEnabled) this.analysisLoading = true;
 	}
 
@@ -387,10 +407,6 @@ class AppState {
 		}
 	}
 
-	requestHint() {
-		if (this.hintLevel < 3) this.hintLevel++;
-	}
-
 	reset() {
 		this.gameId = null;
 		this.fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -407,7 +423,8 @@ class AppState {
 		this.analysisLoading = false;
 		this.eval = 0;
 		this.lastMoveQuality = null;
-		this.hintLevel = 0;
+		this.hint = null;
+		this.checkSquare = null;
 		this.skillEval = null;
 		this.autoplayActive = false;
 		this.opening = null;
@@ -417,6 +434,7 @@ class AppState {
 		this.goLastMove = null;
 		this.chatHistory = [];
 		this.lastMessageReceived = null;
+		this.drawOffered = false;
 	}
 }
 

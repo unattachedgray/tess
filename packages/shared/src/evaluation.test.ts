@@ -1,5 +1,74 @@
 import { describe, expect, it } from "vitest";
-import { gameAccuracy, getSkillLevel, moveAccuracy, winPercent } from "./evaluation.js";
+import {
+	accuracyFromMoves,
+	classifyMoveQuality,
+	gameAccuracy,
+	getSkillLevel,
+	moveAccuracy,
+	winPercent,
+} from "./evaluation.js";
+
+describe("classifyMoveQuality", () => {
+	it("maps cp-loss bands to quality labels", () => {
+		expect(classifyMoveQuality(0)).toBe("best");
+		expect(classifyMoveQuality(10)).toBe("best");
+		expect(classifyMoveQuality(20)).toBe("good");
+		expect(classifyMoveQuality(40)).toBe("ok");
+		expect(classifyMoveQuality(80)).toBe("inaccuracy");
+		expect(classifyMoveQuality(150)).toBe("mistake");
+		expect(classifyMoveQuality(500)).toBe("blunder");
+	});
+});
+
+describe("accuracyFromMoves", () => {
+	it("perfect play scores near 100 with 0 ACPL", () => {
+		const moves = Array.from({ length: 20 }, () => ({ evalBefore: 20, cpLoss: 0 }));
+		const result = accuracyFromMoves(moves, 6);
+		expect(result.accuracy).toBeGreaterThan(95);
+		expect(result.acpl).toBe(0);
+		expect(result.moveAccuracies).toHaveLength(14);
+	});
+
+	it("repeated blunders score low with high ACPL", () => {
+		const moves = Array.from({ length: 20 }, () => ({ evalBefore: 0, cpLoss: 300 }));
+		const result = accuracyFromMoves(moves, 0);
+		expect(result.accuracy).toBeLessThan(50);
+		expect(result.acpl).toBe(300);
+	});
+
+	it("skips opening moves", () => {
+		const moves = [
+			{ evalBefore: 0, cpLoss: 900 }, // opening blunder, skipped
+			{ evalBefore: 0, cpLoss: 900 },
+			{ evalBefore: 0, cpLoss: 0 },
+			{ evalBefore: 0, cpLoss: 0 },
+		];
+		const result = accuracyFromMoves(moves, 2);
+		expect(result.acpl).toBe(0);
+		expect(result.moveAccuracies).toHaveLength(2);
+	});
+
+	it("returns zeros when nothing to evaluate", () => {
+		expect(accuracyFromMoves([], 6)).toEqual({ accuracy: 0, acpl: 0, moveAccuracies: [] });
+	});
+
+	it("agrees with gameAccuracy on equivalent input", () => {
+		// White plays 10 moves each losing 50cp; black perfectly restores nothing.
+		// gameAccuracy path: evals alternate white-move drops.
+		const evals = [0];
+		for (let i = 0; i < 10; i++) {
+			evals.push(evals[evals.length - 1] - 50); // white move loses 50
+			evals.push(evals[evals.length - 1]); // black move keeps eval
+		}
+		const viaEvals = gameAccuracy(evals, "white", 0);
+		const viaMoves = accuracyFromMoves(
+			Array.from({ length: 10 }, (_, i) => ({ evalBefore: -50 * i, cpLoss: 50 })),
+			0,
+		);
+		expect(viaMoves.acpl).toBe(viaEvals.acpl);
+		expect(Math.abs(viaMoves.accuracy - viaEvals.accuracy)).toBeLessThan(1);
+	});
+});
 
 describe("winPercent", () => {
 	it("returns 50% for equal position", () => {

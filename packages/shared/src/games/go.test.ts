@@ -137,6 +137,16 @@ describe("GoGame", () => {
 		]);
 	});
 
+	it("includes passes in KataGo moves so turn inference stays correct", () => {
+		const game = new GoGame(19);
+		game.playGtp("Q16");
+		game.pass();
+		expect(game.getKataGoMoves()).toEqual([
+			["B", "Q16"],
+			["W", "pass"],
+		]);
+	});
+
 	it("supports different board sizes", () => {
 		expect(new GoGame(9).size).toBe(9);
 		expect(new GoGame(13).size).toBe(13);
@@ -151,5 +161,22 @@ describe("GoGame", () => {
 		const result = game.getGameResult();
 		expect(result?.winner).toBe("white");
 		expect(result?.reason).toBe("resignation");
+	});
+
+	it("scoreWithKomi: empty board goes to white by komi", () => {
+		const game = new GoGame(9);
+		const score = game.scoreWithKomi(7.5);
+		expect(score.winner).toBe("white");
+		expect(score.margin).toBe(7.5);
+	});
+
+	it("scoreWithKomi: counts stones plus komi", () => {
+		const game = new GoGame(9);
+		game.play(2, 2); // black
+		game.play(6, 6); // white
+		game.play(4, 4); // black — board now has 2 black stones, 1 white
+		const score = game.scoreWithKomi(7.5);
+		expect(score.winner).toBe("white");
+		expect(score.margin).toBe(6.5);
 	});
 });

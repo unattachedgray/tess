@@ -176,10 +176,15 @@ export class KataGoGameEngine implements GameEngine {
 		const color = game.turn === "black" ? "b" : "w";
 		const size = extra.size ?? 19;
 		const results = await this.kataGo.analyze(moves, color, goVisits, count, size);
-		return results.map((info) => ({
+		// Don't suggest pass in the early/mid game (mirrors the MP path)
+		const filtered =
+			moves.length < 150 ? results.filter((r) => r.move.toLowerCase() !== "pass") : results;
+		return (filtered.length > 0 ? filtered : results).map((info) => ({
 			move: info.move,
 			san: info.move,
-			score: Math.round(info.winrate * 10000 - 5000),
+			// scoreLead (points) × 100 — same scale as MP and SKILL_SCALE's Go
+			// calibration; winrate saturates near won/lost positions, points don't
+			score: Math.round(info.scoreLead * 100),
 			depth: info.visits,
 			pv: info.pv,
 		}));
@@ -195,7 +200,7 @@ export class KataGoGameEngine implements GameEngine {
 		const size = extra.size ?? 19;
 		const results = await this.kataGo.analyze(moves, color, 100, 1, size);
 		if (results.length > 0) {
-			return Math.round(results[0].winrate * 10000 - 5000);
+			return Math.round(results[0].scoreLead * 100);
 		}
 		return 0;
 	}

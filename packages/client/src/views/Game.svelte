@@ -86,7 +86,10 @@
 	const statusText = $derived.by(() => {
 		const _lang = appState.language; // reactive dependency
 		if (appState.isGameOver && appState.result) {
-			const reason = t(`reason.${appState.result.reason}`, _lang) || appState.result.reason;
+			let reason = t(`reason.${appState.result.reason}`, _lang) || appState.result.reason;
+			if (appState.result.margin !== undefined && appState.result.margin > 0) {
+				reason += ` (+${appState.result.margin})`;
+			}
 			if (appState.result.winner === "draw") return `${t("game.draw", _lang)} - ${reason}`;
 			const winner = appState.result.winner === appState.playerColor ? t("game.youWin", _lang) : t("game.youLose", _lang);
 			return `${winner} - ${reason}`;
@@ -133,11 +136,54 @@
 		}
 	});
 
-	// Build arrow shapes — only on hover, not automatically
+	// Build arrow shapes — suggestion hover, or a level-2 hint
 	const boardArrows = $derived.by(() => {
-		if (!hoveredMove || appState.suggestionsStale) return [];
-		const split = splitMove(hoveredMove);
-		return split ? [split] : [];
+		if (hoveredMove && !appState.suggestionsStale) {
+			const split = splitMove(hoveredMove);
+			if (split) return [split];
+		}
+		const h = appState.hint;
+		if (h?.from && h.to) return [[h.from, h.to] as [string, string]];
+		return [];
+	});
+
+	// Level-1 hint: mark the origin square (chess/janggi) without revealing the move
+	const hintOrigin = $derived.by(() => {
+		const h = appState.hint;
+		return h && h.level === 1 && h.from ? h.from : null;
+	});
+
+	// Go hint: level 2 shows the exact point; level 1 only names a board area
+	const goHintMove = $derived(appState.hint?.move ?? null);
+
+	function pass() {
+		ws.send({ type: "PASS" });
+	}
+
+	let drawOfferSent = $state(false);
+	function offerDraw() {
+		ws.send({ type: "OFFER_DRAW" });
+		drawOfferSent = true;
+		setTimeout(() => { drawOfferSent = false; }, 10000);
+	}
+
+	function respondDraw(accept: boolean) {
+		ws.send({ type: "RESPOND_DRAW", accept });
+		appState.drawOffered = false;
+	}
+
+	function takeback() {
+		ws.send({ type: "UNDO" });
+	}
+
+	// The player has a move to take back (their move exists in the history)
+	const canTakeback = $derived.by(() => {
+		if (appState.isMultiplayer || appState.autoplayActive) return false;
+		const firstMover = appState.gameType === "go" ? "black" : "white";
+		const mine = appState.moveHistory.filter((_, i) =>
+			(i % 2 === 0 ? firstMover : firstMover === "white" ? "black" : "white") === appState.playerColor,
+		);
+		return mine.length > 0;
 	});
 </script>
 
@@ -158,10 +204,17 @@
 				{/if}
 			</div>
 			<div class="player-bar-right">
-				<CapturedPieces
-					pieces={appState.playerColor === 'white' ? appState.capturedPieces.white : appState.capturedPieces.black}
-					color={appState.playerColor}
-				/>
+				{#if appState.gameType === 'go'}
+					<span class="prisoner-count" title={t("go.captures", appState.language)}>
+						<span class="prisoner-stone" class:white-stone={opponentColor === 'black'}></span>
+						{opponentColor === 'white' ? appState.prisoners.white : appState.prisoners.black}
+					</span>
+				{:else}
+					<CapturedPieces
+						pieces={appState.playerColor === 'white' ? appState.capturedPieces.white : appState.capturedPieces.black}
+						color={appState.playerColor}
+					/>
+				{/if}
 				{#if showClocks}
 					<Clock
 						time={opponentColor === 'white' ? appState.clockWhite : appState.clockBlack}
@@ -192,7 +245,7 @@
 					boardSize={appState.boardSize}
 					orientation={appState.playerColor}
 					lastMove={appState.goLastMove}
-					highlightedMove={hoveredMove}
+					highlightedMove={hoveredMove ?? goHintMove}
 					onPlay={(x, y) => onGoPlay(x, y)}
 				/>
 			{:else if appState.gameType === 'janggi'}
@@ -207,6 +260,8 @@
 						})()
 						: undefined}
 					arrows={boardArrows}
+					checkSquare={appState.checkSquare}
+					hintSquare={hintOrigin}
 					onMove={(from, to) => onMove(from, to)}
 				/>
 			{:else}
@@ -223,6 +278,7 @@
 					isCheck={appState.isCheck}
 					turn={appState.turn}
 					arrows={boardArrows}
+					highlightSquares={hintOrigin ? [hintOrigin] : []}
 					{onMove}
 				/>
 			{/if}
@@ -243,13 +299,25 @@
 						<span class="quality-icon">{QUALITY_STYLE[qualityFlash].icon}</span>
 						{t(`quality.${qualityFlash}`, appState.language)}
 					</span>
+					{#if (qualityFlash === 'mistake' || qualityFlash === 'blunder') && canTakeback && !appState.isGameOver}
+						<button class="retry-chip" class:fading={qualityFading} onclick={takeback}>
+							{t("game.takeback", appState.language)}
+						</button>
+					{/if}
 				{/if}
 			</div>
 			<div class="player-bar-right">
-				<CapturedPieces
-					pieces={appState.playerColor === 'white' ? appState.capturedPieces.black : appState.capturedPieces.white}
-					color={appState.playerColor === 'white' ? 'black' : 'white'}
-				/>
+				{#if appState.gameType === 'go'}
+					<span class="prisoner-count" title={t("go.captures", appState.language)}>
+						<span class="prisoner-stone" class:white-stone={appState.playerColor === 'black'}></span>
+						{appState.playerColor === 'white' ? appState.prisoners.white : appState.prisoners.black}
+					</span>
+				{:else}
+					<CapturedPieces
+						pieces={appState.playerColor === 'white' ? appState.capturedPieces.black : appState.capturedPieces.white}
+						color={appState.playerColor === 'white' ? 'black' : 'white'}
+					/>
+				{/if}
 				{#if showClocks}
 					<Clock
 						time={appState.playerColor === 'white' ? appState.clockWhite : appState.clockBlack}
@@ -279,9 +347,11 @@
 						{statusText}
 					</span>
 				</div>
-				<span class="text-xs font-mono text-[var(--text-muted)]">
-					{Math.ceil(appState.moveHistory.length / 2)}{#if appState.isGameOver && appState.gameStartTime} · {Math.round((Date.now() - appState.gameStartTime) / 60000)}m{/if}{#if appState.spectatorCount > 0} · 👁 {appState.spectatorCount}{/if}
-				</span>
+				{#if appState.moveHistory.length > 0 || appState.spectatorCount > 0}
+					<span class="text-xs font-mono text-[var(--text-muted)]">
+						{Math.ceil(appState.moveHistory.length / 2)}{#if appState.isGameOver && appState.gameStartTime} · {Math.round((Date.now() - appState.gameStartTime) / 60000)}m{/if}{#if appState.spectatorCount > 0}&ensp;👁 {appState.spectatorCount}{/if}
+					</span>
+				{/if}
 			</div>
 			{#if appState.opening}
 				<div class="text-xs text-[var(--text-muted)] mt-1">
@@ -320,6 +390,30 @@
 		<!-- Move History -->
 		<MoveHistory moves={appState.moveHistory} />
 
+		<!-- Incoming draw offer -->
+		{#if appState.drawOffered && !appState.isGameOver}
+			<div class="flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-[var(--accent-glow)] border border-[var(--accent)]/40">
+				<span class="text-sm font-medium text-[var(--accent)]">{t("game.drawOffered", appState.language)}</span>
+				<div class="flex gap-1.5">
+					<button
+						class="text-xs font-bold px-3 py-1.5 rounded-lg bg-[var(--accent)] text-[var(--bg-primary)] hover:bg-[var(--accent-hover)] transition-colors"
+						onclick={() => respondDraw(true)}
+					>{t("game.acceptDraw", appState.language)}</button>
+					<button
+						class="text-xs font-medium px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+						onclick={() => respondDraw(false)}
+					>{t("game.declineDraw", appState.language)}</button>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Level-1 Go hint: name the area without revealing the point -->
+		{#if appState.hint?.area}
+			<div class="text-xs text-center text-[var(--accent)] py-1 px-2 rounded-lg bg-[var(--accent-glow)]">
+				{t("game.hintArea", appState.language)} {t(appState.hint.area, appState.language)}
+			</div>
+		{/if}
+
 		<!-- Controls -->
 		<div class="flex gap-2">
 			{#if appState.isGameOver}
@@ -354,6 +448,15 @@
 					>
 						{t("game.newGame", appState.language)}
 					</button>
+					{#if canTakeback && appState.result?.reason !== 'resignation'}
+						<button
+							class="py-2.5 px-3 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+							onclick={takeback}
+							title={t("game.takebackTitle", appState.language)}
+						>
+							{t("game.takeback", appState.language)}
+						</button>
+					{/if}
 				{/if}
 				{#if appState.gameType === 'chess'}
 					<button
@@ -364,15 +467,44 @@
 					</button>
 				{/if}
 			{:else}
-				<button
-					class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--accent)]/50 hover:text-[var(--accent)] transition-all flex items-center justify-center gap-1.5"
-					onclick={requestHint}
-				>
-					<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="opacity-70">
-						<path d="M8 1a5 5 0 0 0-3 9v1a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1a5 5 0 0 0-3-9zm-1 13a1 1 0 1 0 2 0H7z"/>
-					</svg>
-					{t("game.hint", appState.language)}
-				</button>
+				{#if !appState.isMultiplayer}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--accent)]/50 hover:text-[var(--accent)] transition-all flex items-center justify-center gap-1.5"
+						onclick={requestHint}
+						title={appState.hint?.level === 1 ? t("game.hintAgain", appState.language) : undefined}
+					>
+						<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="opacity-70">
+							<path d="M8 1a5 5 0 0 0-3 9v1a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1a5 5 0 0 0-3-9zm-1 13a1 1 0 1 0 2 0H7z"/>
+						</svg>
+						{t("game.hint", appState.language)}{#if appState.hint}&nbsp;{appState.hint.level}/2{/if}
+					</button>
+				{:else}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40"
+						onclick={offerDraw}
+						disabled={drawOfferSent}
+					>
+						{drawOfferSent ? t("game.drawSent", appState.language) : t("game.offerDraw", appState.language)}
+					</button>
+				{/if}
+				{#if appState.gameType === 'go'}
+					<button
+						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+						onclick={pass}
+						disabled={!isMyTurn}
+					>
+						{t("game.pass", appState.language)}
+					</button>
+				{/if}
+				{#if canTakeback}
+					<button
+						class="py-2.5 px-3 rounded-xl text-sm font-medium bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+						onclick={takeback}
+						title={t("game.takebackTitle", appState.language)}
+					>
+						{t("game.takeback", appState.language)}
+					</button>
+				{/if}
 				{#if showResignConfirm}
 					<button
 						class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[var(--danger)] text-white transition-colors animate-pulse"
@@ -396,6 +528,7 @@
 <style>
 	.game-container {
 		display: flex;
+		justify-content: center;
 		gap: 1rem;
 		padding: 0.75rem;
 		height: calc(100dvh - 76px); /* viewport minus header (44px) and footer (32px) */
@@ -438,7 +571,9 @@
 
 	.status-bar.your-turn {
 		border-color: var(--accent);
-		box-shadow: 0 0 12px rgba(56, 189, 248, 0.15), inset 0 0 12px rgba(56, 189, 248, 0.05);
+		box-shadow:
+			0 0 12px var(--accent-glow),
+			inset 0 0 12px color-mix(in srgb, var(--accent) 5%, transparent);
 	}
 
 	.status-bar.game-over {
@@ -561,6 +696,49 @@
 
 	.quality-badge.fading {
 		opacity: 0;
+	}
+
+	.retry-chip {
+		font-size: 11px;
+		font-weight: 600;
+		padding: 1px 8px;
+		border-radius: 6px;
+		border: 1px solid var(--border);
+		background: var(--bg-secondary);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: opacity 0.5s ease, color 0.15s ease, border-color 0.15s ease;
+	}
+	.retry-chip:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+	.retry-chip.fading {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.prisoner-count {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 12px;
+		font-weight: 600;
+		font-family: var(--font-mono);
+		color: var(--text-secondary);
+	}
+
+	.prisoner-stone {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: #1a1a1a;
+		border: 1px solid #000;
+	}
+
+	.prisoner-stone.white-stone {
+		background: #f5f5f5;
+		border-color: #ccc;
 	}
 
 	.quality-icon {

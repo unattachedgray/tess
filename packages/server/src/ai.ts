@@ -30,6 +30,9 @@ const GEMINI_KEYS: string[] = (() => {
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-flash-latest";
 // Post-game summaries are worth a stronger model (one call per game)
 const GEMINI_SUMMARY_MODEL = process.env.GEMINI_SUMMARY_MODEL ?? "gemini-pro-latest";
+// Cap thinking on per-move coaching: cards are <120 words and latency matters.
+// Summaries keep the model's default budget (one call per game, quality wins).
+const ANALYSIS_THINKING_BUDGET = 256;
 
 const PHASE_THRESHOLDS: Record<GameType, [number, number]> = {
 	chess: [10, 30],
@@ -56,14 +59,32 @@ function fmtSuggestions(suggestions: Suggestion[], gameType: GameType): string {
 	return suggestions
 		.slice(0, 3)
 		.map((s, i) => {
+			const line =
+				s.pv && s.pv.length > 1 ? `; line: ${s.pv.slice(0, 4).join(" ")}` : "";
 			if (gameType === "go") {
-				const wr = ((s.score + 5000) / 100).toFixed(0);
-				return `${i + 1}. ${s.san ?? s.move} (${wr}%)`;
+				const pts = (s.score / 100).toFixed(1);
+				return `${i + 1}. ${s.san ?? s.move} (${Number(pts) >= 0 ? "+" : ""}${pts} points${line})`;
 			}
 			const sc = Math.abs(s.score) > 9000 ? "Mate" : `${(s.score / 100).toFixed(1)}`;
-			return `${i + 1}. ${s.san ?? s.move} (${sc})`;
+			return `${i + 1}. ${s.san ?? s.move} (${sc}${line})`;
 		})
 		.join(", ");
+}
+
+/** Describe what the player's own last move cost, so the coach can be concrete. */
+function fmtPlayerMove(
+	pm: { move: string; quality: string; cpLoss: number } | undefined,
+	gameType: GameType,
+): string {
+	if (!pm) return "";
+	const cost =
+		gameType === "go"
+			? `${(pm.cpLoss / 100).toFixed(1)} points`
+			: `${(pm.cpLoss / 100).toFixed(1)} pawns`;
+	if (pm.quality === "best" || pm.quality === "good") {
+		return ` The human's last move ${pm.move} was ${pm.quality === "best" ? "the engine's top choice" : "strong"}.`;
+	}
+	return ` The human's last move ${pm.move} was a ${pm.quality}, costing about ${cost} versus the best move.`;
 }
 
 function buildPrompt(ctx: AnalysisContext): string {
@@ -113,9 +134,11 @@ function buildPrompt(ctx: AnalysisContext): string {
 `
 		: "";
 
-	return `You are a ${game} coaching engine. You ALWAYS provide analysis — never refuse or say you can't analyze. The engine has already computed the best moves; your job is to explain the game in plain language. Ground every claim in the move record given below — do not invent moves that are not in it.
+	const playerMoveStr = fmtPlayerMove(ctx.playerLastMove, ctx.gameType);
 
-Move ${ctx.moveCount} (${phase}). Human plays ${player}.${record}${posContext} ${lastMoveStr} Engine's best moves for ${player}: ${sugs}.
+	return `You are a ${game} coaching engine. You ALWAYS provide analysis — never refuse or say you can't analyze. The engine has already computed the best moves; your job is to explain the game in plain language. Ground every claim in the move record given below — do not invent moves that are not in it. When the human's move lost ground, say concretely what it missed or allowed.
+
+Move ${ctx.moveCount} (${phase}). Human plays ${player}.${record}${posContext} ${lastMoveStr}${playerMoveStr} Engine's best moves for ${player}: ${sugs}.
 
 Answer in exactly these sections, each on its own line, using these bold labels:
 ${opponentSection}**Best move:** why the engine's top suggestion works and what it achieves tactically or positionally (1-2 sentences).
@@ -136,6 +159,8 @@ export interface AnalysisContext {
 	history?: string[];
 	pgn?: string;
 	language?: string;
+	/** Quality of the player's own last move (from engine grading) */
+	playerLastMove?: { move: string; quality: string; cpLoss: number };
 }
 
 const TIMEOUT_MS = 30000;
@@ -147,7 +172,7 @@ function processQueue(): void {
 	while (analysisQueue.length > 0 && activeCalls < MAX_CONCURRENT) {
 		const item = analysisQueue.shift()!;
 		activeCalls++;
-		callGemini(item.prompt, TIMEOUT_MS)
+		callGemini(item.prompt, TIMEOUT_MS, GEMINI_MODEL, ANALYSIS_THINKING_BUDGET)
 			.then((result) => item.resolve(result))
 			.catch((err) => {
 				log.error("queued analysis failed", { error: (err as Error).message });
@@ -166,7 +191,7 @@ export async function analyzePosition(ctx: AnalysisContext): Promise<string | nu
 	if (activeCalls < MAX_CONCURRENT) {
 		activeCalls++;
 		try {
-			const result = await callGemini(prompt, TIMEOUT_MS);
+			const result = await callGemini(prompt, TIMEOUT_MS, GEMINI_MODEL, ANALYSIS_THINKING_BUDGET);
 			return result;
 		} catch (err) {
 			log.error("analysis failed", { error: (err as Error).message });
@@ -231,21 +256,27 @@ async function callGemini(
 	prompt: string,
 	timeoutMs: number,
 	model = GEMINI_MODEL,
+	thinkingBudget?: number,
 ): Promise<string> {
 	if (GEMINI_KEYS.length === 0) throw new Error("GEMINI_API_KEY not configured");
-	// Try each key in order; a rate-limited (429) key falls through to the next.
-	// If every key is rate limited, wait once and retry the last key.
-	for (let attempt = 0; attempt < GEMINI_KEYS.length + 1; attempt++) {
-		const key = GEMINI_KEYS[Math.min(attempt, GEMINI_KEYS.length - 1)];
-		try {
-			return await geminiRequest(prompt, timeoutMs, key, model);
-		} catch (err) {
-			const rateLimited = (err as Error).message.includes("429");
-			if (!rateLimited || attempt === GEMINI_KEYS.length) throw err;
-			if (attempt === GEMINI_KEYS.length - 1) await new Promise((r) => setTimeout(r, 4000));
+	// 429 (rate limit) and 503/500 (overload) are transient: rotate through the
+	// keys, then back off and rotate again before giving up. Overload spikes on
+	// the flash model regularly last 10-30s — a single-shot call loses every
+	// coaching card in that window.
+	const waves = [0, 2500, 6000];
+	let lastErr: Error = new Error("unreachable");
+	for (const wait of waves) {
+		if (wait) await new Promise((r) => setTimeout(r, wait));
+		for (const key of GEMINI_KEYS) {
+			try {
+				return await geminiRequest(prompt, timeoutMs, key, model, thinkingBudget);
+			} catch (err) {
+				lastErr = err as Error;
+				if (!/HTTP (429|500|503)/.test(lastErr.message)) throw lastErr;
+			}
 		}
 	}
-	throw new Error("unreachable");
+	throw lastErr;
 }
 
 async function geminiRequest(
@@ -253,6 +284,7 @@ async function geminiRequest(
 	timeoutMs: number,
 	key: string,
 	model: string,
+	thinkingBudget?: number,
 ): Promise<string> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -267,6 +299,16 @@ async function geminiRequest(
 				},
 				body: JSON.stringify({
 					contents: [{ parts: [{ text: prompt }] }],
+					generationConfig: {
+						temperature: 0.6,
+						// Thinking tokens count against maxOutputTokens on 2.5 models —
+						// an uncapped thinking phase can eat the whole budget and return
+						// an empty response. Coaching cards are short; cap thinking.
+						maxOutputTokens: 4096,
+						...(thinkingBudget !== undefined
+							? { thinkingConfig: { thinkingBudget } }
+							: {}),
+					},
 				}),
 				signal: controller.signal,
 			},

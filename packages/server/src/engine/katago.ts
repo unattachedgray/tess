@@ -3,6 +3,12 @@ import { createLogger } from "../logger.js";
 
 const log = createLogger("katago");
 
+// Idle auto-unload: KataGo holds ~700MB GPU + significant RAM even when no Go
+// game is running. Unload after this long unused; the next analyze() lazily
+// re-spawns it (costs one model load, ~5-15s on GPU).
+const IDLE_UNLOAD_MS = Number(process.env.KATAGO_IDLE_UNLOAD_MS ?? 5 * 60_000);
+const IDLE_CHECK_MS = Math.max(5_000, Math.min(60_000, IDLE_UNLOAD_MS / 3));
+
 export interface KataGoMoveInfo {
 	move: string;
 	visits: number;
@@ -25,6 +31,9 @@ export class KataGoAdapter {
 	private nextId = 1;
 	private initPromise: Promise<void> | null = null;
 	private restarting = false;
+	private lastUsedAt = Date.now();
+	private idleTimer: ReturnType<typeof setInterval> | null = null;
+	private unloading = false;
 
 	constructor(
 		private readonly enginePath: string,
@@ -40,6 +49,7 @@ export class KataGoAdapter {
 	}
 
 	private async doInit(): Promise<void> {
+		this.lastUsedAt = Date.now(); // spawn counts as use — no idle-unload mid-warmup
 		const overrideStr = Object.entries(this.overrides)
 			.map(([k, v]) => `${k}=${v}`)
 			.join(",");
@@ -58,6 +68,12 @@ export class KataGoAdapter {
 			});
 
 			this.process.on("exit", (code) => {
+				if (this.unloading) {
+					// intentional idle unload — do NOT auto-restart; next analyze() re-inits
+					this.unloading = false;
+					log.info("KataGo unloaded (idle)");
+					return;
+				}
 				log.warn("KataGo exited", { code });
 				this.rejectAllPending(new Error(`KataGo exited with code ${code}`));
 				if (!this.restarting) this.scheduleRestart();
@@ -85,6 +101,8 @@ export class KataGoAdapter {
 					});
 					resolve(); // Non-fatal
 				}
+				this.lastUsedAt = Date.now();
+				this.startIdleWatch();
 			}, 500);
 		});
 	}
@@ -101,7 +119,11 @@ export class KataGoAdapter {
 		topN: number,
 		boardSize = 19,
 	): Promise<KataGoMoveInfo[]> {
+		// lazy re-init after an idle unload
+		this.lastUsedAt = Date.now();
+		if (!this.process) await this.init();
 		if (!this.process) throw new Error("KataGo not initialized");
+		this.lastUsedAt = Date.now();
 
 		const id = `q${this.nextId++}`;
 		const query = {
@@ -212,6 +234,32 @@ export class KataGoAdapter {
 		this.pending.clear();
 	}
 
+	private startIdleWatch(): void {
+		if (this.idleTimer) return;
+		this.idleTimer = setInterval(() => this.maybeUnloadIdle(), IDLE_CHECK_MS);
+		this.idleTimer.unref?.();
+	}
+
+	private maybeUnloadIdle(): void {
+		if (!this.process || this.unloading || this.pending.size > 0) return;
+		if (Date.now() - this.lastUsedAt < IDLE_UNLOAD_MS) return;
+		log.info("KataGo idle — unloading to free GPU/RAM", {
+			idleMs: Date.now() - this.lastUsedAt,
+		});
+		this.unloading = true;
+		this.initPromise = null; // next analyze() re-inits
+		const proc = this.process;
+		this.process = null;
+		try {
+			proc.stdin!.write(`${JSON.stringify({ id: "shutdown", action: "terminate" })}\n`);
+		} catch {}
+		setTimeout(() => {
+			try {
+				proc.kill();
+			} catch {}
+		}, 1000);
+	}
+
 	private scheduleRestart(): void {
 		if (this.restarting) return;
 		this.restarting = true;
@@ -227,6 +275,7 @@ export class KataGoAdapter {
 	}
 
 	shutdown(): void {
+		this.unloading = true; // intentional — the exit handler must not restart
 		this.rejectAllPending(new Error("KataGo shutting down"));
 		if (this.process) {
 			try {

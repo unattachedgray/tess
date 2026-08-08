@@ -70,4 +70,23 @@ describe("JanggiGame", () => {
 		expect(game.moveCount).toBe(0);
 		expect(game.turn).toBe("white");
 	});
+
+	it("is not in check at the start", () => {
+		const game = new JanggiGame();
+		expect(game.isCheck).toBe(false);
+		expect(game.getCheckSquare()).toBeNull();
+	});
+
+	it("detects check and reports the general's square", () => {
+		// Red chariot on e5 attacks the blue general on e2 down the open e-file
+		const game = new JanggiGame("9/4k4/9/9/9/4r4/9/9/4K4/9 w - - 0 1");
+		expect(game.isCheck).toBe(true);
+		expect(game.getCheckSquare()).toBe("e2");
+	});
+
+	it("palace diagonal move still works after path-helper dedupe", () => {
+		// Blue chariot in palace corner d1 can slide diagonally to e2
+		const game = new JanggiGame("9/4k4/9/9/9/9/9/3K5/9/3R5 w - - 0 1");
+		expect(game.moveUci("d1e2")).not.toBeNull();
+	});
 });

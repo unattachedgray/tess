@@ -2,10 +2,14 @@ import {
 	type DifficultyId,
 	type GameType,
 	type IGame,
+	type MoveQuality,
 	type Suggestion,
 	ChessAdapter,
+	GO_KOMI,
 	GoAdapter,
 	JanggiAdapter,
+	accuracyFromMoves,
+	classifyMoveQuality,
 	detectOpening,
 	gameAccuracy,
 	getSkillLevel,
@@ -29,6 +33,19 @@ const AI_DELAY: Record<DifficultyId, [number, number]> = {
 
 function randomDelay(range: [number, number]): number {
 	return range[0] + Math.random() * (range[1] - range[0]);
+}
+
+/** Coarse board-area i18n key for a Go coordinate (level-1 hints). */
+function goAreaKey(coord: string, size: number): string {
+	const GO_COLS = "ABCDEFGHJKLMNOPQRST";
+	const x = GO_COLS.indexOf(coord[0]?.toUpperCase() ?? "");
+	const row = Number.parseInt(coord.slice(1), 10);
+	if (x < 0 || Number.isNaN(row)) return "hint.area.center";
+	const third = (v: number) => (v < size / 3 ? 0 : v < (2 * size) / 3 ? 1 : 2);
+	const horiz = ["Left", "", "Right"][third(x)];
+	const vert = ["bottom", "middle", "top"][third(row - 1)];
+	const key = `${vert}${horiz}`;
+	return `hint.area.${key === "middle" ? "center" : key}`;
 }
 
 /** Create an IGame instance for the given game type. */
@@ -55,12 +72,22 @@ export class GameRoom {
 	private moveInProgress = false;
 	private destroyed = false;
 	private lastSuggestions: Suggestion[] = [];
+	/** moveCount the lastSuggestions were computed for — guards against stale baselines */
+	private suggestionsMoveCount = -1;
 	private analysisInFlight = false;
 	private analysisPending = false;
 	private analyzedMoves = new Set<number>(); // move numbers already coached
 	private backfillTimer: ReturnType<typeof setTimeout> | null = null;
-	// Incremental eval accumulation from suggestions (like MP's positionEvals)
-	private positionEvals: number[] = [0]; // evals[0] = starting position = 0
+	// Per-player-move eval records (mover's POV) for incremental accuracy.
+	// Unlike a raw eval array this makes no ply-parity assumption, so it stays
+	// correct even though the engine only scores positions on the player's turns.
+	private playerMoveEvals: { evalBefore: number; cpLoss: number }[] = [];
+	/** Player move awaiting quality grading until the next engine pass */
+	private pendingQuality: { move: string; preScore: number } | null = null;
+	/** Most recent graded player move — feeds the coaching prompt */
+	private lastQuality: { move: string; quality: MoveQuality; cpLoss: number } | null = null;
+	private overrideResult: { winner: "white" | "black" | "draw"; reason: string; margin?: number } | null = null;
+	private hintState = { moveCount: -1, level: 0 };
 	coachingEnabled = true;
 	suggestionCount = 3;
 	suggestionStrength: "fast" | "balanced" | "deep" = "deep";
@@ -133,6 +160,7 @@ export class GameRoom {
 			moveHistory,
 			capturedPieces: snap.captured,
 			isCheck: !!(extra.isCheck),
+			...(extra.checkSquare ? { checkSquare: extra.checkSquare } : {}),
 			isGameOver: this.game.isGameOver,
 			result: this.game.getResult() ?? undefined,
 			difficulty: this.difficulty,
@@ -164,6 +192,7 @@ export class GameRoom {
 			legalMoves: snap.legalMoves,
 			capturedPieces: snap.captured,
 			isCheck: !!(extra.isCheck),
+			...(extra.checkSquare ? { checkSquare: extra.checkSquare } : {}),
 			isGameOver: this.game.isGameOver,
 			result: this.game.getResult() ?? undefined,
 			// Game-specific
@@ -180,15 +209,19 @@ export class GameRoom {
 
 	async playMove(move: string): Promise<{ success: boolean; error?: string }> {
 		if (this.moveInProgress) return { success: false, error: "Move in progress" };
-		if (this.game.isGameOver) return { success: false, error: "Game is over" };
+		if (this.game.isGameOver || this.overrideResult) return { success: false, error: "Game is over" };
 		if (this.game.turn !== this.playerColor) return { success: false, error: "Not your turn" };
 
 		this.moveInProgress = true;
 		try {
+			// Baseline for grading: suggestions computed for THIS position, before the move
+			const baseline = this.suggestionsMoveCount === this.game.moveCount ? this.lastSuggestions : [];
+
 			const moveResult = this.executeMove(move);
 			if (!moveResult) return { success: false, error: "Illegal move" };
 
 			this.emit({ type: "MOVE", move: moveResult, ...this.buildMovePayload() });
+			this.gradePlayerMove(move, baseline);
 
 			if (!this.game.isGameOver) {
 				try {
@@ -200,19 +233,77 @@ export class GameRoom {
 			}
 
 			if (!this.game.isGameOver) {
-				this.sendSuggestionsAndAnalysis(move);
+				this.sendSuggestionsAndAnalysis();
 			} else {
-				// Emit explicit GAME_OVER so the client properly transitions
-				const result = this.game.getResult();
-				if (result) {
-					this.emit({ type: "GAME_OVER", result });
-				}
-				this.emitSkillEvaluation();
+				await this.finalizeGameOver();
 			}
 
 			return { success: true };
 		} finally {
 			this.moveInProgress = false;
+		}
+	}
+
+	/**
+	 * Grade the player's move against the engine's pre-move suggestions.
+	 * If the move is in the list, its cp-loss is known immediately. Otherwise
+	 * grading is deferred: the next engine pass (after the AI reply) scores the
+	 * player's next position, and the round-trip eval drop approximates cp-loss.
+	 */
+	private gradePlayerMove(move: string, baseline: Suggestion[]): void {
+		if (baseline.length === 0) return;
+		const normalize = (m: string) => m.toLowerCase().replace(/\s/g, "");
+		const best = baseline[0].score;
+		const match = baseline.find((s) => normalize(s.move) === normalize(move));
+		if (match) {
+			this.finishQuality(move, best, Math.max(0, best - match.score));
+		} else {
+			this.pendingQuality = { move, preScore: best };
+		}
+	}
+
+	private finishQuality(move: string, evalBefore: number, cpLoss: number): void {
+		const quality = classifyMoveQuality(cpLoss);
+		this.lastQuality = { move, quality, cpLoss };
+		this.playerMoveEvals.push({ evalBefore, cpLoss });
+		this.emit({ type: "MOVE_QUALITY", move, quality });
+	}
+
+	/** Emit GAME_OVER (scoring drawn Go double-passes for real) + evaluation. */
+	private async finalizeGameOver(): Promise<void> {
+		let result = this.game.getResult();
+		if (result && this.gameType === "go" && result.reason === "double pass") {
+			result = await this.scoreGoGame();
+			this.overrideResult = result; // summary + DB save use the scored result
+		}
+		if (result) {
+			this.emit({ type: "GAME_OVER", result });
+		}
+		this.emitSkillEvaluation();
+	}
+
+	/** Score a finished Go game: KataGo's scoreLead (komi-aware), falling back to naive area count. */
+	private async scoreGoGame(): Promise<{
+		winner: "white" | "black" | "draw";
+		reason: string;
+		margin?: number;
+	}> {
+		try {
+			// evaluate() returns scoreLead*100 from the side-to-move's perspective
+			const score = await this.engine.evaluate(this.game);
+			const lead = (this.game.turn === "black" ? score : -score) / 100; // black's POV, points
+			if (Math.abs(lead) < 0.25) return { winner: "draw", reason: "score", margin: 0 };
+			return {
+				winner: lead > 0 ? "black" : "white",
+				reason: "score",
+				margin: Math.round(Math.abs(lead) * 2) / 2,
+			};
+		} catch (err) {
+			log.warn("KataGo scoring failed, using naive count", { error: (err as Error).message });
+			const inner = (this.game as { inner?: { scoreWithKomi?: (k: number) => { winner: "white" | "black" | "draw"; margin: number } } }).inner;
+			const fallback = inner?.scoreWithKomi?.(GO_KOMI);
+			if (!fallback) return { winner: "draw", reason: "double pass" };
+			return { winner: fallback.winner, reason: "score", margin: fallback.margin };
 		}
 	}
 
@@ -240,10 +331,18 @@ export class GameRoom {
 				new Promise((r) => setTimeout(r, delay)),
 			]);
 
-			const moveResult = this.executeMove(aiMoveStr);
+			let moveResult = this.executeMove(aiMoveStr);
 			if (!moveResult) {
-				log.error("AI produced illegal move", { move: aiMoveStr, gameType: this.gameType });
-				throw new Error(`AI illegal move: ${aiMoveStr}`);
+				// Never leave the game stuck on the AI's turn: fall back to any
+				// legal move (Go: pass is always legal)
+				log.error("AI produced illegal move, using fallback", {
+					move: aiMoveStr,
+					gameType: this.gameType,
+				});
+				const fallback =
+					this.gameType === "go" ? "PASS" : this.firstLegalMove();
+				moveResult = fallback ? this.executeMove(fallback) : null;
+				if (!moveResult) throw new Error(`AI illegal move: ${aiMoveStr}`);
 			}
 
 			this.emit({ type: "MOVE", move: moveResult, ...this.buildMovePayload() });
@@ -253,18 +352,21 @@ export class GameRoom {
 		}
 	}
 
+	private firstLegalMove(): string | null {
+		const legal = this.game.getLegalMoves();
+		for (const [from, tos] of Object.entries(legal)) {
+			if (tos.length > 0) return `${from}${tos[0]}`;
+		}
+		return null;
+	}
+
 	// --- Suggestions & Analysis ---
 
-	private sendSuggestionsAndAnalysis(playerMove: string): void {
+	private sendSuggestionsAndAnalysis(): void {
 		this.getSuggestions(this.suggestionCount)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
-				this.lastSuggestions = sugPayload.suggestions;
-
-				if (this.lastSuggestions.length > 0) {
-					const quality = this.assessMoveQuality(playerMove);
-					this.emit({ type: "MOVE_QUALITY", move: playerMove, quality });
-				}
+				this.resolvePendingQuality();
 				if (this.coachingEnabled) {
 					this.scheduleAnalysis();
 				}
@@ -273,6 +375,24 @@ export class GameRoom {
 				log.error("suggestions failed", { error: (err as Error).message });
 				this.emit({ type: "SUGGESTIONS", suggestions: [] });
 			});
+	}
+
+	/**
+	 * Finish grading a player move that wasn't in the suggestion list.
+	 * lastSuggestions now scores the player's NEXT position, so the eval drop
+	 * across the round (player move + AI reply) approximates the move's cp-loss.
+	 * The AI can only give eval back, never take extra, so this under-penalizes
+	 * slightly rather than inventing losses.
+	 */
+	private resolvePendingQuality(): void {
+		if (!this.pendingQuality || this.lastSuggestions.length === 0) {
+			this.pendingQuality = null;
+			return;
+		}
+		const { move, preScore } = this.pendingQuality;
+		this.pendingQuality = null;
+		const newScore = this.lastSuggestions[0].score; // player's POV again
+		this.finishQuality(move, preScore, Math.max(0, preScore - newScore));
 	}
 
 	/** Throttle coaching: analyze latest move first, then backfill
@@ -291,10 +411,8 @@ export class GameRoom {
 
 		this.analysisInFlight = true;
 		this.analysisPending = false;
-		const moveNum = this.game.getSnapshot().moveHistory.length;
 
 		this.requestAnalysis().finally(() => {
-			this.analyzedMoves.add(moveNum);
 			this.analysisInFlight = false;
 
 			if (this.analysisPending && !this.game.isGameOver) {
@@ -302,7 +420,7 @@ export class GameRoom {
 				this.analysisPending = false;
 				this.scheduleAnalysis();
 			} else if (!this.game.isGameOver) {
-				// Player is idle — schedule backfill for missed moves after a delay
+				// Player is idle — schedule backfill for missed (or failed) moves
 				this.backfillTimer = setTimeout(() => this.backfillAnalysis(), 5000);
 			}
 		});
@@ -339,9 +457,11 @@ export class GameRoom {
 
 		this.analysisInFlight = true;
 		const moveIdx = targetMove;
-		this.requestAnalysis().finally(() => {
-			this.analyzedMoves.add(moveIdx);
-			this.analyzedMoves.add(this.game.getSnapshot().moveHistory.length);
+		this.requestAnalysis().then((delivered) => {
+			// The delivered card covers the live position, which supersedes the
+			// older target. On failure leave both unmarked so we retry later.
+			if (delivered) this.analyzedMoves.add(moveIdx);
+		}).finally(() => {
 			this.analysisInFlight = false;
 
 			if (this.analysisPending) {
@@ -355,25 +475,14 @@ export class GameRoom {
 		});
 	}
 
-	private assessMoveQuality(
-		userMove: string,
-	): "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder" {
-		if (this.lastSuggestions.length === 0) return "ok";
-		const normalize = (m: string) => m.toLowerCase().replace(/\s/g, "");
-		const normalizedUser = normalize(userMove);
-		const bestMove = normalize(this.lastSuggestions[0].move);
-		if (normalizedUser === bestMove) return "best";
-		if (this.lastSuggestions.some((s) => normalize(s.move) === normalizedUser)) return "good";
-		return "ok";
-	}
-
-	private async requestAnalysis(): Promise<void> {
+	/** Returns true when a card was emitted (or the position was already covered). */
+	private async requestAnalysis(): Promise<boolean> {
 		const snap = this.game.getSnapshot();
 		const extra = snap.extra as Record<string, unknown>;
 		const history = snap.moveHistory;
 		// Queued/backfill runs can land on a position that was already covered
 		// when moves outpace the LLM — emitting again would duplicate the card.
-		if (this.analyzedMoves.has(history.length)) return;
+		if (this.analyzedMoves.has(history.length)) return true;
 		this.analyzedMoves.add(history.length);
 		const lastEntry = history.length > 0 ? history[history.length - 1] : null;
 
@@ -388,22 +497,32 @@ export class GameRoom {
 			history: history.map((m) => m.display),
 			pgn: extra.pgn as string | undefined,
 			language: this.language,
+			// What the player's own last move cost — lets the coach explain
+			// mistakes concretely instead of guessing
+			playerLastMove: this.lastQuality ?? undefined,
 		};
 
 		const moveNum = history.length;
 		const text = await analyzePosition(ctx);
 		if (text) {
 			this.emit({ type: "ANALYSIS", text, moveNumber: moveNum, gameId: this.id });
+			return true;
 		}
+		// Transient failure (Gemini overload etc.) — un-mark so a later
+		// scheduleAnalysis/backfill pass retries instead of dropping the card.
+		this.analyzedMoves.delete(moveNum);
+		return false;
 	}
 
 	async getSuggestions(topN = 3) {
-		if (topN <= 0) return { type: "SUGGESTIONS" as const, suggestions: [] };
+		// Always fetch at least the best move: it is the baseline for move
+		// quality, accuracy, and hints even when the player hides suggestions.
+		const fetchN = Math.max(1, topN);
 
 		try {
 			const suggestions = await this.engine.getSuggestions(
 				this.game,
-				topN,
+				fetchN,
 				this.suggestionStrength,
 			);
 
@@ -418,35 +537,53 @@ export class GameRoom {
 			}
 
 			this.lastSuggestions = suggestions;
+			this.suggestionsMoveCount = this.game.moveCount;
 
-			// Record eval for incremental accuracy (avoid expensive post-game replay)
-			if (suggestions.length > 0) {
-				const score = suggestions[0].score;
-				// Convert to white's perspective
-				const scoreWhitePov = this.game.turn === "white" ? score : -score;
-				this.positionEvals.push(scoreWhitePov);
-			}
-
-			return { type: "SUGGESTIONS" as const, suggestions };
+			return { type: "SUGGESTIONS" as const, suggestions: suggestions.slice(0, topN) };
 		} catch (err) {
 			log.error("suggestions failed", { error: (err as Error).message });
 			return { type: "SUGGESTIONS" as const, suggestions: [] };
 		}
 	}
 
+	/**
+	 * Progressive hint from the engine's best move.
+	 * First request on a position: level 1 (where to look — origin square, or
+	 * board area for Go). Second request: level 2 (the full move).
+	 */
 	async getHint() {
-		if (this.lastSuggestions.length === 0) {
-			const sug = await this.getSuggestions(1);
-			this.lastSuggestions = sug.suggestions;
+		if (this.game.isGameOver || this.overrideResult) return null;
+		const moveCount = this.game.moveCount;
+		if (this.hintState.moveCount === moveCount) {
+			this.hintState.level = Math.min(2, this.hintState.level + 1);
+		} else {
+			this.hintState = { moveCount, level: 1 };
+		}
+
+		if (this.suggestionsMoveCount !== moveCount || this.lastSuggestions.length === 0) {
+			await this.getSuggestions(this.suggestionCount);
 		}
 		if (this.lastSuggestions.length === 0) return null;
-		const bestMove = this.lastSuggestions[0].move;
+
+		const best = this.lastSuggestions[0];
+		const level = this.hintState.level;
+
+		if (this.gameType === "go") {
+			return {
+				type: "HINT" as const,
+				level,
+				...(level >= 2
+					? { move: best.move }
+					: { area: goAreaKey(best.move, this.game.getSnapshot().boardSize ?? 19) }),
+			};
+		}
+
+		const m = best.move.match(/^([a-i]\d{1,2})([a-i]\d{1,2})/);
 		return {
 			type: "HINT" as const,
-			level: 3,
-			piece: bestMove.slice(0, 2),
-			destination: bestMove.length >= 4 ? bestMove.slice(2, 4) : bestMove,
-			fullMove: bestMove,
+			level,
+			from: m?.[1] ?? best.move.slice(0, 2),
+			...(level >= 2 ? { to: m?.[2] ?? best.move.slice(2, 4), move: best.move, san: best.san } : {}),
 		};
 	}
 
@@ -464,35 +601,43 @@ export class GameRoom {
 
 		const skipMoves = this.autoplay ? 2 : 6;
 
-		// Use accumulated evals for chess/janggi (instant SKILL_EVAL).
-		// Go uses replay — winrate-to-centipawn conversion in suggestions
-		// produces unstable ACPL that doesn't match the calibrated Go scale.
-		let evals: number[];
-		if (this.gameType !== "go" && this.positionEvals.length > history.length * 0.3) {
-			evals = this.positionEvals;
-			log.info("using incremental evals", { collected: evals.length - 1, moves: history.length });
-		} else {
-			// Fallback: replay the game (expensive but accurate)
-			log.info("replaying game for evals", { collected: this.positionEvals.length - 1, moves: history.length });
-			const replay = createGame(this.gameType, snap.boardSize);
-			evals = [0];
-			for (const move of history) {
-				replay.move(move.notation);
-				try {
-					const score = await this.engine.evaluate(replay);
-					evals.push(score);
-				} catch {
-					evals.push(evals[evals.length - 1] ?? 0);
-				}
-			}
-		}
-
 		const flatHistory = history.map((m) => ({
 			san: m.display,
 			uci: m.notation,
 			fen: m.position,
 			moveNumber: m.moveNumber,
 		}));
+
+		// Instant path: per-move cp-losses accumulated during play. These are
+		// sampled on the player's turns only, so no ply-parity assumption.
+		const playerPlies = Math.ceil(history.length / 2);
+		if (!this.autoplay && this.playerMoveEvals.length >= Math.max(4, playerPlies * 0.5)) {
+			log.info("using incremental move evals", {
+				collected: this.playerMoveEvals.length,
+				playerPlies,
+			});
+			const playerResult = accuracyFromMoves(this.playerMoveEvals, skipMoves);
+			await this.emitAndSummarize(playerResult, flatHistory);
+			return;
+		}
+
+		// Fallback: replay the game (expensive but accurate); needed for
+		// autoplay (both sides evaluated) and games with sparse coverage.
+		log.info("replaying game for evals", {
+			collected: this.playerMoveEvals.length,
+			moves: history.length,
+		});
+		const replay = createGame(this.gameType, snap.boardSize);
+		const evals: number[] = [0];
+		for (const move of history) {
+			replay.move(move.notation);
+			try {
+				const score = await this.engine.evaluate(replay);
+				evals.push(score);
+			} catch {
+				evals.push(evals[evals.length - 1] ?? 0);
+			}
+		}
 
 		const playerResult = gameAccuracy(evals, this.playerColor, skipMoves);
 		if (this.autoplay) {
@@ -540,7 +685,9 @@ export class GameRoom {
 		this.emit(evalPayload);
 
 		// Game result via IGame
-		const gameResult = this.game.getResult();
+		// overrideResult wins: it carries resignations and scored Go results
+		// that the raw game object doesn't know about
+		const gameResult = this.overrideResult ?? this.game.getResult();
 		const extra = this.game.getSnapshot().extra as Record<string, unknown>;
 
 		const summary = await generateGameSummary({
@@ -659,11 +806,7 @@ export class GameRoom {
 		this.autoplayRunning = false;
 
 		if (this.game.isGameOver) {
-			const result = this.game.getResult();
-			if (result) {
-				this.emit({ type: "GAME_OVER", result });
-			}
-			this.emitSkillEvaluation();
+			await this.finalizeGameOver();
 		}
 	}
 
@@ -677,14 +820,63 @@ export class GameRoom {
 	}
 
 	resign(color: "white" | "black") {
-		const winner = color === "white" ? "black" : "white";
+		const winner: "white" | "black" = color === "white" ? "black" : "white";
 		// Go-specific resignation handling
 		const inner = (this.game as any).inner;
 		if (inner?.resign) inner.resign(color);
+		this.overrideResult = { winner, reason: "resignation" };
+		// A resigned game still deserves its evaluation, summary, and save.
+		// The room stays alive (cleaned up on NEW_GAME/disconnect) so the
+		// SKILL_EVAL and GAME_SUMMARY emits can reach the client.
+		this.emitSkillEvaluation();
 		return {
 			type: "GAME_OVER" as const,
-			result: { winner: winner as "white" | "black", reason: "resignation" },
+			result: this.overrideResult,
 		};
+	}
+
+	/**
+	 * Take back the player's last move (and everything after it) by replaying
+	 * the record on a fresh game — works for all games through IGame, no
+	 * per-game undo support needed.
+	 */
+	undo(): { ok: boolean; error?: string } {
+		if (this.moveInProgress) return { ok: false, error: "Move in progress" };
+		if (this.overrideResult) return { ok: false, error: "Game is over" };
+
+		const snap = this.game.getSnapshot();
+		const history = snap.moveHistory;
+		const firstMover = this.gameType === "go" ? "black" : "white";
+		const other = firstMover === "white" ? "black" : "white";
+		let lastPlayerIdx = -1;
+		for (let i = history.length - 1; i >= 0; i--) {
+			if ((i % 2 === 0 ? firstMover : other) === this.playerColor) {
+				lastPlayerIdx = i;
+				break;
+			}
+		}
+		if (lastPlayerIdx < 0) return { ok: false, error: "Nothing to undo" };
+
+		const fresh = createGame(this.gameType, snap.boardSize);
+		for (const m of history.slice(0, lastPlayerIdx)) {
+			if (!fresh.move(m.notation)) return { ok: false, error: "Undo failed" };
+		}
+		this.game = fresh;
+
+		// Invalidate everything derived from the removed moves
+		this.lastSuggestions = [];
+		this.suggestionsMoveCount = -1;
+		this.pendingQuality = null;
+		this.lastQuality = null;
+		this.playerMoveEvals.pop();
+		this.hintState = { moveCount: -1, level: 0 };
+		for (const n of [...this.analyzedMoves]) {
+			if (n > lastPlayerIdx) this.analyzedMoves.delete(n);
+		}
+
+		this.emit(this.getState());
+		this.sendOpeningSuggestions();
+		return { ok: true };
 	}
 
 	async startIfAiFirst(): Promise<void> {
@@ -698,7 +890,6 @@ export class GameRoom {
 		this.getSuggestions(this.suggestionCount)
 			.then((sugPayload) => {
 				this.emit(sugPayload);
-				this.lastSuggestions = sugPayload.suggestions;
 				if (this.coachingEnabled) this.scheduleAnalysis();
 			})
 			.catch((err) => {

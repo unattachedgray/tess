@@ -12,6 +12,7 @@
 		isCheck = false,
 		turn,
 		arrows = [],
+		highlightSquares = [],
 		onMove,
 	}: {
 		fen: string;
@@ -21,6 +22,8 @@
 		isCheck: boolean;
 		turn: "white" | "black";
 		arrows?: [string, string][];
+		/** Squares to mark with a circle (hint origin etc.) */
+		highlightSquares?: string[];
 		onMove: (from: string, to: string) => void;
 	} = $props();
 
@@ -83,7 +86,10 @@
 			lastMove: lastMove as [Key, Key] | undefined,
 			check: isCheck,
 			drawable: {
-				autoShapes: toDrawShapes(arrows),
+				autoShapes: [
+					...toDrawShapes(arrows),
+					...highlightSquares.map((s) => ({ orig: s as Key, brush: "yellow" })),
+				],
 			},
 		});
 	});

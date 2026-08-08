@@ -7,7 +7,7 @@
  * New games should implement IGame directly instead of using adapters.
  */
 
-import type { IGame, MoveResult, PluginGameResult, GameSnapshot, GameDefinition } from "../game-interface.js";
+import type { IGame, MoveResult, PluginGameResult, GameSnapshot } from "../game-interface.js";
 import { GameRegistry } from "../game-interface.js";
 import { ChessGame } from "./chess.js";
 import { GoGame } from "./go.js";
@@ -94,7 +94,7 @@ export class GoAdapter implements IGame {
 
 	move(notation: string): MoveResult | null {
 		if (notation.toUpperCase() === "PASS") {
-			this.game.pass();
+			if (!this.game.pass()) return null;
 			return {
 				notation: "PASS",
 				display: "Pass",
@@ -200,17 +200,19 @@ export class JanggiAdapter implements IGame {
 			turn: this.game.turn,
 			legalMoves: this.game.getLegalMovesObject(),
 			moveHistory: history.map((m) => ({
-				notation: m.uci ?? `${(m as any).from}${(m as any).to}`,
-				display: m.san ?? m.uci ?? `${(m as any).from}${(m as any).to}`,
-				position: this.game.fen,
-				moveNumber: history.indexOf(m) + 1,
+				notation: m.uci,
+				display: m.san,
+				position: m.fen,
+				moveNumber: m.moveNumber,
 			})),
 			captured: {
-				white: (captured as any).white ?? (captured as any).blue ?? [],
-				black: (captured as any).black ?? (captured as any).red ?? [],
+				white: captured.blue,
+				black: captured.red,
 			},
 			extra: {
+				isCheck: this.game.isCheck,
 				isCheckmate: this.game.isCheckmate,
+				checkSquare: this.game.getCheckSquare(),
 			},
 		};
 	}

@@ -66,6 +66,25 @@ export class JanggiGame {
 		return this._isCheckmate;
 	}
 
+	/** Is the side to move currently in check? */
+	get isCheck(): boolean {
+		if (this._isGameOver) return this._isCheckmate;
+		return this.isKingInCheck(this._turn, this.fenToGrid());
+	}
+
+	/** Square of the side-to-move's general when in check, else null. Drives board highlight. */
+	getCheckSquare(): string | null {
+		const grid = this.fenToGrid();
+		if (!this.isKingInCheck(this._turn, grid)) return null;
+		const kingChar = this._turn === "w" ? "K" : "k";
+		for (let r = 0; r < 10; r++) {
+			for (let c = 0; c < 9; c++) {
+				if (grid[r][c] === kingChar) return this.indexToSquare(c, r);
+			}
+		}
+		return null;
+	}
+
 	// --- Move execution ---
 
 	move(from: string, to: string): { from: string; to: string } | null {
@@ -202,7 +221,7 @@ export class JanggiGame {
 			case "r": // Chariot — orthogonal any distance; diagonal in palace
 				if (dx === 0 || dy === 0) return this.isPathClear(c1, r1, c2, r2, grid);
 				if (this.inPalace(c1, r1) && this.inPalace(c2, r2) && dx === dy && dx <= 2) {
-					return this.isDiagonalClear(c1, r1, c2, r2, grid);
+					return this.isPathClear(c1, r1, c2, r2, grid);
 				}
 				return false;
 
@@ -300,24 +319,6 @@ export class JanggiGame {
 		return true;
 	}
 
-	private isDiagonalClear(
-		c1: number,
-		r1: number,
-		c2: number,
-		r2: number,
-		grid: string[][],
-	): boolean {
-		const sx = Math.sign(c2 - c1);
-		const sy = Math.sign(r2 - r1);
-		let cx = c1 + sx;
-		let cy = r1 + sy;
-		while (cx !== c2 || cy !== r2) {
-			if (grid[cy][cx] !== "1") return false;
-			cx += sx;
-			cy += sy;
-		}
-		return true;
-	}
 
 	private countObstacles(c1: number, r1: number, c2: number, r2: number, grid: string[][]): number {
 		const sx = Math.sign(c2 - c1);

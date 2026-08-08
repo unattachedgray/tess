@@ -20,6 +20,40 @@ export interface EvalClient {
 	language?: string;
 }
 
+/** Persist a finished MP game (PvP games were previously never saved). */
+function saveMpGame(
+	room: MultiplayerRoom,
+	moveCount: number,
+	accuracies?: { white: { accuracy: number; acpl: number }; black: { accuracy: number; acpl: number } },
+): void {
+	try {
+		const players = room.getPlayerInfo();
+		const result = room.getResult();
+		import("./db.js")
+			.then(({ saveGame }) =>
+				saveGame({
+					id: room.id,
+					gameType: room.gameType,
+					whiteUserId: players.white?.userId,
+					blackUserId: players.black?.userId,
+					difficulty: "pvp",
+					result: result.winner,
+					resultReason: result.reason,
+					moves: room.getMoveHistory(),
+					boardSize: room.gameType === "go" ? room.getBoardSize() : undefined,
+					accuracyWhite: accuracies ? Math.round(accuracies.white.accuracy) : undefined,
+					accuracyBlack: accuracies ? Math.round(accuracies.black.accuracy) : undefined,
+					acplWhite: accuracies?.white.acpl,
+					acplBlack: accuracies?.black.acpl,
+					moveCount,
+				}),
+			)
+			.catch((err) => log.error("failed to save MP game", { error: (err as Error).message }));
+	} catch (err) {
+		log.error("failed to save MP game", { error: (err as Error).message });
+	}
+}
+
 export async function evaluateMultiplayerGame(
 	room: MultiplayerRoom,
 	creatorClient: EvalClient,
@@ -30,7 +64,10 @@ export async function evaluateMultiplayerGame(
 ): Promise<void> {
 	const history = room.getMoveHistory();
 	const moveCount = room.gameType === "go" ? room.getGoMoves().length : history.length;
-	if (moveCount < 4) return;
+	if (moveCount < 4) {
+		saveMpGame(room, moveCount);
+		return;
+	}
 
 	const acceptorColor = creatorColor === "white" ? "black" : "white";
 	const evals = room.getPositionEvals();
@@ -114,6 +151,8 @@ export async function evaluateMultiplayerGame(
 		blackAcc: Math.round(blackResult.accuracy),
 		blackAcpl: blackResult.acpl,
 	});
+
+	saveMpGame(room, moveCount, { white: whiteResult, black: blackResult });
 
 	// Map to creator/acceptor
 	const creatorResult = creatorColor === "white" ? whiteResult : blackResult;

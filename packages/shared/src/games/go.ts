@@ -236,6 +236,18 @@ export class GoGame {
 		return { winner: "draw", reason: "double pass" };
 	}
 
+	/**
+	 * Area-score the current position with komi (added to White).
+	 * Naive counting — dead stones are not removed, so this is a fallback
+	 * for when engine scoring is unavailable.
+	 */
+	scoreWithKomi(komi: number): { winner: "black" | "white" | "draw"; margin: number } {
+		const score = this.getScore();
+		const diff = score.black - (score.white + komi);
+		if (diff === 0) return { winner: "draw", margin: 0 };
+		return { winner: diff > 0 ? "black" : "white", margin: Math.abs(diff) };
+	}
+
 	getMoveHistory(): { color: string; coord: string; moveNumber: number }[] {
 		return this._moveHistory.map((m, i) => ({
 			...m,
@@ -243,11 +255,14 @@ export class GoGame {
 		}));
 	}
 
-	/** Returns moves in KataGo analysis format: [["B", "Q16"], ["W", "D4"]] */
+	/** Returns moves in KataGo analysis format: [["B", "Q16"], ["W", "pass"]].
+	 *  Passes are included — KataGo infers whose turn it is from the last
+	 *  entry, so dropping passes would flip the side to move after a pass. */
 	getKataGoMoves(): [string, string][] {
-		return this._moveHistory
-			.filter((m) => m.coord !== "PASS")
-			.map((m) => [m.color === "black" ? "B" : "W", m.coord]);
+		return this._moveHistory.map((m) => [
+			m.color === "black" ? "B" : "W",
+			m.coord === "PASS" ? "pass" : m.coord,
+		]);
 	}
 
 	/** Count territory (empty points enclosed by a single color) + stones + prisoners */

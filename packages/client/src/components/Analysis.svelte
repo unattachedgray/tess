@@ -136,13 +136,20 @@
 		{/if}
 
 		{#if messages.length === 0 && !loading && !skillEval}
-			<p class="text-sm text-[var(--text-muted)] text-center py-4">
-				{#if appState.isGameOver}
-					{appState.isMultiplayer ? t("coach.goodGame", appState.language) : t("coach.makeMove", appState.language)}
-				{:else}
-					{t("coach.makeMove", appState.language)}
-				{/if}
-			</p>
+			<div class="h-full flex flex-col items-center justify-center gap-3 text-center px-4">
+				<div class="w-10 h-10 rounded-full flex items-center justify-center bg-[var(--bg-hover)] text-[var(--text-muted)]">
+					<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+						<path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H8.4L5 13.9V11H3.5A1.5 1.5 0 0 1 2 9.5v-6z"/>
+					</svg>
+				</div>
+				<p class="text-sm text-[var(--text-muted)] max-w-[26ch] leading-relaxed">
+					{#if appState.isGameOver && appState.isMultiplayer}
+						{t("coach.goodGame", appState.language)}
+					{:else}
+						{t("coach.makeMove", appState.language)}
+					{/if}
+				</p>
+			</div>
 		{/if}
 
 		{#each sorted as msg, i}

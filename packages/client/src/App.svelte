@@ -67,6 +67,7 @@
 		});
 		ws.on("GAME_OVER", (msg) => {
 			appState.isGameOver = true;
+			appState.drawOffered = false;
 			appState.result = msg.result;
 			appState.suggestionsStale = false;
 			appState.suggestions = [];
@@ -115,10 +116,10 @@
 				// 3. Engine says score=0 at high depth (drawn) and game is past opening
 				const drawnPosition = Math.abs(topScore) === 0 && (msg.suggestions[0].depth ?? 0) > 25 && appState.moveHistory.length > 40;
 				// 4. Hopelessly lost: resign like engines/pros do
-				//    Chess/Janggi: score < -500 for 3+ consecutive moves (clear material loss)
-				//    Go: score < -600 (~15% winrate) for 3+ moves past move 40
+				//    Chess/Janggi: score < -500 (5 pawns) for 3+ consecutive moves
+				//    Go: scores are scoreLead×100, so -800 = 8 points behind, for 5+ moves
 				if (!autoplayLossStreak) autoplayLossStreak = 0;
-				const resignThreshold = appState.gameType === 'go' ? -400 : -500;
+				const resignThreshold = appState.gameType === 'go' ? -800 : -500;
 				const resignMinMoves = appState.gameType === 'go' ? 60 : 20;
 				const resignStreakNeeded = appState.gameType === 'go' ? 5 : 3;
 				if (topScore < resignThreshold && appState.moveHistory.length > resignMinMoves) {
@@ -142,7 +143,7 @@
 				} else if (chosenMove.toUpperCase() === "PASS") {
 					if (appState.moveHistory.length < 100) {
 						console.log("[autoplay] skipping pass — game too early");
-					} else if (topScore < -200 && appState.isMultiplayer) {
+					} else if (topScore < -300 && appState.isMultiplayer) {
 						console.log("[autoplay] would pass while losing — resigning instead");
 						appState.autoplayActive = false;
 						ws.send({ type: "RESIGN" });
@@ -171,7 +172,7 @@
 			appState.addAnalysis(data.text, data.moveNumber);
 		});
 		ws.on("MOVE_QUALITY", (msg) => { appState.lastMoveQuality = (msg as any).quality; });
-		ws.on("HINT", (msg) => { appState.hintLevel = msg.level; });
+		ws.on("HINT", (msg) => { appState.hint = msg as any; });
 		ws.on("SKILL_EVAL", (msg) => {
 			appState.skillEval = msg as any;
 			appState.analysisLoading = false;
@@ -187,7 +188,18 @@
 			// Reconnect logic in ws.ts will auto-reload when connection comes back
 		});
 		ws.on("SPECTATOR_COUNT", (msg) => { appState.spectatorCount = (msg as any).count ?? 0; });
-		ws.on("ERROR", (msg) => { console.error("[game]", (msg as any).message); });
+		let errorToastTimer: ReturnType<typeof setTimeout> | null = null;
+		ws.on("ERROR", (msg) => {
+			const message = (msg as any).message ?? "Something went wrong";
+			console.error("[game]", message);
+			// Surface rejected actions (illegal ko/suicide moves etc.) instead of
+			// failing silently — autoplay noise is not worth toasting
+			if (!appState.autoplayActive) {
+				appState.errorToast = message;
+				if (errorToastTimer) clearTimeout(errorToastTimer);
+				errorToastTimer = setTimeout(() => { appState.errorToast = null; }, 3000);
+			}
+		});
 		// Multiplayer handlers
 		ws.on("LOBBY_STATE", (msg) => {
 			const data = msg as any;
@@ -239,9 +251,18 @@
 			appState.chatHistory = [...appState.chatHistory, { text: translated, from: data.from, isEmoji: false, ts: Date.now() }];
 			setTimeout(() => appState.lastMessageReceived = null, 4000);
 		});
+		ws.on("DRAW_OFFER", () => {
+			appState.drawOffered = true;
+		});
+		ws.on("DRAW_RESPONSE", (msg) => {
+			if (!(msg as any).accepted) {
+				appState.errorToast = t("game.drawDeclined", appState.language);
+				setTimeout(() => { appState.errorToast = null; }, 3000);
+			}
+		});
 		ws.on("OPPONENT_DISCONNECTED", () => {
 			appState.opponentDisconnected = true;
-			console.log("[MP] Opponent disconnected — waiting for reconnect");
+			console.log("[MP] Opponent disconnected, waiting for reconnect");
 		});
 		ws.on("OPPONENT_RECONNECTED", () => {
 			appState.opponentDisconnected = false;
@@ -286,8 +307,9 @@
 		if (!autoStarted) {
 			autoStarted = true;
 			setupHandlers();
-			// Identify ourselves FIRST so lobby shows real name
-			ws.send({ type: 'SET_NICKNAME', nickname: appState.nickname || appState.userId });
+			// Identify ourselves FIRST so lobby shows real name, and so the
+			// server can rejoin us to a live MP game after a reload
+			ws.send({ type: 'SET_NICKNAME', nickname: appState.nickname || appState.userId, sessionKey: appState.sessionKey });
 			ws.send({
 				type: "NEW_GAME",
 				gameType: appState.gameType,
@@ -381,7 +403,9 @@
 	}
 </script>
 
-<div class="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { showMenu = false; showDifficultyPicker = false; } }} />
+
+<div class="min-h-[100dvh] flex flex-col bg-[var(--bg-primary)] text-[var(--text-primary)]">
 	<header class="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] h-[44px] bg-[var(--bg-secondary)]">
 		<div class="flex items-center gap-2">
 			<button
@@ -396,17 +420,18 @@
 					{/if}
 				</svg>
 			</button>
+			<span class="text-[16px] font-[650] tracking-[-0.03em] text-[var(--accent)] select-none">Tess</span>
+			<span class="w-px h-3.5 bg-[var(--border)]"></span>
 			{#if appState.view === 'lobby'}
-				<span class="text-[13px] font-semibold text-[var(--text-primary)] uppercase tracking-wide">{tt('lobby.title')}</span>
+				<span class="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{tt('lobby.title')}</span>
 			{:else if appState.view === 'review'}
-				<span class="text-[13px] font-semibold text-[var(--text-primary)] uppercase tracking-wide">{tt('header.back')}</span>
+				<span class="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{tt('header.back')}</span>
 			{:else}
-				<span class="text-[13px] font-semibold text-[var(--text-primary)] uppercase tracking-wide">{showMenu ? tt('header.close') : gameName}</span>
+				<span class="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{showMenu ? tt('header.close') : gameName}</span>
 			{/if}
 		</div>
 
 		<div class="flex items-center gap-3">
-			<span class="text-[16px] font-[650] tracking-[-0.03em] text-[var(--accent)] select-none">Tess</span>
 			<span class="text-[11px] text-[var(--text-muted)]" title={appState.userId}>
 				{appState.nickname ? appState.nickname : appState.userId}
 			</span>
@@ -420,7 +445,7 @@
 					<button
 						class="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-[var(--warning)] text-[var(--bg-primary)] cursor-pointer"
 						onclick={leaveMultiplayer}
-						title={appState.opponentDisconnected ? "Opponent disconnected" : "Connection lost — reconnecting..."}
+						title={appState.opponentDisconnected ? "Opponent disconnected" : "Connection lost, reconnecting..."}
 					>Multiplayer</button>
 				{:else if appState.isGameOver}
 					<button
@@ -471,7 +496,7 @@
 					<button
 						class="text-[11px] font-medium px-2 py-0.5 rounded-md transition-all cursor-pointer {showDifficultyPicker
 							? 'bg-[var(--accent)] text-[var(--bg-primary)]'
-							: 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}"
+							: 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
 						onclick={() => showDifficultyPicker = !showDifficultyPicker}
 						title="Change AI opponent difficulty (starts new game)"
 					>
@@ -516,7 +541,7 @@
 
 	{#if serverRestarting}
 		<div class="flex items-center justify-center gap-2 px-4 py-1.5 bg-[var(--warning)] text-[var(--bg-primary)] text-xs font-semibold">
-			<span>Server restarting — will refresh automatically</span>
+			<span>Server restarting. This page will refresh automatically.</span>
 		</div>
 	{/if}
 
@@ -546,6 +571,10 @@
 		{:else}
 			<Game {ws} onRematch={rematch} onAutoplayRematch={autoplayRematch} />
 		{/if}
+		<!-- Rejected-action toast (illegal move, cannot pass, etc.) -->
+		{#if appState.errorToast}
+			<div class="error-toast">{appState.errorToast}</div>
+		{/if}
 		<!-- Challenge notification toast -->
 		{#if challengeNotification}
 			<div class="challenge-toast">
@@ -565,11 +594,114 @@
 		{/if}
 	</main>
 
-	<footer class="flex items-center justify-center gap-3 px-4 py-2 text-[10px] text-[var(--text-muted)] border-t border-[var(--border)]">
-		<span>Tess v1.0</span>
-		<span>·</span>
+	<footer class="flex items-center justify-center gap-5 px-4 py-2 text-[10px] text-[var(--text-muted)] border-t border-[var(--border)]">
+		<span class="font-[650] tracking-[-0.02em]">Tess</span>
 		<a href="https://github.com/unattachedgray/tess" target="_blank" rel="noopener" class="hover:text-[var(--accent)] transition-colors">GitHub</a>
-		<span>·</span>
 		<span>&copy; {new Date().getFullYear()} unattachedgray</span>
 	</footer>
 </div>
+
+<style>
+	.error-toast {
+		position: fixed;
+		bottom: 56px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 60;
+		padding: 8px 16px;
+		border-radius: 10px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--danger);
+		color: var(--danger);
+		font-size: 13px;
+		font-weight: 600;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		animation: toast-in-center 0.2s ease-out;
+		pointer-events: none;
+	}
+
+	.challenge-toast {
+		position: fixed;
+		bottom: 56px;
+		right: 16px;
+		z-index: 60;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 10px 14px;
+		border-radius: 12px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--accent);
+		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+		animation: toast-in 0.2s ease-out;
+	}
+
+	.toast-content {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13px;
+		color: var(--text-primary);
+	}
+
+	.toast-icon {
+		font-size: 16px;
+		opacity: 0.8;
+	}
+
+	.toast-time {
+		margin-left: 6px;
+		font-size: 11px;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+	}
+
+	.toast-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.toast-accept {
+		padding: 5px 14px;
+		border-radius: 8px;
+		border: none;
+		background: var(--accent);
+		color: var(--bg-primary);
+		font-size: 12px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.toast-accept:hover { background: var(--accent-hover); }
+
+	.toast-spectate {
+		padding: 5px 10px;
+		border-radius: 8px;
+		border: 1px solid var(--border);
+		background: transparent;
+		color: var(--text-secondary);
+		font-size: 12px;
+		cursor: pointer;
+	}
+	.toast-spectate:hover { color: var(--text-primary); }
+
+	.toast-dismiss {
+		padding: 2px 6px;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 12px;
+		cursor: pointer;
+	}
+	.toast-dismiss:hover { color: var(--text-primary); }
+
+	@keyframes toast-in {
+		from { opacity: 0; transform: translateY(8px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	@keyframes toast-in-center {
+		from { opacity: 0; transform: translate(-50%, 8px); }
+		to { opacity: 1; transform: translate(-50%, 0); }
+	}
+</style>

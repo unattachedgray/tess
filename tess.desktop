@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Tess
 Comment=Board Game Learning Platform
-Exec=bash -c 'cd /home/julian/dev/tess && ./tess.sh prod'
+Exec=xdg-open http://127.0.0.1:8460
 Type=Application
 Categories=Game;BoardGame;
-Terminal=true
+Terminal=false

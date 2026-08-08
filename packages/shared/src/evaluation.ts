@@ -73,6 +73,53 @@ export function gameAccuracy(
 	return { accuracy, acpl: Math.round(acpl), moveAccuracies };
 }
 
+export type MoveQuality = "best" | "good" | "ok" | "inaccuracy" | "mistake" | "blunder";
+
+/**
+ * Classify a move by its centipawn loss (Go: point-loss × 100).
+ * Single source of truth — used by both singleplayer and multiplayer paths.
+ */
+export function classifyMoveQuality(cpLoss: number): MoveQuality {
+	if (cpLoss <= 10) return "best";
+	if (cpLoss <= 25) return "good";
+	if (cpLoss <= 50) return "ok";
+	if (cpLoss <= 100) return "inaccuracy";
+	if (cpLoss <= 200) return "mistake";
+	return "blunder";
+}
+
+/**
+ * Accuracy/ACPL from per-move records of the PLAYER's moves only.
+ * Each record carries the eval before the move and the centipawn loss,
+ * both from the mover's perspective. Unlike gameAccuracy() this makes
+ * no assumption about ply parity, so it works when evals are only
+ * sampled on the player's turns (the singleplayer flow).
+ */
+export function accuracyFromMoves(
+	moves: { evalBefore: number; cpLoss: number }[],
+	skipOpeningMoves = 6,
+): { accuracy: number; acpl: number; moveAccuracies: number[] } {
+	const considered = moves.slice(skipOpeningMoves);
+	const moveAccuracies = considered.map((m) =>
+		moveAccuracy(winPercent(m.evalBefore), winPercent(m.evalBefore - m.cpLoss)),
+	);
+	if (moveAccuracies.length === 0) return { accuracy: 0, acpl: 0, moveAccuracies: [] };
+
+	const harmonicSum = moveAccuracies.reduce((sum, a) => sum + 1 / Math.max(a, 0.1), 0);
+	const harmonicMean = moveAccuracies.length / harmonicSum;
+	const arithmeticMean = moveAccuracies.reduce((a, b) => a + b, 0) / moveAccuracies.length;
+
+	const acpl = considered.reduce((sum, m) => sum + Math.max(0, m.cpLoss), 0) / considered.length;
+	return {
+		accuracy: (harmonicMean + arithmeticMean) / 2,
+		acpl: Math.round(acpl),
+		moveAccuracies,
+	};
+}
+
+/** Standard komi for Go (Chinese rules) — single source for engine + scoring. */
+export const GO_KOMI = 7.5;
+
 export interface SkillLevel {
 	label: string;
 	rating: string;

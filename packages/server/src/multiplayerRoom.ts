@@ -4,7 +4,7 @@
  * Separate from GameRoom (which handles singleplayer vs AI).
  * Reuses the same shared game engines (ChessGame, GoGame, JanggiGame).
  */
-import { ChessGame, GoGame, JanggiGame, PRESET_EMOJIS, PRESET_MESSAGES } from "@tess/shared";
+import { ChessGame, GO_KOMI, GoGame, JanggiGame, PRESET_EMOJIS, PRESET_MESSAGES } from "@tess/shared";
 import { gameAccuracy, getSkillLevel } from "@tess/shared";
 import type { GameType, TimeControl } from "@tess/shared";
 import { FischerClock, type ClockState } from "./clock.js";
@@ -35,6 +35,7 @@ export class MultiplayerRoom {
 	private spectators = new Set<MpClient>();
 	private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private pendingDraw: "white" | "black" | null = null;
+	private finalResult: { winner: "white" | "black" | "draw"; reason: string } | null = null;
 	status: RoomStatus = "waiting";
 	private onGameEndCallback: ((room: MultiplayerRoom) => void) | null = null;
 	private startMetadata: Record<string, unknown> = {};
@@ -42,6 +43,17 @@ export class MultiplayerRoom {
 	// Incremental eval accumulation (scores from white's perspective)
 	private positionEvals: number[] = [0]; // evals[0] = starting position = 0
 	private lastPreMoveScore = 0; // score before the most recent move
+	// Both players request analysis each ply — only the first requester per
+	// move may record an eval and broadcast MOVE_QUALITY, or the eval array
+	// gets duplicate entries and quality flashes fire twice.
+	private lastClaimedEvalMove = 0;
+
+	/** Returns true exactly once per move number — the caller owns recording. */
+	claimEvalForMove(moveCount: number): boolean {
+		if (moveCount <= this.lastClaimedEvalMove) return false;
+		this.lastClaimedEvalMove = moveCount;
+		return true;
+	}
 
 	constructor(opts: {
 		id: string;
@@ -305,6 +317,29 @@ export class MultiplayerRoom {
 		}
 	}
 
+	/**
+	 * Analysis found no legal moves for the side to move — settle by the
+	 * game's own rules instead of resigning whoever happened to ask.
+	 */
+	settleNoLegalMoves(): void {
+		if (this.status !== "playing") return;
+		const loser = this.getTurn();
+		const winner: "white" | "black" = loser === "white" ? "black" : "white";
+		if (this.game instanceof ChessGame) {
+			// chess.js distinguishes checkmate from stalemate
+			const result = this.getResult();
+			this.endGame(result.winner, result.reason);
+		} else if (this.game instanceof JanggiGame) {
+			const grid = this.game.fenToGrid();
+			const inCheck = this.game.isKingInCheck(this.game.turn === "white" ? "w" : "b", grid);
+			if (inCheck) this.endGame(winner, "checkmate");
+			else this.endGame("draw", "stalemate");
+		} else {
+			// Go: the engine always has pass available — should not reach here
+			this.endGame("draw", "no moves");
+		}
+	}
+
 	/** Handle resignation. */
 	resign(client: MpClient): void {
 		const color = this.getPlayerColor(client);
@@ -326,9 +361,13 @@ export class MultiplayerRoom {
 		this.onGameEndCallback = cb;
 	}
 
-	/** Get full move history for post-game analysis. */
+	/** Get full move history (all games — Go coords mapped into the same shape). */
 	getMoveHistory(): { san: string; uci: string; fen: string; moveNumber: number }[] {
-		if (this.game instanceof GoGame) return [];
+		if (this.game instanceof GoGame) {
+			return this.game
+				.getMoveHistory()
+				.map((m) => ({ san: m.coord, uci: m.coord, fen: "", moveNumber: m.moveNumber }));
+		}
 		return this.game.getMoveHistory();
 	}
 
@@ -440,8 +479,7 @@ export class MultiplayerRoom {
 		this.clock.start("white");
 
 		// Send MP_GAME_START to both players
-		console.log(`[mp] startGame: white=${white.userId}, black=${black.userId}`);
-		console.log(`[mp] sending MP_GAME_START to white (${white.userId})`);
+		log.info("sending MP_GAME_START", { white: white.userId, black: black.userId });
 		white.send({
 			type: "MP_GAME_START",
 			gameId: this.id,
@@ -451,7 +489,6 @@ export class MultiplayerRoom {
 			timeControl: this.timeControl,
 			...this.startMetadata,
 		});
-		console.log(`[mp] sending MP_GAME_START to black (${black.userId})`);
 		black.send({
 			type: "MP_GAME_START",
 			gameId: this.id,
@@ -468,10 +505,16 @@ export class MultiplayerRoom {
 	}
 
 	private endGame(winner: "white" | "black" | "draw", reason: string): void {
+		// A pending abandonment timer can fire after the game already ended
+		// (resignation during the grace period) — never end a game twice.
+		if (this.status === "finished") return;
 		this.status = "finished";
 		this.clock?.pause();
+		for (const timer of this.disconnectTimers.values()) clearTimeout(timer);
+		this.disconnectTimers.clear();
 
 		const result = { winner, reason };
+		this.finalResult = result;
 		this.broadcast({ type: "GAME_OVER", result });
 		log.info(`Game ${this.id} ended: ${winner} by ${reason}`);
 
@@ -483,6 +526,36 @@ export class MultiplayerRoom {
 		}
 	}
 
+	/** Is this userId one of the seated players? (Reconnection matching.) */
+	hasPlayer(userId: string): boolean {
+		return this.findPlayerSlot(userId) !== null;
+	}
+
+	/** Seated player identities, for persistence. */
+	getPlayerInfo(): {
+		white: { userId: string; nickname?: string } | null;
+		black: { userId: string; nickname?: string } | null;
+	} {
+		const info = (c: MpClient | null) =>
+			c ? { userId: c.userId, nickname: c.nickname } : null;
+		return { white: info(this.players.white), black: info(this.players.black) };
+	}
+
+	/** MP_GAME_START payload for a player rejoining after a drop/reload. */
+	buildSessionStart(userId: string): Record<string, unknown> | null {
+		const slot = this.findPlayerSlot(userId);
+		if (!slot) return null;
+		const opponent = slot === "white" ? this.players.black : this.players.white;
+		return {
+			type: "MP_GAME_START",
+			gameId: this.id,
+			gameType: this.gameType,
+			yourColor: slot,
+			opponentName: opponent ? opponent.nickname || opponent.userId : "Opponent",
+			timeControl: this.timeControl,
+		};
+	}
+
 	private getCurrentTurn(): "white" | "black" {
 		return this.game.turn;
 	}
@@ -492,19 +565,20 @@ export class MultiplayerRoom {
 	}
 
 	getResult(): { winner: "white" | "black" | "draw"; reason: string } {
+		// How the game ACTUALLY ended (agreement, timeout, abandonment...) —
+		// recomputing from the board can't know these
+		if (this.finalResult) return this.finalResult;
 		if (this.game instanceof GoGame) {
 			const goResult = this.game.getGameResult();
 			// Resignation — use as-is
 			if (goResult && goResult.reason === "resignation") return goResult;
 			// Score: territory + stones + prisoners + komi
-			const score = this.game.getScore();
-			const blackScore = score.black;
-			const whiteScore = score.white + 7.5; // komi
-			if (blackScore > whiteScore)
-				return { winner: "black", reason: `B+${(blackScore - whiteScore).toFixed(1)}` };
-			if (whiteScore > blackScore)
-				return { winner: "white", reason: `W+${(whiteScore - blackScore).toFixed(1)}` };
-			return { winner: "draw", reason: "Jigo" };
+			const s = this.game.scoreWithKomi(GO_KOMI);
+			if (s.winner === "draw") return { winner: "draw", reason: "Jigo" };
+			return {
+				winner: s.winner,
+				reason: `${s.winner === "black" ? "B" : "W"}+${s.margin.toFixed(1)}`,
+			};
 		}
 		if (this.game instanceof ChessGame || this.game instanceof JanggiGame) {
 			if (this.game.isCheckmate) {
@@ -537,7 +611,9 @@ export class MultiplayerRoom {
 			gameType: this.gameType,
 			playerColor: perspective,
 			turn: this.getCurrentTurn(),
-			moveHistory: [],
+			// Full record, not [] — a rejoining client rebuilds its move list
+			// from this state (it only accumulates MOVE deltas while connected)
+			moveHistory: this.getMoveHistory(),
 			capturedPieces: { white: [], black: [] },
 			isCheck: false,
 			isGameOver: this.isGameOver(),

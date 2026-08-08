@@ -105,6 +105,7 @@ export class SessionManager {
 			const result = await pool.search(fen, chessTime, topN, variant, eloLimit);
 			const suggestions = result.info
 				.filter((info: any) => info.pv && info.pv.length > 0)
+				.sort((a: any, b: any) => (a.multipv ?? 0) - (b.multipv ?? 0))
 				.slice(0, topN)
 				.map((info: any) => ({
 					move: info.pv[0],
