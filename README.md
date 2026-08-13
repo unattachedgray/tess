@@ -213,10 +213,14 @@ ENGINE_POOL_SIZE=4           # More engine workers for more concurrent games
 - **Encrypted federation** — Noise protocol on all cross-server traffic
 - **No direct connections** — players connect to their own server, never to each other
 - **Input validation** — all WebSocket messages validated via Zod schemas, all federation data size-limited and type-checked
-- **Rate limiting** — 30 WS messages/sec per client, 10 federation requests/min per IP
+- **Sender authorization** — validating a message is not the same as authorizing who sent it; every handler that mutates a shared room checks membership first
+- **Abuse guards** — caps on concurrent connections (total and per address), message rate, frame size, and AI spend
 - **Whitelist communication** — only preset emojis and message keys can be sent between players
 
-See [docs/FEDERATION.md](docs/FEDERATION.md) for the full security model.
+**[docs/security.md](docs/security.md) is the one to read** — what is exposed,
+why each limit is the number it is, how to check the limits actually in force on
+a running server, and the traps that have already cost this project real bugs.
+[docs/FEDERATION.md](docs/FEDERATION.md) covers the peer-to-peer model.
 
 ## For Developers
 
@@ -253,6 +257,7 @@ node test-mp-autoplay.cjs janggi 1200 2200     # Janggi simulation
 ### Documentation
 
 - [Engine Calibration](docs/engine-calibration.md) — How AI difficulty and skill evaluation work
+- [Security](docs/security.md) — exposure, limits and their reasoning, operations, verification harnesses
 - [Federation](docs/FEDERATION.md) — P2P discovery, protocol, security model
 - [Engines](docs/ENGINES.md) — Engine setup, difficulty mapping, troubleshooting
 

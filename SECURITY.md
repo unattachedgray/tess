@@ -1,5 +1,10 @@
 # Security Policy
 
+> This file is the **reporting policy and scope** for people who find a
+> vulnerability. The operational picture — what is exposed, why each limit is
+> the number it is, how to verify a defence still works, and what is knowingly
+> still open — lives in **[`docs/security.md`](docs/security.md)**.
+
 ## Reporting Vulnerabilities
 
 If you discover a security vulnerability in Tess, please report it responsibly.
@@ -28,7 +33,7 @@ You can expect an initial response within 72 hours.
 
 ### Out of Scope
 
-- **AI coaching content quality** — Claude CLI output is not sanitized for correctness, only for safety. Inaccurate game advice is not a security issue.
+- **AI coaching content quality** — model output is not sanitized for correctness, only for safety. Inaccurate game advice is not a security issue. (Coaching runs on the Gemini API; the Claude CLI this line used to name has not been in the tree since coaching moved.) The *cost* of coaching is in scope: see the spend caps in `docs/security.md`.
 - **Engine binary vulnerabilities** — Fairy-Stockfish and KataGo are third-party binaries. Report those to their respective projects.
 - **Local development environments** — Attacks that require local access to the development machine.
 - **Social engineering** — Tricking users into sharing game links is not in scope.
@@ -49,7 +54,13 @@ SQLite with WAL mode. All queries use parameterized statements via better-sqlite
 
 ### WebSocket Protocol
 
-All WebSocket messages are validated against Zod schemas before processing. Unknown message types are rejected. Each client has an isolated session.
+All WebSocket messages are validated against Zod schemas before processing, and unknown message types are rejected.
+
+**Schema validity is not authorization.** A well-formed message from the wrong
+sender is still well-formed, and a handler that mutates shared state must
+authorize the sender against that state. Clients are not fully isolated: a
+client may hold a reference to a shared room as a spectator, so every handler
+that mutates a room checks membership first. See `docs/security.md` §1.
 
 ### Static File Serving
 

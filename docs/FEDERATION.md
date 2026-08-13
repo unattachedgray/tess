@@ -108,6 +108,28 @@ Once two servers are connected via Hyperswarm, they communicate using a JSON-ove
    tess-emoji and tess-message are whitelist-validated on BOTH sides
    before delivery to the local player.
 
+> ### Before wiring this up: the relay has no sender authorization
+>
+> Steps 4 and 5 above describe the intended design. **The accept path is not
+> implemented** — `federatedGames` is never written to, `acceptRemoteChallenge()`
+> and `registerRelay()` are never called, and `TESS_DISCOVERY=off` in
+> production. Every relay callback therefore returns immediately today.
+>
+> That is fortunate, because `onRemoteMove` never checks that the peer sending
+> a `tess-move` is the peer that owns that `gameId`. It looks the game up by id
+> and plays the move **as the opponent**. Any peer on the public
+> `tess-board-game-discovery-v1` topic could move, emoji, message and resign on
+> behalf of a player in any game whose id it could guess or observe.
+>
+> **Store `peerKey` alongside each federated game and reject any relay message
+> whose `info.publicKey` does not match that game's owner — before the accept
+> path is connected, not after.** The "both servers are authoritative" claim
+> above is about move *legality*, which does not tell you *who* sent the move.
+>
+> Also unfiltered: a remote `creatorName` is only length-limited, while the
+> peer `name` field is character-filtered. Apply the same filter — it is
+> broadcast into every local client's lobby.
+
 6. GAME END
    Resignation relayed via tess-resign.
    Both servers run independent post-game evaluation.
@@ -137,13 +159,34 @@ The Multiplayer lobby has a "Network Play" toggle that enables/disables federati
 
 ```
 POST /api/federation/toggle { "enabled": false }
+X-Tess-Admin: <TESS_ADMIN_TOKEN>
 ```
+
+> **This route requires `TESS_ADMIN_TOKEN` and fails closed without it.**
+> Enabling federation starts Hyperswarm on the public DHT **and opens a
+> UPnP/NAT-PMP port mapping for this port on your router** — it changes your
+> network boundary, so it must never be reachable anonymously.
+>
+> The lobby used to carry a toggle button for this. It was removed in the
+> 2026-08-12 security pass: any visitor to a public lobby could press it, and
+> since Tess has no login, a browser has no legitimate way to hold the token.
+> Federation is a server-side setting now. Use `TESS_DISCOVERY`, or:
+>
+> ```bash
+> curl -X POST localhost:8460/api/federation/toggle \
+>   -H 'Content-Type: application/json' \
+>   -H "X-Tess-Admin: $TESS_ADMIN_TOKEN" \
+>   -d '{"enabled":true}'
+> ```
+>
+> An unauthenticated call, or one with a spoofed `X-Forwarded-For: 127.0.0.1`,
+> returns `403`. Both of those used to work.
 
 Local multiplayer (same server) always works regardless of federation setting.
 
 ## Opt-Out
 
-Set `TESS_DISCOVERY=off` in `.env` or toggle off in the Multiplayer lobby. When disabled:
+Set `TESS_DISCOVERY=off` in `.env` (the lobby toggle button was removed — see above). When disabled:
 
 - Server does not join the DHT network
 - Server does not advertise via mDNS
@@ -208,7 +251,7 @@ Player A ←WebSocket→ Server A ←Hyperswarm→ Server B ←WebSocket→ Play
 | Method | Path | Description | Auth |
 |--------|------|-------------|------|
 | GET | `/api/federation/status` | Discovery enabled + stats | Public |
-| POST | `/api/federation/toggle` | Enable/disable federation | Local only |
+| POST | `/api/federation/toggle` | Enable/disable federation | **`X-Tess-Admin` token; fails closed when unset** |
 | POST | `/api/federation/peers` | Register a peer URL | Rate-limited |
 | GET | `/api/federation/peers` | List known peers | Discovery required |
 | POST | `/api/federation/heartbeat` | Health check response | Discovery required |

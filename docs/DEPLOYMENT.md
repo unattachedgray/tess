@@ -63,6 +63,22 @@ Set environment variables or export them in your shell:
 |----------|---------|-------------|
 | `PORT` | `8082` | HTTP/WS server port |
 | `NODE_ENV` | — | Set to `production` for production mode |
+| `ENGINE_POOL_SIZE` | `2` | UCI engine processes. **This, not RAM, is what limits how many people can analyse at once.** |
+| `TESS_DISCOVERY` | on | Set to `off` to disable federation entirely |
+| `TESS_ADMIN_TOKEN` | — | Required by `POST /api/federation/toggle`, sent as `X-Tess-Admin`. **Unset means the route is refused for everyone**, including you — that is deliberate, because the route opens a UPnP mapping on your router. |
+| `TESS_ALLOWED_ORIGINS` | `https://tess.unattached.me` | Comma-separated CORS allowlist. Only matters for a separately-hosted client; the bundled one is same-origin. |
+
+**Abuse guards** for a public bind. Full reasoning for each number is in
+[`security.md`](security.md) §4; the short version is here.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TESS_MAX_CONNS` | `10` | Total concurrent sockets. Sized against `ENGINE_POOL_SIZE`, not against memory. |
+| `TESS_MAX_CONNS_PER_IP` | `3` | Sockets one address may hold. **Must stay well below `TESS_MAX_CONNS`** — if it does not, one caller can take every slot and the total cap constrains nobody. |
+| `TESS_MSG_PER_SEC` / `TESS_MSG_BURST` | `20` / `60` | Client message budget per address. |
+| `TESS_MAX_PAYLOAD` | `65536` | Largest client frame. The `ws` library default is 100 MB. |
+| `TESS_AI_PER_IP_HOUR` | `120` | Gemini coaching calls per address per hour. |
+| `TESS_AI_GLOBAL_DAY` | `5000` | Gemini calls per day, all callers. **This is the one that bounds the bill** — addresses are cheap, so a distributed flood walks past any per-address limit. |
 
 Example:
 
@@ -78,6 +94,22 @@ Tess includes a PM2 ecosystem config:
 ```bash
 pm2 start ecosystem.config.cjs
 ```
+
+**Redeploying after a code or config change:**
+
+```bash
+pnpm build && pm2 startOrReload ecosystem.config.cjs
+```
+
+> **`startOrReload`, not `restart`.** A plain `pm2 restart` re-runs the process
+> but does **not** re-read the `env` block in `ecosystem.config.cjs`. Change a
+> limit, restart, and the server keeps running the old value while the config
+> file says otherwise — with nothing to indicate the mismatch. Verify with
+> `curl localhost:8460/api/admin`, which reports the caps actually in force.
+
+The build prints Svelte accessibility warnings (`a11y_*`) for the menu dialog
+and a settings button. They are pre-existing, unrelated to deployment, and do
+not fail the build.
 
 The config (`ecosystem.config.cjs`):
 
@@ -199,7 +231,22 @@ Returns server status, uptime, active game count, and memory usage.
 curl http://localhost:8082/api/admin
 ```
 
-Returns memory breakdown (heap, RSS), PID, and Node.js version.
+Returns uptime, active game count, heap usage, and — under `guards` — the abuse
+limits **actually in force on the running process**:
+
+```json
+{"uptime": 4, "activeGames": 0, "memory": {"heapMB": 13},
+ "guards": {"ips": 0, "connections": 0, "connectionCap": 10,
+            "aiToday": 0, "aiDailyCap": 5000}}
+```
+
+Read `connectionCap` and `aiDailyCap` here rather than from the source or the
+config file. They are the ones the process is enforcing, so they are also the
+proof that your last `startOrReload` actually took. `aiToday` is the day's
+Gemini spend against `aiDailyCap`.
+
+Note: PID and Node version are deliberately **not** exposed, despite what
+`API.md` says.
 
 ### PM2 Monitoring
 

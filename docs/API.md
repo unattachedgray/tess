@@ -43,24 +43,32 @@ Detailed server statistics.
   "uptime": 3600,
   "activeGames": 2,
   "memory": {
-    "heapUsed": 45,
-    "heapTotal": 64,
-    "rss": 120
+    "heapMB": 45
   },
-  "pid": 12345,
-  "nodeVersion": "v22.0.0"
+  "guards": {
+    "ips": 3,
+    "connections": 5,
+    "connectionCap": 10,
+    "aiToday": 41,
+    "aiDailyCap": 5000
+  }
 }
 ```
+
+This endpoint is **unauthenticated**, so it deliberately omits the process id
+and Node version that earlier versions of this document described. Do not add
+them back.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `uptime` | number | Server uptime in seconds |
 | `activeGames` | number | Active game room count |
-| `memory.heapUsed` | number | V8 heap used (MB) |
-| `memory.heapTotal` | number | V8 heap total (MB) |
-| `memory.rss` | number | Resident set size (MB) |
-| `pid` | number | Server process ID |
-| `nodeVersion` | string | Node.js version |
+| `memory.heapMB` | number | V8 heap used (MB) |
+| `guards.ips` | number | Distinct addresses currently connected |
+| `guards.connections` | number | Open sockets |
+| `guards.connectionCap` | number | Socket limit **in force on this process** — the value the running server is enforcing, which is not necessarily the one in `ecosystem.config.cjs` (see DEPLOYMENT.md) |
+| `guards.aiToday` | number | Gemini coaching calls made today |
+| `guards.aiDailyCap` | number | Daily Gemini call limit |
 
 ---
 
@@ -74,7 +82,7 @@ List recent completed games.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `limit` | number | 20 | Maximum number of games to return |
+| `limit` | number | 20 | Maximum number of games to return. **Clamped to 1–100**; a value outside that range is silently clamped, and a non-numeric value falls back to 20 rather than erroring. |
 | `type` | string | — | Filter by game type: `chess`, `go`, `janggi` |
 | `user` | string | — | Filter by user ID (matches white or black player) |
 
