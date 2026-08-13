@@ -37,17 +37,16 @@
 		} catch {}
 	}
 
-	async function toggleFederation() {
-		const newState = !federationEnabled;
-		try {
-			const res = await fetch("/api/federation/toggle", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ enabled: newState }),
-			});
-			if (res.ok) federationEnabled = newState;
-		} catch {}
-	}
+	// The federation toggle used to live here as a button.
+	//
+	// It was removed because it was a PUBLIC control over a network boundary:
+	// POST /api/federation/toggle starts Hyperswarm on the public DHT and opens
+	// a UPnP/NAT-PMP mapping for this port on the router, and any visitor to
+	// this lobby could press it. The route now requires TESS_ADMIN_TOKEN, and a
+	// browser on a server with no login has no legitimate way to hold that
+	// token — so the button could only ever fail, silently, for everyone.
+	//
+	// Federation is now a server-side setting. See docs/FEDERATION.md.
 
 	// Subscribe to lobby on mount
 	$effect(() => {
@@ -268,13 +267,10 @@
 	<div class="federation-section">
 		<div class="federation-header">
 			<span class="federation-label">{t("lobby.network", lang)}</span>
-			<button
-				class="toggle-btn {federationEnabled ? 'on' : 'off'}"
-				onclick={toggleFederation}
-				title={federationEnabled ? "Disable network discovery" : "Enable network discovery"}
-			>
-				<div class="toggle-knob"></div>
-			</button>
+			<span
+				class="federation-state {federationEnabled ? 'on' : 'off'}"
+				title="Network discovery is a server setting (TESS_DISCOVERY)"
+			>{federationEnabled ? "on" : "off"}</span>
 		</div>
 		{#if federationEnabled && appState.playerCounts.remotePlayers > 0}
 			<div class="federation-stats">
@@ -441,32 +437,17 @@
 		letter-spacing: 0.05em;
 	}
 
-	.toggle-btn {
-		width: 36px;
-		height: 20px;
-		border-radius: 10px;
-		border: none;
-		cursor: pointer;
-		position: relative;
-		transition: background 0.2s;
+	.federation-state {
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		padding: 0.1rem 0.45rem;
+		border-radius: 999px;
+		cursor: default;
 	}
-
-	.toggle-btn.on { background: var(--accent); }
-	.toggle-btn.off { background: var(--bg-hover); }
-
-	.toggle-knob {
-		position: absolute;
-		top: 2px;
-		width: 16px;
-		height: 16px;
-		border-radius: 50%;
-		background: white;
-		box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-		transition: transform 0.2s;
-	}
-
-	.toggle-btn.on .toggle-knob { transform: translateX(18px); }
-	.toggle-btn.off .toggle-knob { transform: translateX(2px); }
+	.federation-state.on { background: var(--accent); color: var(--bg-primary); }
+	.federation-state.off { background: var(--bg-hover); color: var(--text-secondary); }
 
 	.federation-stats {
 		display: flex;

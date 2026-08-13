@@ -171,7 +171,11 @@ export const TIME_PRESETS = [
 
 export type Challenge = {
 	id: string;
-	code: string;
+	/** The 6-char join code. Present ONLY in CHALLENGE_CREATED, to the
+	 *  creator: it is a bearer credential for the private-invite path and is
+	 *  stripped from the broadcast LOBBY_STATE. Optional so the compiler
+	 *  refuses any consumer that assumes the public list carries it. */
+	code?: string;
 	gameType: "go" | "chess" | "janggi";
 	timeControl: TimeControl;
 	creatorName: string;

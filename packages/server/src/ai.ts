@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { GameType, Suggestion } from "@tess/shared";
+import { allowAiCall } from "./guard.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("ai");
@@ -186,6 +187,10 @@ function processQueue(): void {
 }
 
 export async function analyzePosition(ctx: AnalysisContext): Promise<string | null> {
+	// Spend cap. MAX_CONCURRENT below bounds parallelism, not volume — on a
+	// public server those are different problems, and only this one bounds the
+	// bill. Returning null degrades to a game without coaching, never an error.
+	if (!allowAiCall()) return null;
 	const prompt = buildPrompt(ctx);
 
 	if (activeCalls < MAX_CONCURRENT) {
@@ -228,6 +233,7 @@ export interface GameSummaryContext {
 }
 
 export async function generateGameSummary(ctx: GameSummaryContext): Promise<string | null> {
+	if (!allowAiCall()) return null;
 	const game = ctx.gameType === "go" ? "Go" : ctx.gameType === "janggi" ? "Janggi" : "Chess";
 	const player = ctx.playerColor === "white" ? "White" : "Black";
 

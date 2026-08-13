@@ -2,11 +2,19 @@ import type { ServerType } from "@hono/node-server";
 import { ClientMessage, classifyMoveQuality } from "@tess/shared";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { GameRoom } from "./gameRoom.js";
-import { createLogger } from "./logger.js";
-import type { SessionManager } from "./session.js";
+import {
+	MAX_PAYLOAD_BYTES,
+	acceptConnection,
+	allowMessage,
+	clientIp,
+	releaseConnection,
+	sweep,
+} from "./guard.js";
 import { Lobby, type LobbyClient } from "./lobby.js";
-import { MultiplayerRoom, type MpClient } from "./multiplayerRoom.js";
+import { createLogger } from "./logger.js";
+import { type MpClient, MultiplayerRoom } from "./multiplayerRoom.js";
 import { evaluateMultiplayerGame } from "./postGameEval.js";
+import type { SessionManager } from "./session.js";
 
 const log = createLogger("ws");
 
@@ -33,12 +41,19 @@ export function createWsServer(
 	federation?: import("./federation.js").FederationService,
 ): WebSocketServer {
 	// biome-ignore lint: ServerType is compatible at runtime
-	const wss = new WebSocketServer({ server: server as any });
+	// maxPayload: ws defaults to 100MB per frame. The largest legitimate client
+	// message is a settings update, so an unbounded frame is only useful to
+	// someone trying to exhaust memory on a public server.
+	const wss = new WebSocketServer({ server: server as any, maxPayload: MAX_PAYLOAD_BYTES });
+	setInterval(sweep, 300_000).unref?.();
 	const clients = new Map<WebSocket, ClientState>();
 	const lobby = new Lobby();
 	const mpRooms = new Map<string, MultiplayerRoom>();
 	// Track federated games: gameId -> { room, localColor, remotePlayerWs }
-	const federatedGames = new Map<string, { room: MultiplayerRoom; localColor: "white" | "black" }>();
+	const federatedGames = new Map<
+		string,
+		{ room: MultiplayerRoom; localColor: "white" | "black" }
+	>();
 
 	// Wire federation callbacks for game relay
 	if (federation) {
@@ -136,96 +151,128 @@ export function createWsServer(
 		}
 	}, 30000);
 
-	wss.on("close", () => { clearInterval(heartbeat); clearInterval(roomCleanup); });
+	wss.on("close", () => {
+		clearInterval(heartbeat);
+		clearInterval(roomCleanup);
+	});
 
 	/** Notify all clients to refresh (called before server shutdown) */
 	(wss as any).broadcastRefresh = () => {
 		const msg = JSON.stringify({ type: "SERVER_RESTART" });
 		for (const ws of wss.clients) {
 			if (ws.readyState === ws.OPEN) {
-				try { ws.send(msg); } catch {}
+				try {
+					ws.send(msg);
+				} catch {}
 			}
 		}
 	};
 
-	wss.on("connection", (ws: WebSocket) => {
-		(ws as unknown as { isAlive: boolean }).isAlive = true;
-		ws.on("pong", () => {
+	wss.on(
+		"connection",
+		(
+			ws: WebSocket,
+			req?: {
+				socket?: { remoteAddress?: string };
+				headers?: Record<string, string | string[] | undefined>;
+			},
+		) => {
+			// Per-address connection cap. The per-connection message limit below is
+			// bypassed simply by opening more sockets, so this is the layer that makes
+			// it mean something on a public bind.
+			const ip = clientIp(req?.socket?.remoteAddress, req?.headers);
+			if (!acceptConnection(ip)) {
+				ws.close(1013, "too many connections");
+				return;
+			}
 			(ws as unknown as { isAlive: boolean }).isAlive = true;
-		});
+			ws.on("pong", () => {
+				(ws as unknown as { isAlive: boolean }).isAlive = true;
+			});
 
-		const clientId = ++nextClientId;
-		const state: ClientState = {
-			_id: clientId,
-			ws,
-			room: null,
-			mpRoom: null,
-			inLobby: false,
-			lobbyClient: null,
-			suggestionCount: 3,
-			autoplayElo: 2800,
-			language: undefined,
-			userId: `player-${clientId}-${Date.now().toString(36)}`,
-		};
-		log.info(`client #${state._id} connected`);
-		// Subscribe to lobby for challenge notifications
-		lobby.subscribe(getLobbyClient(state));
-		clients.set(ws, state);
-		log.info("client connected", { clients: clients.size });
-		broadcastPlayerCounts();
-
-		let processing = Promise.resolve();
-		// Rate limiting: max 30 messages per second per client
-		let msgCount = 0;
-		let msgWindowStart = Date.now();
-		const MSG_RATE_LIMIT = 30;
-		const MSG_WINDOW_MS = 1000;
-
-		ws.on("message", (data: Buffer) => {
-			const now = Date.now();
-			if (now - msgWindowStart > MSG_WINDOW_MS) {
-				msgCount = 0;
-				msgWindowStart = now;
-			}
-			msgCount++;
-			if (msgCount > MSG_RATE_LIMIT) {
-				log.warn("rate limited", { clientId: state._id, count: msgCount });
-				return; // Drop message silently
-			}
-			processing = processing
-				.then(() => handleMessage(state, data.toString()))
-				.catch((err) => {
-					log.error("message handling error", { error: (err as Error).message });
-				});
-		});
-
-		ws.on("close", () => {
-			const clientState = clients.get(ws);
-			if (clientState?.room) {
-				sessionManager.removeRoom(clientState.room.id);
-			}
-			if (clientState?.mpRoom) {
-				const mpClient = toMpClient(clientState);
-				clientState.mpRoom.handleDisconnect(mpClient);
-			}
-			if (clientState) {
-				const lobbyClient = getLobbyClient(clientState);
-				lobby.removeClientChallenges(lobbyClient);
-				lobby.unsubscribe(lobbyClient);
-			}
-			clients.delete(ws);
-			log.info("client disconnected", { clients: clients.size });
+			const clientId = ++nextClientId;
+			const state: ClientState = {
+				_id: clientId,
+				ws,
+				room: null,
+				mpRoom: null,
+				inLobby: false,
+				lobbyClient: null,
+				suggestionCount: 3,
+				autoplayElo: 2800,
+				language: undefined,
+				userId: `player-${clientId}-${Date.now().toString(36)}`,
+			};
+			log.info(`client #${state._id} connected`);
+			// Subscribe to lobby for challenge notifications
+			lobby.subscribe(getLobbyClient(state));
+			clients.set(ws, state);
+			log.info("client connected", { clients: clients.size });
 			broadcastPlayerCounts();
-		});
 
-		ws.on("error", (err) => {
-			log.error("ws error", { error: err.message });
-		});
-	});
+			let processing = Promise.resolve();
+			// Rate limiting: max 30 messages per second per client
+			let msgCount = 0;
+			let msgWindowStart = Date.now();
+			const MSG_RATE_LIMIT = 30;
+			const MSG_WINDOW_MS = 1000;
+
+			ws.on("message", (data: Buffer) => {
+				const now = Date.now();
+				if (now - msgWindowStart > MSG_WINDOW_MS) {
+					msgCount = 0;
+					msgWindowStart = now;
+				}
+				msgCount++;
+				if (msgCount > MSG_RATE_LIMIT) {
+					log.warn("rate limited", { clientId: state._id, count: msgCount });
+					return; // Drop message silently
+				}
+				// Second layer, keyed on the ADDRESS rather than the socket, so
+				// opening N connections no longer multiplies the allowance by N.
+				if (!allowMessage(ip)) {
+					log.warn("rate limited (per-ip)", { clientId: state._id, ip });
+					return;
+				}
+				processing = processing
+					.then(() => handleMessage(state, data.toString()))
+					.catch((err) => {
+						log.error("message handling error", { error: (err as Error).message });
+					});
+			});
+
+			ws.on("close", () => {
+				releaseConnection(ip);
+				const clientState = clients.get(ws);
+				if (clientState?.room) {
+					sessionManager.removeRoom(clientState.room.id);
+				}
+				if (clientState?.mpRoom) {
+					const mpClient = toMpClient(clientState);
+					clientState.mpRoom.handleDisconnect(mpClient);
+				}
+				if (clientState) {
+					const lobbyClient = getLobbyClient(clientState);
+					lobby.removeClientChallenges(lobbyClient);
+					lobby.unsubscribe(lobbyClient);
+				}
+				clients.delete(ws);
+				log.info("client disconnected", { clients: clients.size });
+				broadcastPlayerCounts();
+			});
+
+			ws.on("error", (err) => {
+				log.error("ws error", { error: err.message });
+			});
+		},
+	);
 
 	function broadcastPlayerCounts(): void {
 		const counts = {
-			chess: 0, go: 0, janggi: 0, total: clients.size,
+			chess: 0,
+			go: 0,
+			janggi: 0,
+			total: clients.size,
 			remotePlayers: federation?.getRemotePlayerCount() ?? 0,
 			federatedServers: federation?.getVerifiedPeers().length ?? 0,
 		};
@@ -670,6 +717,13 @@ export function createWsServer(
 					lobby.removeChallenge(ch.id);
 					break;
 				}
+				if (!ch.code) {
+					// Fail closed. A room with no code would be matched by
+					// JOIN_BY_CODE on an empty string; refusing is cheaper than
+					// reasoning about that. Lobby-held challenges always carry one.
+					send(state.ws, { type: "ERROR", message: "Challenge is malformed" });
+					break;
+				}
 				const room = new MultiplayerRoom({
 					id: ch.id,
 					code: ch.code,
@@ -726,6 +780,21 @@ export function createWsServer(
 				if (codeEntry) {
 					// Same as ACCEPT_CHALLENGE
 					const ch2 = codeEntry.challenge;
+					if (msg.spectate) {
+						// WHY — this branch matches a WAITING lobby challenge, so
+						// there is no game to watch yet. The old code built the room
+						// anyway, seated only the creator, and then retired her
+						// challenge: she was pulled out of the lobby into a room that
+						// could never start, unreachable by everyone else, and told
+						// nothing. The room was also unreapable, since the reaper only
+						// collects "finished" ones.
+						send(state.ws, { type: "ERROR", message: "That game has not started yet" });
+						break;
+					}
+					if (!ch2.code) {
+						send(state.ws, { type: "ERROR", message: "Challenge is malformed" });
+						break;
+					}
 					const room2 = new MultiplayerRoom({
 						id: ch2.id,
 						code: ch2.code,
@@ -743,10 +812,12 @@ export function createWsServer(
 							creator2.room = null;
 						}
 					}
-					if (msg.spectate) {
-						room2.addSpectator(toMpClient(state));
-					} else {
-						room2.addPlayer(toMpClient(state));
+					// WHY — addPlayer returns null on a full room. Discarding that
+					// return while still setting state.mpRoom is what handed a
+					// stranger a live reference into someone else's game.
+					if (room2.addPlayer(toMpClient(state)) === null) {
+						send(state.ws, { type: "ERROR", message: "Game is full" });
+						break;
 					}
 					state.mpRoom = room2;
 					// Stop singleplayer room from interfering
@@ -774,23 +845,39 @@ export function createWsServer(
 							log.error("MP eval failed (code join)", { error: (err as Error).message });
 						}
 					});
+					// Safe to retire: only a seated second player reaches here.
 					lobby.removeChallenge(ch2.id);
 					break;
 				}
 				// Check active rooms
+				//
+				// TRAP — this is the SECOND seat-granting branch. The lobby-challenge
+				// branch above is a near-identical implementation, and patching only
+				// one of them is how a guard ships broken: the live JOIN_BY_CODE for
+				// a game already in progress comes through HERE. When adding a check,
+				// grep for the condition, not the function name.
+				//
+				// Both addPlayer and addSpectator refuse when full. Setting
+				// state.mpRoom regardless of the outcome is what handed a stranger a
+				// live reference into someone else's game.
+				let refusal: string | null = null;
 				for (const room of mpRooms.values()) {
 					if (room.code === msg.code.toUpperCase()) {
 						if (msg.spectate) {
-							room.addSpectator(toMpClient(state));
-						} else {
-							room.addPlayer(toMpClient(state));
+							if (!room.addSpectator(toMpClient(state))) {
+								refusal = "Too many spectators";
+								break;
+							}
+						} else if (room.addPlayer(toMpClient(state)) === null) {
+							refusal = "Game is full";
+							break;
 						}
 						state.mpRoom = room;
 						break;
 					}
 				}
 				if (!state.mpRoom) {
-					send(state.ws, { type: "ERROR", message: "Game not found" });
+					send(state.ws, { type: "ERROR", message: refusal ?? "Game not found" });
 				}
 				break;
 			}
@@ -921,13 +1008,28 @@ export function createWsServer(
 				const client = toMpClient(state);
 				const playerColor = room.getPlayerColor(client);
 
+				// TRAP — leaving is NOT the same authorization as watching. Every
+				// other multiplayer handler gates on getPlayerColor(); this one
+				// gated only the resign and the notification, then destroyed the
+				// room unconditionally. A spectator could therefore end any live
+				// game: destroy() clears the clock interval AND sets running=null,
+				// so no later move restarts it — flag-fall becomes impossible, the
+				// room leaves mpRooms so the reaper and the reconnect scan can
+				// never find it, and neither player is told anything. Verified
+				// end to end by the audit against the live server.
+				if (!playerColor) {
+					room.removeSpectator(client);
+					state.mpRoom = null;
+					break;
+				}
+
 				// Resign if game in progress
-				if (room.status === "playing" && playerColor) {
+				if (room.status === "playing") {
 					room.resign(client);
 				}
 
 				// Notify opponent
-				if (playerColor) {
+				{
 					const oppColor = playerColor === "white" ? "black" : "white";
 					const oppMpClient = room.getPlayer(oppColor);
 					if (oppMpClient) {

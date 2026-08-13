@@ -1,5 +1,5 @@
-import type { Challenge, TimeControl } from "@tess/shared";
 import { randomBytes } from "node:crypto";
+import type { Challenge, TimeControl } from "@tess/shared";
 
 // Unambiguous characters (no 0/O/1/I/L)
 const CODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -98,7 +98,7 @@ export class Lobby {
 		// Send current state immediately
 		client.send({
 			type: "LOBBY_STATE",
-			challenges: this.getChallengeList(),
+			challenges: this.getPublicChallengeList(),
 			activePlayers: this.subscribers.size,
 		});
 	}
@@ -123,18 +123,38 @@ export class Lobby {
 		return Array.from(this.challenges.values()).map((e) => e.challenge);
 	}
 
+	/**
+	 * The lobby view, with the join code removed.
+	 *
+	 * RULE — `code` is a bearer credential for the private-invite path, so it
+	 * belongs only in CHALLENGE_CREATED, to its creator. Broadcasting it in
+	 * LOBBY_STATE gave every connected socket, authenticated or not, the codes
+	 * for every open game. That is what turned "needs a shared link" into
+	 * "fully anonymous" for the room-destruction bug. The lobby UI joins by
+	 * `id` and never reads `code`.
+	 */
+	getPublicChallengeList(): Challenge[] {
+		return this.getChallengeList().map(({ code: _code, ...rest }) => rest);
+	}
+
 	/** Optional: extra challenges from federation to include in broadcast */
 	remoteChallenges: Challenge[] = [];
 
 	broadcastState(): void {
-		console.log(`[lobby] broadcasting to ${this.subscribers.size} subscribers, ${this.challenges.size} local + ${this.remoteChallenges.length} remote challenges`);
+		console.log(
+			`[lobby] broadcasting to ${this.subscribers.size} subscribers, ${this.challenges.size} local + ${this.remoteChallenges.length} remote challenges`,
+		);
 		const msg = {
 			type: "LOBBY_STATE" as const,
-			challenges: [...this.getChallengeList(), ...this.remoteChallenges],
+			challenges: [...this.getPublicChallengeList(), ...this.remoteChallenges],
 			activePlayers: this.subscribers.size,
 		};
 		for (const sub of this.subscribers) {
-			try { sub.send(msg); } catch { /* client gone */ }
+			try {
+				sub.send(msg);
+			} catch {
+				/* client gone */
+			}
 		}
 	}
 

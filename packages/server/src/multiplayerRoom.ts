@@ -4,10 +4,17 @@
  * Separate from GameRoom (which handles singleplayer vs AI).
  * Reuses the same shared game engines (ChessGame, GoGame, JanggiGame).
  */
-import { ChessGame, GO_KOMI, GoGame, JanggiGame, PRESET_EMOJIS, PRESET_MESSAGES } from "@tess/shared";
+import {
+	ChessGame,
+	GO_KOMI,
+	GoGame,
+	JanggiGame,
+	PRESET_EMOJIS,
+	PRESET_MESSAGES,
+} from "@tess/shared";
 import { gameAccuracy, getSkillLevel } from "@tess/shared";
 import type { GameType, TimeControl } from "@tess/shared";
-import { FischerClock, type ClockState } from "./clock.js";
+import { type ClockState, FischerClock } from "./clock.js";
 import { createLogger } from "./logger.js";
 const log = createLogger("mp");
 
@@ -113,9 +120,10 @@ export class MultiplayerRoom {
 		return color;
 	}
 
-	/** Add a spectator. */
-	addSpectator(client: MpClient): void {
-		if (this.spectators.size >= 50) return; // cap spectators
+	/** Add a spectator. Returns false when the gallery is full — callers must
+	 *  not hand out a room reference on a refusal. */
+	addSpectator(client: MpClient): boolean {
+		if (this.spectators.size >= 50) return false; // cap spectators
 		this.spectators.add(client);
 		this.broadcastSpectatorCount();
 
@@ -126,6 +134,7 @@ export class MultiplayerRoom {
 				client.send({ type: "CLOCK_UPDATE", ...this.clock.getState() });
 			}
 		}
+		return true;
 	}
 
 	removeSpectator(client: MpClient): void {
@@ -536,8 +545,7 @@ export class MultiplayerRoom {
 		white: { userId: string; nickname?: string } | null;
 		black: { userId: string; nickname?: string } | null;
 	} {
-		const info = (c: MpClient | null) =>
-			c ? { userId: c.userId, nickname: c.nickname } : null;
+		const info = (c: MpClient | null) => (c ? { userId: c.userId, nickname: c.nickname } : null);
 		return { white: info(this.players.white), black: info(this.players.black) };
 	}
 
