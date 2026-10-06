@@ -175,8 +175,8 @@ export class KataGoAdapter {
 	}
 
 	private processBuffer(): void {
-		let idx = this.buffer.indexOf("\n");
-		while (idx >= 0) {
+		let idx: number;
+		while ((idx = this.buffer.indexOf("\n")) >= 0) {
 			const line = this.buffer.substring(0, idx).trim();
 			this.buffer = this.buffer.substring(idx + 1);
 			if (!line) continue;
@@ -187,7 +187,6 @@ export class KataGoAdapter {
 			} catch {
 				// Ignore non-JSON lines (startup messages)
 			}
-			idx = this.buffer.indexOf("\n");
 		}
 	}
 

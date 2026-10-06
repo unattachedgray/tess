@@ -58,14 +58,16 @@ export function resolveKataGoPath(): string | null {
 	const gpu = hasGpu();
 
 	if (gpu) {
-		const cuda = resolve(dir, "katago-cuda");
+		const unpackedCuda = resolve(dir, "katago-cuda-unpacked/AppRun");
+		const cuda = existsSync(unpackedCuda) ? unpackedCuda : resolve(dir, "katago-cuda");
 		if (existsSync(cuda)) {
 			log.info("found KataGo CUDA", { path: cuda });
 			return cuda;
 		}
 	}
 
-	const binary = resolve(dir, "katago");
+	const unpackedCpu = resolve(dir, "katago-unpacked/AppRun");
+	const binary = existsSync(unpackedCpu) ? unpackedCpu : resolve(dir, "katago");
 	if (existsSync(binary)) {
 		log.info("found KataGo CPU", { path: binary });
 		return binary;

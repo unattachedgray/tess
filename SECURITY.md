@@ -33,7 +33,7 @@ You can expect an initial response within 72 hours.
 
 ### Out of Scope
 
-- **AI coaching content quality** — model output is not sanitized for correctness, only for safety. Inaccurate game advice is not a security issue. (Coaching runs on the Gemini API; the Claude CLI this line used to name has not been in the tree since coaching moved.) The *cost* of coaching is in scope: see the spend caps in `docs/security.md`.
+- **AI coaching content quality** — model output is not sanitized for correctness, only for safety. Inaccurate game advice is not a security issue. (Coaching uses the local economy gateway with no direct provider or premium fallback.) The *cost* of coaching is in scope: see the spend caps in `docs/security.md`.
 - **Engine binary vulnerabilities** — Fairy-Stockfish and KataGo are third-party binaries. Report those to their respective projects.
 - **Local development environments** — Attacks that require local access to the development machine.
 - **Social engineering** — Tricking users into sharing game links is not in scope.

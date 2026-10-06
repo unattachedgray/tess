@@ -17,7 +17,7 @@
 | **Chess logic** | chess.js | Standard chess rule engine. |
 | **Go engine** | KataGo (GTP) | Best open-source Go AI. Concurrent analysis via query IDs. |
 | **Chess/Janggi engine** | Fairy-Stockfish (UCI) | Supports standard chess + variants including Janggi. |
-| **AI analysis** | Claude Code CLI | `claude --print` subprocess. No API keys — uses the user's Claude subscription. |
+| **AI analysis** | Local economy gateway | Dedicated file credential; no direct provider or premium fallback. |
 | **Process manager** | PM2 | Production process management with restart/logging. |
 
 ### Why Svelte over Vanilla TS
@@ -191,7 +191,7 @@ tess/
 │       └── fairy-stockfish
 │
 ├── start.sh                       # Install/dev/prod launcher
-└── ecosystem.config.cjs           # PM2 production config
+└── scripts/security/              # Isolated systemd production service
 ```
 
 ## Key Design Decisions
@@ -238,13 +238,12 @@ Engines are expensive processes. Shared across all clients:
 - Graceful shutdown on server exit
 
 ### 5. AI Analysis
-Claude Code CLI (`claude --print`) is the only LLM integration:
-- Spawned as subprocess with timeout (30s)
-- Rate-limited: max 1 concurrent call per game, 5s cooldown
-- Context includes: position (FEN), move history, game phase, top engine suggestions
-- Output: styled markdown with bolded glossary terms
-- Multi-language via prompt instruction
-- Fire-and-forget: analysis arrives async, game doesn't block on it
+The local apicascade gateway is the only LLM integration:
+- Dedicated file credential loaded from systemd; no owner environment files
+- Economy strength, interactive execution, project `tess`, escalation disabled
+- Bounded concurrent calls and daily request cap; quota failure disables coaching only
+- Context includes position, history, phase, and computed engine suggestions
+- Output arrives asynchronously as styled markdown, with language set in the prompt
 
 ### 6. No Database Until Needed
 Phase 1 and 2 work without any database:
@@ -285,7 +284,7 @@ Update game state
     ├── WS: MOVE → client (AI response)
     │
     ├── If analysis enabled:
-    │   └── Async: claude --print with game context
+    │   └── Async: economy gateway with game context
     │       └── WS: ANALYSIS → client
     │
     └── If game over:

@@ -1,0 +1,56 @@
+[Unit]
+Description=Tess public game server
+After=network.target weft-tess-egress.service
+Requires=weft-tess-egress.service
+
+[Service]
+Type=simple
+User=weft-tess
+Group=weft-tess
+WorkingDirectory=/var/lib/weft-tess
+StateDirectory=weft-tess
+StateDirectoryMode=0700
+LoadCredential=cascade-key:/etc/weft-tess/cascade-key
+Environment=PATH=/opt/weft-tess/runtime:/usr/bin:/bin
+Environment=HOME=/var/lib/weft-tess
+Environment=NODE_ENV=production
+Environment=PORT=8460
+Environment=TESS_BIND_HOST=127.0.0.1
+Environment=TESS_DB_PATH=/var/lib/weft-tess/tess.db
+Environment=TESS_DISCOVERY=off
+Environment=TESS_MAX_CONNS=10
+Environment=TESS_MAX_CONNS_PER_IP=3
+Environment=TESS_AI_GLOBAL_DAY=500
+ExecStart=/opt/weft-tess/runtime/node --import /opt/weft-tess/packages/server/node_modules/tsx/dist/esm/index.mjs /opt/weft-tess/packages/server/src/index.ts
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+DevicePolicy=closed
+DeviceAllow=/dev/nvidia0 rw
+DeviceAllow=/dev/nvidiactl rw
+DeviceAllow=/dev/nvidia-uvm rw
+DeviceAllow=/dev/nvidia-uvm-tools rw
+MemoryMax=3G
+CPUQuota=600%
+TasksMax=256
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

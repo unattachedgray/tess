@@ -138,7 +138,7 @@ Before making significant changes, read these docs:
 Key design decisions:
 - **Authoritative server**: All moves are validated server-side, even in singleplayer.
 - **Engine pool**: KataGo and Fairy-Stockfish are shared processes, not per-client.
-- **Claude CLI only**: AI analysis uses `claude --print`. No API keys, no fallback services.
+- **Economy gateway only**: AI analysis uses the local apicascade gateway and a dedicated file credential. No home environment reads, direct provider credentials, or premium fallback.
 - **Shared game logic**: Rules in `packages/shared/` are used by both client and server.
 
 ## Reporting Issues

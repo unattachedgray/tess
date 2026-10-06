@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import { KataGoAdapter } from "./engine/katago.js";
 import {
@@ -19,20 +18,6 @@ const log = createLogger("server");
 const PORT = Number.parseInt(process.env.PORT ?? "8082", 10);
 
 async function main() {
-	// PID tracking — kill orphaned previous instances
-	const PIDFILE = join(process.cwd(), "data", ".server.pid");
-	try {
-		const { readFileSync, writeFileSync, mkdirSync } = await import("node:fs");
-		mkdirSync(join(process.cwd(), "data"), { recursive: true });
-		try {
-			const oldPid = parseInt(readFileSync(PIDFILE, "utf8").trim(), 10);
-			if (oldPid && oldPid !== process.pid) {
-				try { process.kill(oldPid, "SIGTERM"); console.log(`[startup] killed orphaned PID ${oldPid}`); } catch {}
-			}
-		} catch {}
-		writeFileSync(PIDFILE, String(process.pid));
-		console.log(`[startup] PID ${process.pid} written to ${PIDFILE}`);
-	} catch {}
 	// Initialize database
 	const { initDb } = await import("./db.js");
 	initDb();
@@ -105,7 +90,7 @@ async function main() {
 
 	const app = createApp(sessionManager, federation);
 
-	const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
+	const server = serve({ fetch: app.fetch, port: PORT, hostname: process.env.TESS_BIND_HOST ?? "127.0.0.1" }, (info) => {
 		log.info(`server listening on port ${info.port}`);
 	});
 

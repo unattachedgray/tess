@@ -15,7 +15,7 @@ export function getDb(): Database.Database {
 }
 
 export function initDb(dbPath?: string): Database.Database {
-	const path = dbPath ?? resolve(__dirname, "../../../data/tess.db");
+	const path = dbPath ?? process.env.TESS_DB_PATH ?? resolve(__dirname, "../../../data/tess.db");
 	log.info("opening database", { path });
 
 	mkdirSync(dirname(path), { recursive: true });

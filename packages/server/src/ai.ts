@@ -1,39 +1,9 @@
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { callGateway } from "./gateway.js";
 import type { GameType, Suggestion } from "@tess/shared";
 import { allowAiCall } from "./guard.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("ai");
-
-// Gemini API keys: process.env first, then ~/.env (where local secrets live).
-// Order matters — free-tier key first, paid key as 429 fallback.
-const GEMINI_KEYS: string[] = (() => {
-	let envFile = "";
-	try {
-		envFile = readFileSync(join(homedir(), ".env"), "utf8");
-	} catch {}
-	const fromFile = (name: string): string | null => {
-		const m = envFile.match(new RegExp(`^${name}=(.+)$`, "m"));
-		return m ? m[1].trim().replace(/^["']|["']$/g, "") : null;
-	};
-	const keys = [
-		process.env.GEMINI_API_KEY ?? fromFile("GEMINI_API_KEY"),
-		process.env.GEMINI_PAID_API_KEY ?? fromFile("GEMINI_PAID_API_KEY"),
-	].filter((k): k is string => !!k);
-	const deduped = [...new Set(keys)];
-	if (deduped.length === 0)
-		log.warn("GEMINI_API_KEY not found in env or ~/.env — AI coaching disabled");
-	return deduped;
-})();
-
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-flash-latest";
-// Post-game summaries are worth a stronger model (one call per game)
-const GEMINI_SUMMARY_MODEL = process.env.GEMINI_SUMMARY_MODEL ?? "gemini-pro-latest";
-// Cap thinking on per-move coaching: cards are <120 words and latency matters.
-// Summaries keep the model's default budget (one call per game, quality wins).
-const ANALYSIS_THINKING_BUDGET = 256;
 
 const PHASE_THRESHOLDS: Record<GameType, [number, number]> = {
 	chess: [10, 30],
@@ -173,7 +143,7 @@ function processQueue(): void {
 	while (analysisQueue.length > 0 && activeCalls < MAX_CONCURRENT) {
 		const item = analysisQueue.shift()!;
 		activeCalls++;
-		callGemini(item.prompt, TIMEOUT_MS, GEMINI_MODEL, ANALYSIS_THINKING_BUDGET)
+		callGateway(item.prompt, TIMEOUT_MS, "position-coaching")
 			.then((result) => item.resolve(result))
 			.catch((err) => {
 				log.error("queued analysis failed", { error: (err as Error).message });
@@ -196,7 +166,7 @@ export async function analyzePosition(ctx: AnalysisContext): Promise<string | nu
 	if (activeCalls < MAX_CONCURRENT) {
 		activeCalls++;
 		try {
-			const result = await callGemini(prompt, TIMEOUT_MS, GEMINI_MODEL, ANALYSIS_THINKING_BUDGET);
+			const result = await callGateway(prompt, TIMEOUT_MS, "position-coaching");
 			return result;
 		} catch (err) {
 			log.error("analysis failed", { error: (err as Error).message });
@@ -250,89 +220,10 @@ export async function generateGameSummary(ctx: GameSummaryContext): Promise<stri
 Write a 3-4 sentence game summary for the player. Comment on their strengths, key mistakes, and one specific improvement tip. Be encouraging but honest. Use **bold** for key concepts. Under 80 words.${ctx.language && ctx.language !== "en" ? ` Respond in ${({ ko: "Korean", es: "Spanish", vi: "Vietnamese", mn: "Mongolian" })[ctx.language] ?? "English"}.` : ""}`;
 
 	try {
-		const result = await callGemini(prompt, 45000, GEMINI_SUMMARY_MODEL);
+		const result = await callGateway(prompt, 45000, "game-summary");
 		return result;
 	} catch (err) {
 		log.error("game summary failed", { error: (err as Error).message });
 		return null;
-	}
-}
-
-async function callGemini(
-	prompt: string,
-	timeoutMs: number,
-	model = GEMINI_MODEL,
-	thinkingBudget?: number,
-): Promise<string> {
-	if (GEMINI_KEYS.length === 0) throw new Error("GEMINI_API_KEY not configured");
-	// 429 (rate limit) and 503/500 (overload) are transient: rotate through the
-	// keys, then back off and rotate again before giving up. Overload spikes on
-	// the flash model regularly last 10-30s — a single-shot call loses every
-	// coaching card in that window.
-	const waves = [0, 2500, 6000];
-	let lastErr: Error = new Error("unreachable");
-	for (const wait of waves) {
-		if (wait) await new Promise((r) => setTimeout(r, wait));
-		for (const key of GEMINI_KEYS) {
-			try {
-				return await geminiRequest(prompt, timeoutMs, key, model, thinkingBudget);
-			} catch (err) {
-				lastErr = err as Error;
-				if (!/HTTP (429|500|503)/.test(lastErr.message)) throw lastErr;
-			}
-		}
-	}
-	throw lastErr;
-}
-
-async function geminiRequest(
-	prompt: string,
-	timeoutMs: number,
-	key: string,
-	model: string,
-	thinkingBudget?: number,
-): Promise<string> {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
-	try {
-		const res = await fetch(
-			`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-			{
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					"x-goog-api-key": key,
-				},
-				body: JSON.stringify({
-					contents: [{ parts: [{ text: prompt }] }],
-					generationConfig: {
-						temperature: 0.6,
-						// Thinking tokens count against maxOutputTokens on 2.5 models —
-						// an uncapped thinking phase can eat the whole budget and return
-						// an empty response. Coaching cards are short; cap thinking.
-						maxOutputTokens: 4096,
-						...(thinkingBudget !== undefined
-							? { thinkingConfig: { thinkingBudget } }
-							: {}),
-					},
-				}),
-				signal: controller.signal,
-			},
-		);
-		if (!res.ok) {
-			const body = await res.text().catch(() => "");
-			throw new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 200)}`);
-		}
-		const data = (await res.json()) as {
-			candidates?: { content?: { parts?: { text?: string }[] } }[];
-		};
-		const text = data.candidates?.[0]?.content?.parts
-			?.map((p) => p.text ?? "")
-			.join("")
-			.trim();
-		if (!text) throw new Error("Gemini returned empty response");
-		return text;
-	} finally {
-		clearTimeout(timer);
 	}
 }

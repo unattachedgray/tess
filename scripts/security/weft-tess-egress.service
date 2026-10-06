@@ -1,0 +1,9 @@
+[Unit]
+Description=Restrict Tess network access to its economy gateway
+Before=weft-tess.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/weft-tess/egress.nft
+[Install]
+WantedBy=multi-user.target

@@ -43,7 +43,7 @@ cd tess
 
 That's it. The script installs dependencies, downloads game engines, and opens your browser. Takes about 2 minutes on first run.
 
-> **Requirements:** Node.js 20+ (checked automatically). Works on Linux and WSL2. Optional: a [Gemini API key](https://aistudio.google.com/apikey) (`GEMINI_API_KEY` in env or `~/.env`) for AI coaching.
+> **Requirements:** Node.js 20+ (checked automatically). Works on Linux and WSL2. AI coaching requires a dedicated economy gateway credential; games work without it. Production uses the [isolated runtime](docs/isolated-runtime.md).
 
 ## Features
 

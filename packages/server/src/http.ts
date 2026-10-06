@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -24,6 +25,7 @@ function rateLimit(
 }
 
 const log = createLogger("http");
+const clientRoot = fileURLToPath(new URL("../../client/dist/", import.meta.url));
 
 /**
  * The address to hold accountable for an HTTP request.
@@ -278,12 +280,12 @@ export function createApp(sessionManager: SessionManager, federation?: Federatio
 	});
 
 	// ── Join routes (serve SPA for game code URLs) ──
-	app.get("/join/:code", serveStatic({ root: "../../packages/client/dist", path: "index.html" }));
-	app.get("/watch/:code", serveStatic({ root: "../../packages/client/dist", path: "index.html" }));
+	app.get("/join/:code", serveStatic({ root: clientRoot, path: "index.html" }));
+	app.get("/watch/:code", serveStatic({ root: clientRoot, path: "index.html" }));
 
 	// Serve static files in production
-	app.use("/*", serveStatic({ root: "../../packages/client/dist" }));
-	app.get("*", serveStatic({ root: "../../packages/client/dist", path: "index.html" }));
+	app.use("/*", serveStatic({ root: clientRoot }));
+	app.get("*", serveStatic({ root: clientRoot, path: "index.html" }));
 
 	return app;
 }

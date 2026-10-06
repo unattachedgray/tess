@@ -63,11 +63,11 @@ check_engines() {
     fi
 }
 
-check_gemini() {
-    if [ -n "$GEMINI_API_KEY" ] || grep -q "^GEMINI_API_KEY=" "$HOME/.env" 2>/dev/null; then
-        log "Gemini API key: OK"
+check_gateway() {
+    if [ -n "${CREDENTIALS_DIRECTORY:-}" ] && [ -r "$CREDENTIALS_DIRECTORY/cascade-key" ]; then
+        log "Economy gateway credential: available"
     else
-        warn "GEMINI_API_KEY not found (env or ~/.env). AI coaching will be unavailable."
+        warn "Coaching requires the dedicated gateway credential; games work without coaching."
     fi
 }
 
@@ -80,7 +80,7 @@ do_install() {
     pnpm install
     pnpm rebuild better-sqlite3 2>/dev/null || true
     check_engines
-    check_gemini
+    check_gateway
     # Generate sound files if missing
     if [ ! -f "packages/client/public/sounds/move.mp3" ]; then
         bash scripts/download-engines.sh --sounds-only
@@ -101,29 +101,15 @@ do_dev() {
 }
 
 do_prod() {
-    check_engines
-    log "Building for production..."
-    pnpm run build
-    log "Starting production server on port $PORT..."
-    log "  Open: http://localhost:$PORT"
-    echo ""
-
-    # Open browser (best-effort)
-    open_browser "http://localhost:$PORT" &
-
-    cd packages/server
-    NODE_ENV=production PORT="$PORT" npx tsx src/index.ts
+    warn "Production is managed by weft-tess.service. See docs/isolated-runtime.md."
+    warn "This launcher will not start an owner-account production server."
+    return 1
 }
 
 do_stop() {
-    log "Stopping Tess..."
-    if command -v pm2 &>/dev/null; then
-        pm2 stop tess 2>/dev/null && log "Stopped PM2 process" || true
-    fi
-    # Kill any running dev/prod processes
-    pkill -f "tsx.*src/index.ts" 2>/dev/null && log "Stopped server" || true
-    pkill -f "vite.*5174" 2>/dev/null && log "Stopped client" || true
-    log "Done."
+    warn "Stop development with Ctrl-C in its terminal. Production uses weft-tess.service."
+    warn "This launcher will not kill processes by command-line matching."
+    return 1
 }
 
 do_status() {
@@ -151,7 +137,7 @@ do_status() {
     [ -f "assets/engines/fairy-stockfish" ] && echo -e "Chess:   ${GREEN}OK${NC}" || echo -e "Chess:   ${RED}Missing${NC}"
     [ -d "assets/engines/katago" ] && echo -e "Go:      ${GREEN}OK${NC}" || echo -e "Go:      ${YELLOW}Missing${NC}"
     ([ -f "assets/engines/fairy-stockfish-largeboard" ] || [ -f "assets/engines/fairy-stockfish-largeboard_x86-64-bmi2.exe" ]) && echo -e "Janggi:  ${GREEN}OK${NC}" || echo -e "Janggi:  ${YELLOW}Missing${NC}"
-    ([ -n "$GEMINI_API_KEY" ] || grep -q "^GEMINI_API_KEY=" "$HOME/.env" 2>/dev/null) && echo -e "Gemini:  ${GREEN}OK${NC}" || echo -e "Gemini:  ${YELLOW}No API key${NC}"
+    check_gateway
     echo ""
 }
 

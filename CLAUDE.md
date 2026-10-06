@@ -8,7 +8,7 @@ Board game learning platform — play Go, Chess, and Janggi against AI with real
 - **Shared**: TypeScript workspace package with Zod schemas + game logic
 - **Database**: SQLite (better-sqlite3)
 - **Engines**: KataGo (Go, GTP), Fairy-Stockfish (Chess/Janggi, UCI)
-- **AI Analysis**: Claude Code CLI (`claude --print`) — no API keys
+- **AI Analysis**: local apicascade gateway, economy only; systemd file credential
 - **Federation**: Hyperswarm (DHT + NAT traversal), Bonjour (mDNS), UPnP
 - **Tooling**: Biome (lint+format), Vitest (testing), pnpm (package manager)
 
@@ -46,7 +46,7 @@ node test-mp-autoplay.cjs chess 800 2200   # Run autoplay simulation
 - **Server-authoritative**: All moves validated server-side. Federation: each server validates its own player.
 - **Federation**: Hyperswarm DHT for discovery + NAT traversal. UPnP for auto port-forward. mDNS for LAN. Game relay over encrypted Noise streams.
 - **i18n**: All UI strings use `t()` function. 5 languages (en/ko/es/vi/mn). Chat messages sent as i18n keys, translated on receiver's client.
-- **Claude CLI only**: `claude --print` for coaching. No API keys needed. Gracefully disabled if CLI not installed.
+- **Gateway only**: coaching uses the local apicascade gateway with economy routing and no escalation. Credentials come from systemd `CREDENTIALS_DIRECTORY/cascade-key`; no home environment file or direct provider fallback. See `docs/isolated-runtime.md` for deployment.
 
 ## Key Files
 - `packages/shared/src/evaluation.ts` — SKILL_SCALE, getSkillLevel(), getDifficultyRating()

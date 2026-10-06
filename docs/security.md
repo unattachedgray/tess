@@ -45,7 +45,7 @@ against that state, not merely validate the message.
 | surface | reachable by | notes |
 |---|---|---|
 | `tess.unattached.me` → `:8460` | the internet, via cloudflared | the whole WebSocket protocol and HTTP API |
-| `:8460` direct | anything that can route to the host | the server binds all interfaces |
+| `:8460` direct | loopback only | isolated system service binds `127.0.0.1` |
 
 There is no login. A player is identified by a `userId` the server derives from
 a client-held secret (sha256 of a `crypto.randomUUID()`, 122 bits), never taken
@@ -89,7 +89,7 @@ fresh bucket; the only loopback peers are cloudflared and the owner.
    branches. Patching one of them and shipping is a mistake this project has now
    made once; grep for the *condition*, not the function name.
 6. **Money is the only truly finite resource.** Sockets and CPU degrade; the
-   Gemini bill does not come back.
+   gateway quota does not come back.
 
 ---
 
@@ -164,9 +164,8 @@ Ranked. None is a credential compromise; all are documented rather than fixed.
    checks that the sending peer owns the game. It is dead code: `federatedGames`
    is never written to, and `TESS_DISCOVERY=off`. **Do not wire up the accept
    path without keying each federated game to its peer's public key first.**
-6. **Startup kills the pid in `data/.server.pid`.** A stale or reused pid means
-   killing an unrelated process. It requires local write access, so it is not a
-   remote issue, but it is a real hazard when running a second instance.
+6. **Startup PID hazard fixed in September 2026.** Startup no longer reads or
+   kills a PID from a writable state file. The systemd supervisor owns lifecycle.
 
 ---
 
@@ -174,14 +173,10 @@ Ranked. None is a credential compromise; all are documented rather than fixed.
 
 ### Making a change take effect
 
-```bash
-cd ~/dev/tess && pnpm build && pm2 startOrReload ecosystem.config.cjs
-```
-
-**`startOrReload`, not `restart`.** A plain restart re-runs the process without
-re-reading the `env` block in `ecosystem.config.cjs`. Change a limit, restart,
-and the server keeps enforcing the old one while the config file says
-otherwise — with nothing anywhere to indicate the mismatch.
+Deploy a validated root-owned release through the [isolated runtime procedure](isolated-runtime.md).
+Production is managed by `weft-tess.service`; PM2 and the home checkout are retired
+as production launch paths. After changing service limits, reload systemd, restart
+only this service, and read the effective limits from the live API.
 
 ### Reading the limits actually in force
 
@@ -192,21 +187,20 @@ curl -s localhost:8460/api/admin | python3 -m json.tool
 ```json
 {"uptime": 4, "activeGames": 0, "memory": {"heapMB": 13},
  "guards": {"ips": 0, "connections": 0, "connectionCap": 10,
-            "aiToday": 0, "aiDailyCap": 5000}}
+            "aiToday": 0, "aiDailyCap": 500}}
 ```
 
 `connectionCap` and `aiDailyCap` are read out of the running process, so they
 are simultaneously the current limits and the proof that the last reload took.
-`aiToday` is the day's Gemini spend against its cap. Do not read these numbers
+`aiToday` is the day's coaching request count against its cap. Do not read these numbers
 off the source or the config file; those are what you *intended*.
 
 ### The token you have not set
 
-`TESS_ADMIN_TOKEN` is deliberately absent from `ecosystem.config.cjs`, so
-`/api/federation/toggle` refuses everyone, including you. That is the correct
-resting state while `TESS_DISCOVERY=off`. To toggle federation, set the token in
-the env block, `pm2 startOrReload`, and pass it as `X-Tess-Admin` — see
-`FEDERATION.md`.
+`TESS_ADMIN_TOKEN` is deliberately absent from the system service, so
+`/api/federation/toggle` refuses everyone. Discovery remains off, and the isolated
+UID cannot make arbitrary outbound connections. Enabling federation would require
+a separate review of both authentication and network policy.
 
 The lobby's federation toggle **button** was removed in the same pass. It was a
 public control over a network boundary, and since Tess has no login, no browser
@@ -276,3 +270,11 @@ about the Gemini key or its spend, which is where the actual money risk is.
 
 Both are corrected. When a defence changes, the claim about it changes in the
 same commit.
+
+
+## September 2026 runtime isolation
+
+Current deployment uses the dedicated `weft-tess` system account and economy gateway.
+The historical direct Gemini integration described above is removed. See
+[isolated runtime](isolated-runtime.md) for the current file, network, credential,
+and deployment boundaries.
